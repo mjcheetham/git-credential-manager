@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text;
+using GitCredentialManager.Interop;
 using GitCredentialManager.Interop.Linux;
 using GitCredentialManager.Interop.MacOS;
 using GitCredentialManager.Interop.Posix;
@@ -27,19 +28,45 @@ namespace GitCredentialManager
         public ICredential Get(string service, string account)
         {
             EnsureBackingStore();
-            return _backingStore.Get(service, account);
+            try
+            {
+                return _backingStore.Get(service, account);
+            }
+            catch (InteropException ex)
+            {
+                _context.Trace.WriteLine("Failed to query credential store.");
+                _context.Trace.WriteException(ex);
+                return null;
+            }
         }
 
         public void AddOrUpdate(string service, string account, string secret)
         {
             EnsureBackingStore();
-            _backingStore.AddOrUpdate(service, account, secret);
+            try
+            {
+                _backingStore.AddOrUpdate(service, account, secret);
+            }
+            catch (InteropException ex)
+            {
+                _context.Trace.WriteLine("Failed to save to credential store.");
+                _context.Trace.WriteException(ex);
+            }
         }
 
         public bool Remove(string service, string account)
         {
             EnsureBackingStore();
-            return _backingStore.Remove(service, account);
+            try
+            {
+                return _backingStore.Remove(service, account);
+            }
+            catch (InteropException ex)
+            {
+                _context.Trace.WriteLine("Failed to erase from credential store.");
+                _context.Trace.WriteException(ex);
+                return false;
+            }
         }
 
         #endregion
