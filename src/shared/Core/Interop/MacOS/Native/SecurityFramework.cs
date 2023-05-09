@@ -21,9 +21,11 @@ namespace GitCredentialManager.Interop.MacOS.Native
         public static readonly IntPtr kSecAttrLabel;
         public static readonly IntPtr kSecAttrAccount;
         public static readonly IntPtr kSecAttrService;
+        public static readonly IntPtr kSecAttrAccessible;
         public static readonly IntPtr kSecValueRef;
         public static readonly IntPtr kSecValueData;
         public static readonly IntPtr kSecReturnData;
+        public static readonly IntPtr kSecAttrAccessibleAfterFirstUnlock;
 
         static SecurityFramework()
         {
@@ -40,9 +42,11 @@ namespace GitCredentialManager.Interop.MacOS.Native
             kSecAttrLabel            = GetGlobal(Handle, "kSecAttrLabel");
             kSecAttrAccount          = GetGlobal(Handle, "kSecAttrAccount");
             kSecAttrService          = GetGlobal(Handle, "kSecAttrService");
+            kSecAttrAccessible       = GetGlobal(Handle, "kSecAttrAccessible");
             kSecValueRef             = GetGlobal(Handle, "kSecValueRef");
             kSecValueData            = GetGlobal(Handle, "kSecValueData");
             kSecReturnData           = GetGlobal(Handle, "kSecReturnData");
+            kSecAttrAccessibleAfterFirstUnlock = GetGlobal(Handle, "kSecAttrAccessibleAfterFirstUnlock");
         }
 
         [DllImport(SecurityFrameworkLib, CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]

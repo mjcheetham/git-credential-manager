@@ -172,6 +172,7 @@ namespace GitCredentialManager.Interop.MacOS
                     IntPtr.Zero, IntPtr.Zero);
 
                 CFDictionaryAddValue(dict, kSecClass, kSecClassGenericPassword);
+                CFDictionaryAddValue(dict, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlock);
 
                 dataPtr = CFDataCreate(IntPtr.Zero, data, data.Length);
                 CFDictionaryAddValue(dict, kSecValueData, dataPtr);
@@ -217,6 +218,8 @@ namespace GitCredentialManager.Interop.MacOS
                     IntPtr.Zero,
                     0,
                     IntPtr.Zero, IntPtr.Zero);
+
+                CFDictionaryAddValue(dict, kSecAttrAccessible, kSecAttrAccessibleAfterFirstUnlock);
 
                 dataPtr = CFDataCreate(IntPtr.Zero, data, data.Length);
                 CFDictionaryAddValue(dict, kSecValueData, dataPtr);
