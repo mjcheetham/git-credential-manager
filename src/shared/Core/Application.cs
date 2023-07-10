@@ -71,13 +71,26 @@ namespace GitCredentialManager
 
             // Add common options
             var noGuiOption = new Option<bool>("--no-ui", "Do not use graphical user interface prompts");
+            var yesGuiOption = new Option<bool>("--ui", "Use graphical user interface prompts (default)");
             rootCommand.AddGlobalOption(noGuiOption);
+            rootCommand.AddGlobalOption(yesGuiOption);
 
-            void NoGuiOptionHandler(InvocationContext context)
+            void GuiOptionHandler(InvocationContext context)
             {
-                if (context.ParseResult.HasOption(noGuiOption))
+                bool no = context.ParseResult.HasOption(noGuiOption);
+                bool yes = context.ParseResult.HasOption(yesGuiOption);
+                if (no && yes)
+                {
+                    context.ExitCode = -1;
+                    context.Console.WriteLine("error: --no-ui and --ui are mutually exclusive.");
+                }
+                else if (no)
                 {
                     Context.Settings.IsGuiPromptsEnabled = false;
+                }
+                else if (yes)
+                {
+                    Context.Settings.IsGuiPromptsEnabled = true;
                 }
             }
 
@@ -114,7 +127,7 @@ namespace GitCredentialManager
             var parser = new CommandLineBuilder(rootCommand)
                 .UseDefaults()
                 .UseExceptionHandler(OnException)
-                .AddMiddleware(NoGuiOptionHandler)
+                .AddMiddleware(GuiOptionHandler)
                 .Build();
 
             return await parser.InvokeAsync(args);
