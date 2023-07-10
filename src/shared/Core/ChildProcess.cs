@@ -45,7 +45,7 @@ public class ChildProcess : DisposableObject
         // to an exception if the process finishes executing before the
         // variable is passed to Trace2.
         _startTime = DateTimeOffset.UtcNow;
-        _trace2.WriteChildStart(
+        _trace2?.WriteChildStart(
             _startTime,
             processClass,
             _startInfo.UseShellExecute,
@@ -70,7 +70,7 @@ public class ChildProcess : DisposableObject
         if (sender is Process)
         {
             double elapsedTime = (_exitTime - _startTime).TotalSeconds;
-            _trace2.WriteChildExit(
+            _trace2?.WriteChildExit(
                 elapsedTime,
                 _id,
                 Process.ExitCode);

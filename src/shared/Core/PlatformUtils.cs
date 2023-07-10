@@ -207,6 +207,48 @@ namespace GitCredentialManager
             return false;
         }
 
+        public static bool IsAvaloniaSupported(ITrace2 trace2)
+        {
+            if (IsWindows() || IsMacOS())
+            {
+                return true;
+            }
+
+            //
+            // Avalonia is only official supported on the following distributions:
+            //  * Debian 9+
+            //  * Ubuntu 16.04+
+            //  * Fedora 30+
+            //
+            // Don't bother checking the specific distro version, but do check the
+            // ID and ID_LIKE fields.
+            //
+            LinuxDistroInfo info = _linuxDistroInfo ?? GetLinuxDistroInfo(trace2);
+
+            // Debian
+            if (info.Id.Equals("debian", StringComparison.OrdinalIgnoreCase) ||
+                info.IdLike.Contains("debian", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Ubuntu
+            if (info.Id.Equals("ubuntu", StringComparison.OrdinalIgnoreCase) ||
+                info.IdLike.Contains("ubuntu", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            // Fedora
+            if (info.Id.Equals("fedora", StringComparison.OrdinalIgnoreCase) ||
+                info.IdLike.Contains("fedora", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return false;
+        }
+
         #region Platform Entry Path Utils
 
         /// <summary>

@@ -510,7 +510,8 @@ namespace GitCredentialManager
                     return str.ToBooleanyOrDefault(defaultValue);
                 }
 
-                return defaultValue;
+                // Enable GUI prompts if we are running on an Avalonia-supported OS and distro
+                return PlatformUtils.IsAvaloniaSupported(null);
             }
             set => _environment.SetEnvironmentVariable(KnownEnvars.GcmGuiPromptsEnabled, value ? bool.TrueString : bool.FalseString);
         }
