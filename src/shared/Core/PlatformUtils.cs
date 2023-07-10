@@ -351,9 +351,20 @@ namespace GitCredentialManager
             return "Unknown";
         }
 
-        private static string _linuxDistroVersion;
+        private class LinuxDistroInfo
+        {
+            public string Id { get; set; }
+            public string IdLike { get; set; }
+            public string Name { get; set; }
+            public string PrettyName { get; set; }
+            public string Version { get; set; }
+            public string VersionId { get; set; }
+            public string VersionCodename { get; set; }
+        }
 
-        private static string GetLinuxDistroVersion(ITrace2 trace2)
+        private static LinuxDistroInfo _linuxDistroInfo;
+
+        private static LinuxDistroInfo GetLinuxDistroInfo(ITrace2 trace2)
         {
             // Let's first try to get the distribution information from /etc/os-release
             // (or /usr/lib/os-release) which is required in systemd distributions.
@@ -380,27 +391,46 @@ namespace GitCredentialManager
                     props[kvp[0]] = kvp[1].Trim('"');
                 }
 
+                var info = new LinuxDistroInfo();
+
                 // Try to get the PRETTY_NAME first which is a user-friendly description
                 // including the distro name and version.
                 if (props.TryGetValue("PRETTY_NAME", out string prettyName))
                 {
-                    return prettyName;
+                    info.PrettyName = prettyName;
                 }
 
-                // Fall-back to (NAME || ID) + (VERSION || VERSION_ID || VERSION_CODENAME)?
-                if (props.TryGetValue("NAME", out string distro) ||
-                    props.TryGetValue("ID", out distro))
+                if (props.TryGetValue("NAME", out string name))
                 {
-                    if (props.TryGetValue("VERSION", out string version) ||
-                        props.TryGetValue("VERSION_ID", out version) ||
-                        props.TryGetValue("VERSION_CODENAME", out version))
-                    {
-                        return $"{distro} {version}";
-                    }
-
-                    // Return just the distro name if we don't have a version
-                    return distro;
+                    info.Name = name;
                 }
+
+                if (props.TryGetValue("ID", out string id))
+                {
+                    info.Id = id;
+                }
+
+                if (props.TryGetValue("ID_LIKE", out string idLike))
+                {
+                    info.IdLike = idLike;
+                }
+
+                if (props.TryGetValue("VERSION", out string version))
+                {
+                    info.Version = version;
+                }
+
+                if (props.TryGetValue("VERSION_ID", out string versionId))
+                {
+                    info.VersionId = versionId;
+                }
+
+                if (props.TryGetValue("VERSION_CODENAME", out string codename))
+                {
+                    info.VersionCodename = codename;
+                }
+
+                return info;
             }
 
             // If we couldn't get the distribution information from /etc/os-release
@@ -420,11 +450,22 @@ namespace GitCredentialManager
 
                 if (uname.ExitCode == 0)
                 {
-                    return uname.StandardOutput.ReadToEnd().Trim();
+                    string output = uname.StandardOutput.ReadToEnd().Trim();
+                    return new LinuxDistroInfo
+                    {
+                        Id = "linux",
+                        Name = "Linux",
+                        PrettyName = output
+                    };
                 }
             }
 
-            return "Unknown-Linux";
+            return new LinuxDistroInfo
+            {
+                Id = "linux",
+                Name = "Linux",
+                PrettyName = "Linux (Unknown)"
+            };
         }
 
         private static string GetOSVersion(ITrace2 trace2)
@@ -451,7 +492,13 @@ namespace GitCredentialManager
 
             if (IsLinux())
             {
-                return _linuxDistroVersion ??= GetLinuxDistroVersion(trace2);
+                LinuxDistroInfo info = _linuxDistroInfo ??= GetLinuxDistroInfo(trace2);
+
+                // Prefer the PRETTY_NAME which is a user-friendly description including
+                // the distro name and version. If not available then fall-back to:
+                // (NAME || ID) + (VERSION || VERSION_ID || VERSION_CODENAME)
+                return info.PrettyName ??
+                       $"{info.Name ?? info.Id} {info.Version ?? info.VersionId ?? info.VersionCodename}";
             }
 
             return "Unknown";
