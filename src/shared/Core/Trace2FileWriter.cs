@@ -6,9 +6,13 @@ namespace GitCredentialManager;
 public class Trace2FileWriter : Trace2Writer
 {
     private readonly string _path;
+    private readonly IFileSystem _fs;
 
-    public Trace2FileWriter(Trace2FormatTarget formatTarget, string path) : base(formatTarget)
+    private Stream _stream;
+
+    public Trace2FileWriter(IFileSystem fs, Trace2FormatTarget formatTarget, string path) : base(formatTarget)
     {
+        _fs = fs;
         _path = path;
     }
 
@@ -16,7 +20,9 @@ public class Trace2FileWriter : Trace2Writer
     {
         try
         {
-            File.AppendAllText(_path, Format(message));
+            _stream ??= _fs.OpenFileStream(_path, FileMode.Append, FileAccess.ReadWrite, FileShare.ReadWrite);
+            byte[] data = EncodingEx.UTF8NoBom.GetBytes(Format(message));
+            _stream.Write(data, 0, data.Length);
         }
         catch (DirectoryNotFoundException)
         {

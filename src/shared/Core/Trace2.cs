@@ -512,11 +512,24 @@ public class Trace2 : DisposableObject, ITrace2
             {
                 AddWriter(new Trace2StreamWriter(formatTarget.Key, _commandContext.Streams.Error));
             }
-            else if (Path.IsPathRooted(formatTarget.Value)) // Write to file
+            else if (Path.IsPathRooted(formatTarget.Value)) // Write to file system
             {
+                string path;
+
+                if (_commandContext.FileSystem.DirectoryExists(formatTarget.Value)) // Directory
+                {
+                    DateTimeOffset t = _applicationStartTime;
+                    string fileName = $"{t:yyyyMMdd}T{t:HHmmssffffff}-{_sid}";
+                    path = Path.Combine(formatTarget.Value, fileName);
+                }
+                else // File
+                {
+                    path = formatTarget.Value;
+                }
+
                 try
                 {
-                    AddWriter(new Trace2FileWriter(formatTarget.Key, formatTarget.Value));
+                    AddWriter(new Trace2FileWriter(_commandContext.FileSystem, formatTarget.Key, path));
                 }
                 catch (Exception ex)
                 {
