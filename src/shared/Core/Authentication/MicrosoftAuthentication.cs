@@ -118,10 +118,6 @@ namespace GitCredentialManager.Authentication
             "live", "liveconnect", "liveid",
         };
 
-#if NETFRAMEWORK
-        private DummyWindow _dummyWindow;
-#endif
-
         public MicrosoftAuthentication(ICommandContext context)
             : base(context) { }
 
@@ -130,6 +126,10 @@ namespace GitCredentialManager.Authentication
         public async Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(
             string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt)
         {
+            // Create a cancellation token source that will be used to dismiss any UI that
+            // may be shown during the authentication process.
+            var uiCts = new CancellationTokenSource();
+
             // Check if we can and should use OS broker authentication
             bool useBroker = CanUseBroker();
             Context.Trace.WriteLine(useBroker
@@ -144,7 +144,7 @@ namespace GitCredentialManager.Authentication
             try
             {
                 // Create the public client application for authentication
-                IPublicClientApplication app = await CreatePublicClientApplicationAsync(authority, clientId, redirectUri, useBroker, msaPt);
+                IPublicClientApplication app = await CreatePublicClientApplicationAsync(authority, clientId, redirectUri, useBroker, msaPt, uiCts.Token);
 
                 AuthenticationResult result = null;
 
@@ -245,10 +245,7 @@ namespace GitCredentialManager.Authentication
 
                             case MicrosoftAuthenticationFlowType.DeviceCode:
                                 Context.Trace.WriteLine("Performing interactive auth with device code...");
-                                // We don't have a way to display a device code without a terminal at the moment
-                                // TODO: introduce a small GUI window to show a code if no TTY exists
-                                ThrowIfTerminalPromptsDisabled();
-                                result = await app.AcquireTokenWithDeviceCode(scopes, ShowDeviceCodeInTty).ExecuteAsync();
+                                result = await GetTokenByDeviceCodeAsync(app, scopes);
                                 break;
 
                             default:
@@ -261,10 +258,8 @@ namespace GitCredentialManager.Authentication
             }
             finally
             {
-#if NETFRAMEWORK
-                // If we created a dummy window during authentication we should dispose of it now that we're done
-                _dummyWindow?.Dispose();
-#endif
+                // If we created any progress UI during authentication we should dispose of it now that we're done
+                uiCts.Cancel();
             }
         }
 
@@ -451,8 +446,70 @@ namespace GitCredentialManager.Authentication
             }
         }
 
-        private async Task<IPublicClientApplication> CreatePublicClientApplicationAsync(
-            string authority, string clientId, Uri redirectUri, bool enableBroker, bool msaPt)
+        private async Task<AuthenticationResult> GetTokenByDeviceCodeAsync(IPublicClientApplication app, IEnumerable<string> scopes)
+        {
+            if (Context.Settings.IsGuiPromptsEnabled && Context.SessionManager.IsDesktopSession)
+            {
+                var readyEvent = new ManualResetEventSlim();
+                var promptCts = new CancellationTokenSource();
+                var tokenCts = new CancellationTokenSource();
+
+                Task promptTask = null;
+                Task<AuthenticationResult> tokenTask = app.AcquireTokenWithDeviceCode(scopes, dcr =>
+                {
+                    var viewModel = new DeviceCodeViewModel(Context.Environment)
+                    {
+                        UserCode = dcr.UserCode,
+                        VerificationUrl = dcr.VerificationUrl,
+                    };
+
+                    promptTask = AvaloniaUi.ShowViewAsync<DeviceCodeView>(viewModel, GetParentWindowHandle(), promptCts.Token);
+                    readyEvent.Set();
+
+                    // Always return a completed task so that MSAL will continue to poll for the token
+                    return Task.CompletedTask;
+                }).ExecuteAsync(tokenCts.Token);
+
+                readyEvent.Wait();
+                Task t = await Task.WhenAny(promptTask, tokenTask);
+
+                // If the dialog was closed the user wishes to cancel the request
+                if (t == promptTask)
+                {
+                    tokenCts.Cancel();
+                }
+
+                // If the token task completed then we can cancel the prompt task
+                try
+                {
+                    return await tokenTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    throw new Exception("User canceled device code authentication");
+                }
+                finally
+                {
+                    // Close the dialog
+                    promptCts.Cancel();
+                }
+            }
+
+            ThrowIfTerminalPromptsDisabled();
+
+            return await app.AcquireTokenWithDeviceCode(scopes,
+                    dcr =>
+                    {
+                        Context.Terminal.WriteLine(dcr.Message);
+
+                        // Always return a completed task so that MSAL will continue to poll for the token
+                        return Task.CompletedTask;
+                    })
+                .ExecuteAsync();
+        }
+
+        private async Task<IPublicClientApplication> CreatePublicClientApplicationAsync(string authority,
+            string clientId, Uri redirectUri, bool enableBroker, bool msaPt, CancellationToken uiCt)
         {
             var httpFactoryAdaptor = new MsalHttpClientFactoryAdaptor(Context.HttpClientFactory);
 
@@ -495,11 +552,9 @@ namespace GitCredentialManager.Authentication
                     }
                     else if (enableBroker) // Only actually need to set a parent window when using the Windows broker
                     {
-#if NETFRAMEWORK
-                        Context.Trace.WriteLine($"Using dummy parent window for MSAL authentication dialogs.");
-                        _dummyWindow = new DummyWindow();
-                        appBuilder.WithParentActivityOrWindow(_dummyWindow.ShowAndGetHandle);
-#endif
+                        Context.Trace.WriteLine("Using dummy parent window for MSAL authentication dialogs.");
+                        var progressWindow = new ProgressWindow();
+                        appBuilder.WithParentActivityOrWindow(() => progressWindow.ShowAndGetHandle(uiCt));
                     }
                 }
             }
@@ -759,13 +814,6 @@ namespace GitCredentialManager.Authentication
         {
             // TODO: add nicer HTML success and error pages
             return new SystemWebViewOptions();
-        }
-
-        private Task ShowDeviceCodeInTty(DeviceCodeResult dcr)
-        {
-            Context.Terminal.WriteLine(dcr.Message);
-
-            return Task.CompletedTask;
         }
 
         private void OnMsalLogMessage(LogLevel level, string message, bool containspii)
