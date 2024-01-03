@@ -567,6 +567,7 @@ _(unset)_|Windows: `wincredman`, macOS: `keychain`, Linux: _(none)_|-
 `gpg`|Use GPG to store encrypted files that are compatible with the [pass][pass] (requires GPG and `pass` to initialize the store).|macOS, Linux
 `cache`|Git's built-in [credential cache][credential-cache].|macOS, Linux
 `plaintext`|Store credentials in plaintext files (**UNSECURE**). Customize the plaintext store location with [`credential.plaintextStorePath`][credential-plaintextstorepath].|Windows, macOS, Linux
+`passthrough`|Do not use an internal credential storage mechanism. Relies on externally configured storage.|Windows, macOS, Linux
 
 #### Example
 

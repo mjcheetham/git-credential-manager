@@ -9,6 +9,7 @@ There are several options for storing credentials that GCM supports:
 - GPG/[`pass`][passwordstore] compatible files
 - Git's built-in [credential cache][credential-cache]
 - Plaintext files
+- Passthrough
 
 The default credential stores on macOS and Windows are the macOS Keychain and
 the Windows Credential Manager, respectively.
@@ -250,6 +251,21 @@ If you chose to use this credential store, it is recommended you set the
 permissions on this directory such that no other users or applications can
 access files within. If possible, use a path that exists on an external volume
 that you take with you and use full-disk encryption.
+
+## Passthrough
+
+**Available on:** _Windows, macOS, Linux_
+
+```shell
+export GCM_CREDENTIAL_STORE=passthrough
+# or
+git config --global credential.credentialStore passthrough
+```
+
+This option disables credential storage and relies on another storage helper to
+be configured in Git in order to persist credentials. This is useful if you want
+always generate a new credential for each request, or if you want to use another
+credential store that is not supported by GCM.
 
 [access-windows-credential-manager]: https://support.microsoft.com/en-us/windows/accessing-credential-manager-1b5c916a-6a16-889f-8581-fc16e8165ac0
 [aws-cloudshell]: https://aws.amazon.com/cloudshell/

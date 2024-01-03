@@ -64,6 +64,10 @@ namespace GitCredentialManager
 
             switch (credStoreName)
             {
+                case StoreNames.Passthrough:
+                    _backingStore = new NullCredentialStore();
+                    break;
+
                 case StoreNames.WindowsCredentialManager:
                     ValidateWindowsCredentialManager();
                     _backingStore = new WindowsCredentialManager(ns);
@@ -168,6 +172,9 @@ namespace GitCredentialManager
 
             sb.AppendFormat("  {1,-13} : store credentials in plain-text files (UNSECURE){0}",
                 Environment.NewLine, StoreNames.Plaintext);
+
+            sb.AppendFormat("  {1,-13} : don't use any internal storage mechanism{0}",
+                Environment.NewLine, StoreNames.Passthrough);
         }
 
         private void ValidateWindowsCredentialManager()
