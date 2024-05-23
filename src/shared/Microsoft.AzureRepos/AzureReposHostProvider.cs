@@ -542,12 +542,26 @@ namespace Microsoft.AzureRepos
                 AzureDevOpsConstants.GitConfiguration.Credential.ServicePrincipalCertificateThumbprint,
                 out string certThumbprint);
 
-            if (hasCertThumbprint && hasClientSecret)
+            bool hasFedCred = _context.Settings.TryGetSetting(
+                AzureDevOpsConstants.EnvironmentVariables.ServicePrincipalFederatedCredential,
+                Constants.GitConfiguration.Credential.SectionName,
+                AzureDevOpsConstants.GitConfiguration.Credential.ServicePrincipalFederatedCredential,
+                out string fedCredential);
+
+            if (hasFedCred && (hasCertThumbprint || hasClientSecret))
             {
-                _context.Streams.Error.WriteLine("warning: both service principal client secret and certificate thumbprint are configured - using certificate");
+                _context.Streams.Error.WriteLine("warning: multiple service principal credentials are configured - using federated credential");
+            }
+            else if (hasCertThumbprint && hasClientSecret)
+            {
+                _context.Streams.Error.WriteLine("warning: multiple service principal credentials are configured - using certificate");
             }
 
-            if (hasCertThumbprint)
+            if (hasFedCred)
+            {
+                sp.FederatedCredential = fedCredential;
+            }
+            else if (hasCertThumbprint)
             {
                 X509Certificate2 cert = X509Utils.GetCertificateByThumbprint(certThumbprint);
                 if (cert is null)

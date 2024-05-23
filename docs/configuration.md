@@ -858,6 +858,7 @@ You must also set at least one authentication mechanism if you set this value:
 
 - [credential.azreposServicePrincipalSecret][credential-azrepos-sp-secret]
 - [credential.azreposServicePrincipalCertificateThumbprint][credential-azrepos-sp-cert-thumbprint]
+- [credential.azreposServicePrincipalFederatedCredential][credential-azrepos-sp-fedcred]
 
 For more information about service principals, see the Azure DevOps
 [documentation][azrepos-sp-mid].
@@ -875,8 +876,8 @@ git config --global credential.azreposServicePrincipal "11111111-1111-1111-1111-
 ### credential.azreposServicePrincipalSecret
 
 Specifies the client secret for the [service principal][service-principal] when
-performing Microsoft authentication for Azure Repos with
-[credential.azreposServicePrincipalSecret][credential-azrepos-sp] set.
+performing Microsoft authentication for Azure Repos when
+[credential.azreposServicePrincipal][credential-azrepos-sp] is set.
 
 #### Example
 
@@ -892,7 +893,7 @@ git config --global credential.azreposServicePrincipalSecret "da39a3ee5e6b4b0d32
 
 Specifies the thumbprint of a certificate to use when authenticating as a
 [service principal][service-principal] for Azure Repos when
-[GCM_AZREPOS_SERVICE_PRINCIPAL][credential-azrepos-sp] is set.
+[credential.azreposServicePrincipal][credential-azrepos-sp] is set.
 
 #### Example
 
@@ -901,6 +902,22 @@ git config --global credential.azreposServicePrincipalCertificateThumbprint "9b6
 ```
 
 **Also see: [GCM_AZREPOS_SP_CERT_THUMBPRINT][gcm-azrepos-sp-cert-thumbprint]**
+
+---
+
+### credential.azreposServicePrincipalFederatedCredential
+
+Specifies the federated credential from a third-party identity provider to use
+when authenticating as a [service principal][service-principal] for Azure Repos
+when [credential.azreposServicePrincipal][credential-azrepos-sp] is set.
+
+#### Example
+
+```shell
+git config --global credential.azreposServicePrincipalFederatedCredential "eyJhbGciOiJIUzI1NiIs..."
+```
+
+**Also see: [GCM_AZREPOS_SP_FEDERATED_CRED][gcm-azrepos-sp-fedcred]**
 
 ---
 
@@ -1034,6 +1051,8 @@ Defaults to disabled.
 [credential-azrepos-sp]: #credentialazreposserviceprincipal
 [credential-azrepos-sp-secret]: #credentialazreposserviceprincipalsecret
 [credential-azrepos-sp-cert-thumbprint]: #credentialazreposserviceprincipalcertificatethumbprint
+[credential-azrepos-sp-fedcred]: #credentialazreposserviceprincipalfederatedcredential
 [gcm-azrepos-service-principal]: environment.md#GCM_AZREPOS_SERVICE_PRINCIPAL
 [gcm-azrepos-sp-secret]: environment.md#GCM_AZREPOS_SP_SECRET
 [gcm-azrepos-sp-cert-thumbprint]: environment.md#GCM_AZREPOS_SP_CERT_THUMBPRINT
+[gcm-azrepos-sp-fedcred]: environment.md#GCM_AZREPOS_SP_FEDERATED_CRED

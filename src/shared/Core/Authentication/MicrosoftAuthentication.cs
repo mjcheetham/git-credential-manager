@@ -81,7 +81,18 @@ namespace GitCredentialManager.Authentication
         /// Certificate used to authenticate the service principal.
         /// </summary>
         /// <remarks>
-        /// If both <see cref="Certificate"/> and <see cref="ClientSecret"/> are set, the certificate will be used.
+        /// If multiple authentication options are specified, the order of precedence is:
+        /// <list type="number">
+        ///   <item>
+        ///     <description>Federated credential (<see cref="FederatedCredential"/>)</description>
+        ///    </item>
+        ///   <item>
+        ///     <description>Certificate thumbprint(<see cref="Certificate"/>)</description>
+        ///    </item>
+        ///   <item>
+        ///     <description>Client secret (<see cref="ClientSecret"/>)</description>
+        ///    </item>
+        /// </list>
         /// </remarks>
         public X509Certificate2 Certificate { get; set; }
 
@@ -89,9 +100,39 @@ namespace GitCredentialManager.Authentication
         /// Secret used to authenticate the service principal.
         /// </summary>
         /// <remarks>
-        /// If both <see cref="Certificate"/> and <see cref="ClientSecret"/> are set, the certificate will be used.
+        /// If multiple authentication options are specified, the order of precedence is:
+        /// <list type="number">
+        ///   <item>
+        ///     <description>Federated credential (<see cref="FederatedCredential"/>)</description>
+        ///    </item>
+        ///   <item>
+        ///     <description>Certificate thumbprint(<see cref="Certificate"/>)</description>
+        ///    </item>
+        ///   <item>
+        ///     <description>Client secret (<see cref="ClientSecret"/>)</description>
+        ///    </item>
+        /// </list>
         /// </remarks>
         public string ClientSecret { get; set; }
+
+        /// <summary>
+        /// Federated credential used to authenticate the service principal, obtained from a third party IdP.
+        /// </summary>
+        /// <remarks>
+        /// If multiple authentication options are specified, the order of precedence is:
+        /// <list type="number">
+        ///   <item>
+        ///     <description>Federated credential (<see cref="FederatedCredential"/>)</description>
+        ///    </item>
+        ///   <item>
+        ///     <description>Certificate thumbprint(<see cref="Certificate"/>)</description>
+        ///    </item>
+        ///   <item>
+        ///     <description>Client secret (<see cref="ClientSecret"/>)</description>
+        ///    </item>
+        /// </list>
+        /// </remarks>
+        public string FederatedCredential { get; set; }
     }
 
     public interface IMicrosoftAuthenticationResult
@@ -529,7 +570,12 @@ namespace GitCredentialManager.Authentication
                 .WithTenantId(sp.TenantId)
                 .WithHttpClientFactory(httpFactoryAdaptor);
 
-            if (sp.Certificate is not null)
+            if (!string.IsNullOrWhiteSpace(sp.FederatedCredential))
+            {
+                Context.Trace.WriteLineSecrets("Using federated credential: '{0}'", new object[] { sp.FederatedCredential });
+                appBuilder = appBuilder.WithClientAssertion((CancellationToken _) => Task.FromResult(sp.FederatedCredential));
+            }
+            else if (sp.Certificate is not null)
             {
                 Context.Trace.WriteLineSecrets("Using certificate with thumbprint: '{0}'", new object[] { sp.Certificate.Thumbprint });
                 appBuilder = appBuilder.WithCertificate(sp.Certificate);
@@ -541,7 +587,7 @@ namespace GitCredentialManager.Authentication
             }
             else
             {
-                throw new InvalidOperationException("Service principal identity does not contain a certificate or client secret.");
+                throw new InvalidOperationException("Service principal identity does not contain a federated credential, certificate, or client secret.");
             }
 
             IConfidentialClientApplication app = appBuilder.Build();

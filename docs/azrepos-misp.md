@@ -98,26 +98,37 @@ the Azure CLI to inspect the Service Principal.
 
 #### Authentication with Service Principals
 
-When using a Service Principal with GCM, you will also need to provide the
-client secret or certificate that is associated with the Service Principal.
+When using a Service Principal with GCM, you will also need to provide a
+credential that is associated with the Service Principal. This can be one of:
 
-You can provide the client secret or certificate to GCM by setting one of the
-following environment variables or Git configuration options.
+- federated credential
+- certificate
+- client secret
+
+You can provide your chosen service principal credential to GCM by setting one
+of the following environment variables or Git configuration options.
 
 Type|Git Configuration|Environment Variable
 -|-|-
 Client Secret|[`credential.azreposServicePrincipalSecret`][gcm-sp-secret-config]|[`GCM_AZREPOS_SP_SECRET`][gcm-sp-secret-env]
 Certificate|[`credential.azreposServicePrincipalCertificateThumbprint`][gcm-sp-cert-config]|[`GCM_AZREPOS_SP_CERT_THUMBPRINT`][gcm-sp-cert-env]
+Federated Credential|[`credential.azreposServicePrincipalFederatedCredential`][gcm-sp-fedcred-config]|[`GCM_AZREPOS_SP_FEDERATED_CRED`][gcm-sp-fedcred-env]
 
-The value for these options should be the client secret or the thumbrint of the
-certificate that is associated with the Service Principal.
+The value for these options should be the client secret, the thumbrint of the
+certificate, or the federated credential that is associated with the Service
+Principal.
 
 The certificate itself should be installed on the machine where GCM is running
 and should be installed in personal store the certificate store for either the
 current user or the local machine.
 
+To use federated credentials you must first establish a link between the service
+principal and the third-party identity provider. See the
+[Azure documentation][az-federated] for more information on how to do this.
+
 [az-mi]: https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview
 [az-sp]: https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
+[az-federated]: https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation
 [azdo-misp]: https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity?view=azure-devops
 [gcm-mi-config]: https://gh.io/gcm/config#credentialazreposmanagedidentity
 [gcm-mi-env]: https://gh.io/gcm/env#GCM_AZREPOS_MANAGEDIDENTITY
@@ -127,3 +138,5 @@ current user or the local machine.
 [gcm-sp-secret-env]: https://gh.io/gcm/env#GCM_AZREPOS_SP_SECRET
 [gcm-sp-cert-config]: https://gh.io/gcm/config#credentialazreposserviceprincipalcertificatethumbprint
 [gcm-sp-cert-env]: https://gh.io/gcm/env#GCM_AZREPOS_SP_CERT_THUMBPRINT
+[gcm-sp-fedcred-config]: https://gh.io/gcm/config#credentialazreposserviceprincipalFederatedCredential
+[gcm-sp-fedcred-env]: https://gh.io/gcm/env#GCM_AZREPOS_SP_FEDERATED_CRED

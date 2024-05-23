@@ -975,6 +975,7 @@ You must also set at least one authentication mechanism if you set this value:
 
 - [GCM_AZREPOS_SP_SECRET][gcm-azrepos-sp-secret]
 - [GCM_AZREPOS_SP_CERT_THUMBPRINT][gcm-azrepos-sp-cert-thumbprint]
+- [GCM_AZREPOS_SP_FEDERATED_CRED][gcm-azrepos-sp-fedcred]
 
 For more information about service principals, see the Azure DevOps
 [documentation][azrepos-sp-mid].
@@ -998,8 +999,8 @@ export GCM_AZREPOS_SERVICE_PRINCIPAL="11111111-1111-1111-1111-111111111111/22222
 ### GCM_AZREPOS_SP_SECRET
 
 Specifies the client secret for the [service principal][service-principal] when
-performing Microsoft authentication for Azure Repos with
-[GCM_AZREPOS_SERVICE_PRINCIPAL][gcm-azrepos-sp] set.
+performing Microsoft authentication for Azure Repos when
+[GCM_AZREPOS_SERVICE_PRINCIPAL][gcm-azrepos-sp] is set.
 
 #### Windows
 
@@ -1036,6 +1037,28 @@ export GCM_AZREPOS_SP_CERT_THUMBPRINT="9b6555292e4ea21cbc2ebd23e66e2f91ebbe92dc"
 ```
 
 **Also see: [credential.azreposServicePrincipalCertificateThumbprint][credential-azrepos-sp-cert-thumbprint]**
+
+---
+
+### GCM_AZREPOS_SP_FEDERATED_CRED
+
+Specifies the federated credential from a third-party identity provider to use
+when authenticating as a [service principal][service-principal] for Azure Repos
+when [GCM_AZREPOS_SERVICE_PRINCIPAL][gcm-azrepos-sp] is set.
+
+#### Windows
+
+```batch
+SET GCM_AZREPOS_SP_FEDERATED_CRED="eyJhbGciOiJIUzI1NiIs..."
+```
+
+#### macOS/Linux
+
+```bash
+export GCM_AZREPOS_SP_FEDERATED_CRED="eyJhbGciOiJIUzI1NiIs..."
+```
+
+**Also see: [credential.azreposServicePrincipalFederatedCredential][credential-azrepos-sp-fedcred]**
 
 ---
 
@@ -1184,6 +1207,8 @@ Defaults to disabled.
 [gcm-azrepos-sp]: #gcm_azrepos_service_principal
 [gcm-azrepos-sp-secret]: #gcm_azrepos_sp_secret
 [gcm-azrepos-sp-cert-thumbprint]: #gcm_azrepos_sp_cert_thumbprint
+[gcm-azrepos-sp-fedcred]: #gcm_azrepos_sp_federated_cred
 [credential-azrepos-sp]: configuration.md#credentialazreposserviceprincipal
 [credential-azrepos-sp-secret]: configuration.md#credentialazreposserviceprincipalsecret
 [credential-azrepos-sp-cert-thumbprint]: configuration.md#credentialazreposserviceprincipalcertificatethumbprint
+[credential-azrepos-sp-fedcred]: configuration.md#credentialazreposserviceprincipalfederatedcredential

@@ -45,6 +45,7 @@ namespace Microsoft.AzureRepos
             public const string ServicePrincipalSecret = "GCM_AZREPOS_SP_SECRET";
             public const string ServicePrincipalCertificateThumbprint = "GCM_AZREPOS_SP_CERT_THUMBPRINT";
             public const string ManagedIdentity = "GCM_AZREPOS_MANAGEDIDENTITY";
+            public const string ServicePrincipalFederatedCredential = "GCM_AZREPOS_SP_FEDERATED_CRED";
         }
 
         public static class GitConfiguration
@@ -59,6 +60,7 @@ namespace Microsoft.AzureRepos
                 public const string ServicePrincipal = "azreposServicePrincipal";
                 public const string ServicePrincipalSecret = "azreposServicePrincipalSecret";
                 public const string ServicePrincipalCertificateThumbprint = "azreposServicePrincipalCertificateThumbprint";
+                public const string ServicePrincipalFederatedCredential = "azreposServicePrincipalFederatedCredential";
                 public const string ManagedIdentity = "azreposManagedIdentity";
             }
         }
