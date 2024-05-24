@@ -546,7 +546,7 @@ namespace Microsoft.AzureRepos
                 AzureDevOpsConstants.EnvironmentVariables.ServicePrincipalFederatedCredential,
                 Constants.GitConfiguration.Credential.SectionName,
                 AzureDevOpsConstants.GitConfiguration.Credential.ServicePrincipalFederatedCredential,
-                out string fedCredential);
+                out string fedCredential) && !string.IsNullOrWhiteSpace(fedCredential);
 
             if (hasFedCred && (hasCertThumbprint || hasClientSecret))
             {
@@ -559,7 +559,24 @@ namespace Microsoft.AzureRepos
 
             if (hasFedCred)
             {
-                sp.FederatedCredential = fedCredential;
+                if (StringComparer.OrdinalIgnoreCase.Equals(fedCredential, AzureDevOpsConstants.AutoServicePrincipalFederatedCred)
+                    && _context.BuildAgent.IsRunningOnBuildAgent)
+                {
+                    // TODO: allow custom audience to be specified
+                    string audience = "api://AzureADTokenExchange";
+                    _context.Trace.WriteLine($"Attempting to acquire identity token for federation from build agent with audience '{audience}'...");
+                    string token = _context.BuildAgent.GetFederatedIdentityToken(audience);
+                    if (!string.IsNullOrWhiteSpace(token))
+                    {
+                        _context.Trace.WriteLineSecrets("Acquired identity token for federation from build agent: {0}",
+                            new object[] { token });
+                        sp.FederatedCredential = token;
+                    }
+                }
+                else
+                {
+                    sp.FederatedCredential = fedCredential;
+                }
             }
             else if (hasCertThumbprint)
             {
@@ -570,10 +587,14 @@ namespace Microsoft.AzureRepos
                     return false;
                 }
 
+                _context.Trace.WriteLine($"Found certificate with thumbprint '{cert.Thumbprint}' for service principal.");
+
                 sp.Certificate = cert;
             }
             else if (hasClientSecret)
             {
+                _context.Trace.WriteLineSecrets("Found client secret for service principal: {0}",
+                    new object[] { clientSecret });
                 sp.ClientSecret = clientSecret;
             }
 

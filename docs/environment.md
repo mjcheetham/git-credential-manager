@@ -1046,16 +1046,28 @@ Specifies the federated credential from a third-party identity provider to use
 when authenticating as a [service principal][service-principal] for Azure Repos
 when [GCM_AZREPOS_SERVICE_PRINCIPAL][gcm-azrepos-sp] is set.
 
+When the value is set to `"auto"`, GCM will attempt to automatically acquire an
+identity token to use for federated authentication from the current
+[environment][auto-fedcred].
+
 #### Windows
 
 ```batch
+REM Explicitly set the federated credential
 SET GCM_AZREPOS_SP_FEDERATED_CRED="eyJhbGciOiJIUzI1NiIs..."
+
+REM Automatically acquire the federated credential
+SET GCM_AZREPOS_SP_FEDERATED_CRED="auto"
 ```
 
 #### macOS/Linux
 
 ```bash
+# Explicitly set the federated credential
 export GCM_AZREPOS_SP_FEDERATED_CRED="eyJhbGciOiJIUzI1NiIs..."
+
+# Automatically acquire the federated credential
+export GCM_AZREPOS_SP_FEDERATED_CRED="auto"
 ```
 
 **Also see: [credential.azreposServicePrincipalFederatedCredential][credential-azrepos-sp-fedcred]**
@@ -1147,6 +1159,7 @@ Defaults to disabled.
 
 **Also see: [trace2.perfFormat][trace2-performance-config]**
 
+[auto-fedcred]: azrepos-misp.md#automatic-federated-credentials
 [autodetect]: autodetect.md
 [azure-access-tokens]: azrepos-users-and-tokens.md
 [configuration]: configuration.md

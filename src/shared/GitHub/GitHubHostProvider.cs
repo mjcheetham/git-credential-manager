@@ -1,7 +1,11 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using GitHub.Diagnostics;
 using GitCredentialManager;
@@ -10,7 +14,7 @@ using GitCredentialManager.Diagnostics;
 
 namespace GitHub
 {
-    public partial class GitHubHostProvider : DisposableObject, IHostProvider, IDiagnosticProvider
+    public partial class GitHubHostProvider : DisposableObject, IHostProvider, IDiagnosticProvider, IBuildAgentProvider
     {
         private static readonly string[] GitHubOAuthScopes =
         {
@@ -474,6 +478,64 @@ namespace GitHub
         public IEnumerable<IDiagnostic> GetDiagnostics()
         {
             yield return new GitHubApiDiagnostic(_gitHubApi, _context);
+        }
+
+        public bool IsRunningOnBuildAgent =>
+            _context.Environment.Variables.TryGetValue("GITHUB_ACTIONS", out string var) && var.IsTruthy();
+
+        public string GetFederatedIdentityToken(string audience)
+        {
+            if (!IsRunningOnBuildAgent)
+            {
+                return null;
+            }
+
+            if (!_context.Environment.Variables.TryGetValue("ACTIONS_ID_TOKEN_REQUEST_TOKEN", out string requestToken))
+            {
+                return null;
+            }
+
+            if (!_context.Environment.Variables.TryGetValue("ACTIONS_ID_TOKEN_REQUEST_URL", out string requestUrl))
+            {
+                return null;
+            }
+
+            // Append audience to the request URL
+            if (!string.IsNullOrWhiteSpace(audience))
+            {
+                requestUrl += $"&audience={WebUtility.UrlEncode(audience)}";
+            }
+
+            _context.Trace.WriteLine($"GitHub Actions identity token request URL: {requestUrl}");
+            _context.Trace.WriteLineSecrets("GitHub Actions identity token request token: {0}",
+                new object[] { requestToken });
+
+            // Exchange token for an OIDC identity token
+            HttpClient http = _context.HttpClientFactory.CreateClient();
+            using var request = new HttpRequestMessage(HttpMethod.Get, requestUrl);
+            request.AddBearerAuthenticationHeader(requestToken);
+            request.Headers.Add("Accept", "application/json; api-version=2.0");
+            using HttpResponseMessage response = http.Send(request);
+            if (!response.IsSuccessStatusCode)
+            {
+                _context.Trace.WriteLine($"Failed to get identity token: {response.StatusCode}");
+                return null;
+            }
+
+            var result = response.Content.ReadFromJsonAsync<IdTokenResult>().Result;
+            if (result is null)
+            {
+                _context.Trace.WriteLine("Failed to parse identity token response.");
+                return null;
+            }
+
+            return result.Value;
+        }
+
+        private class IdTokenResult
+        {
+            [JsonPropertyName("value")]
+            public string Value { get; set; }
         }
 
         #region Private Methods

@@ -29,6 +29,8 @@ namespace Microsoft.AzureRepos
         public const string UrnScheme = "azrepos";
         public const string UrnOrgPrefix = "org";
 
+        public const string AutoServicePrincipalFederatedCred = "auto";
+
         public static class PersonalAccessTokenScopes
         {
             public const string ReposWrite = "vso.code_write";

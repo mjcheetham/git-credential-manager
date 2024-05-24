@@ -911,10 +911,18 @@ Specifies the federated credential from a third-party identity provider to use
 when authenticating as a [service principal][service-principal] for Azure Repos
 when [credential.azreposServicePrincipal][credential-azrepos-sp] is set.
 
+When the value is set to `"auto"`, GCM will attempt to automatically acquire an
+identity token to use for federated authentication from the current
+[environment][auto-fedcred].
+
 #### Example
 
 ```shell
+# Explicitly set the federated credential
 git config --global credential.azreposServicePrincipalFederatedCredential "eyJhbGciOiJIUzI1NiIs..."
+
+# Automatically acquire the federated credential
+git config --global credential.azreposServicePrincipalFederatedCredential "auto"
 ```
 
 **Also see: [GCM_AZREPOS_SP_FEDERATED_CRED][gcm-azrepos-sp-fedcred]**
@@ -988,6 +996,7 @@ Defaults to disabled.
 
 **Also see: [GIT_TRACE2_PERF][trace2-performance-env]**
 
+[auto-fedcred]: azrepos-misp.md#automatic-federated-credentials
 [auto-detection]: autodetect.md
 [azure-tokens]: azrepos-users-and-tokens.md
 [use-http-path]: https://git-scm.com/docs/gitcredentials/#Documentation/gitcredentials.txt-useHttpPath

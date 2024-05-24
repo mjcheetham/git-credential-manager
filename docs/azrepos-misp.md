@@ -126,6 +126,41 @@ To use federated credentials you must first establish a link between the service
 principal and the third-party identity provider. See the
 [Azure documentation][az-federated] for more information on how to do this.
 
+##### Automatic Federated Credentials
+
+In supported environments, GCM can automatically acquire tokens for federated
+authentication when either the [`GCM_AZREPOS_SP_FEDERATED_CRED`][gcm-sp-fedcred-env]
+or [`credential.azreposServicePrincipalFederatedCredential`][gcm-sp-fedcred-config]
+settings are set to the special value `"auto"`.
+
+The current set supported environments are:
+
+- GitHub Actions
+
+   To use federated credentials in GitHub Actions, you must grant the
+    `id-token` write permission in your workflow.
+
+    ```yaml
+    name: example-workflow
+
+    on:
+      workflow_dispatch:
+
+    permissions:
+      id-token: write
+
+    jobs:
+      job1:
+        runs-on: ubuntu-latest
+        steps:
+        - name: Clone from Azure Repos using federated credentials
+          env:
+            GCM_AZREPOS_SERVICE_PRINCIPAL: {tenant-id}/{client-id}
+            GCM_AZREPOS_SP_FEDERATED_CRED: auto
+          run: |
+            git clone https://dev.azure.com/{org}/{project}/_git/{repo}
+    ```
+
 [az-mi]: https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/overview
 [az-sp]: https://learn.microsoft.com/en-us/entra/identity-platform/app-objects-and-service-principals?tabs=browser
 [az-federated]: https://learn.microsoft.com/en-us/entra/workload-id/workload-identity-federation

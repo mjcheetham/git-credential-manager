@@ -62,6 +62,12 @@ namespace GitCredentialManager
                 IEnumerable<IDiagnostic> providerDiagnostics = diagnosticProvider.GetDiagnostics();
                 _diagnostics.AddRange(providerDiagnostics);
             }
+
+            // If the provide knows about build host environments we should enable those
+            if (provider is IBuildAgentProvider buildHostProvider)
+            {
+                Context.BuildAgent.Register(buildHostProvider);
+            }
         }
 
         protected override async Task<int> RunInternalAsync(string[] args)

@@ -13,6 +13,7 @@ namespace GitCredentialManager.Tests.Objects
 
             InstallDir = Path.GetDirectoryName(AppPath);
 
+            BuildAgent = new NullBuildAgent();
             Streams = new TestStandardStreams();
             Terminal = new TestTerminal();
             SessionManager = new TestSessionManager();
@@ -43,6 +44,8 @@ namespace GitCredentialManager.Tests.Objects
 
         public IProcessManager ProcessManager { get; set; }
 
+        public IBuildAgent BuildAgent { get; set; }
+
         #region ICommandContext
 
         string ICommandContext.ApplicationPath
@@ -72,6 +75,8 @@ namespace GitCredentialManager.Tests.Objects
         IGit ICommandContext.Git => Git;
 
         IEnvironment ICommandContext.Environment => Environment;
+
+        IBuildAgent ICommandContext.BuildAgent => BuildAgent;
 
         #endregion
 

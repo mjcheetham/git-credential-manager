@@ -83,6 +83,12 @@ namespace GitCredentialManager
         /// Process manager.
         /// </summary>
         IProcessManager ProcessManager { get; }
+
+        /// <summary>
+        /// Access services provided by a continuous integration (CI) build agent, if available in the current
+        /// environment.
+        /// </summary>
+        IBuildAgent BuildAgent { get; }
     }
 
     /// <summary>
@@ -98,6 +104,7 @@ namespace GitCredentialManager
             Streams = new StandardStreams();
             Trace   = new Trace();
             Trace2  = new Trace2(this);
+            BuildAgent = new BuildAgent();
 
             if (PlatformUtils.IsWindows())
             {
@@ -220,6 +227,8 @@ namespace GitCredentialManager
         public IEnvironment Environment { get; }
 
         public IProcessManager ProcessManager { get; }
+
+        public IBuildAgent BuildAgent { get; }
 
         #endregion
 
