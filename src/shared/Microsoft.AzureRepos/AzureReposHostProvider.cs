@@ -83,7 +83,7 @@ namespace Microsoft.AzureRepos
                 return new GitCredential(mid, azureResult.AccessToken);
             }
 
-            if (UseServicePrincipal(out ServicePrincipalIdentity sp))
+            if (TryGetServicePrincipalIdentity(out ServicePrincipalIdentity sp))
             {
                 _context.Trace.WriteLine($"Getting Azure Access Token for service principal {sp.TenantId}/{sp.Id}...");
                 var azureResult = await _msAuth.GetTokenForServicePrincipalAsync(sp, AzureDevOpsConstants.AzureDevOpsDefaultScopes);
@@ -132,7 +132,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine("Nothing to store for managed identity authentication.");
             }
-            else if (UseServicePrincipal(out _))
+            else if (UseServicePrincipal(out _, out _))
             {
                 _context.Trace.WriteLine("Nothing to store for service principal authentication.");
             }
@@ -167,7 +167,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine("Nothing to erase for managed identity authentication.");
             }
-            else if (UseServicePrincipal(out _))
+            else if (UseServicePrincipal(out _, out _))
             {
                 _context.Trace.WriteLine("Nothing to erase for service principal authentication.");
             }
@@ -493,15 +493,17 @@ namespace Microsoft.AzureRepos
             return defaultValue;
         }
 
-        private bool UseServicePrincipal(out ServicePrincipalIdentity sp)
+        private bool UseServicePrincipal(out string tenantId, out string clientId)
         {
+            tenantId = null;
+            clientId = null;
+
             if (!_context.Settings.TryGetSetting(
                     AzureDevOpsConstants.EnvironmentVariables.ServicePrincipalId,
                     Constants.GitConfiguration.Credential.SectionName,
                     AzureDevOpsConstants.GitConfiguration.Credential.ServicePrincipal,
                     out string spStr) || string.IsNullOrWhiteSpace(spStr))
             {
-                sp = null;
                 return false;
             }
 
@@ -510,19 +512,27 @@ namespace Microsoft.AzureRepos
             if (split.Length < 1 || string.IsNullOrWhiteSpace(split[0]))
             {
                 _context.Streams.Error.WriteLine("error: unable to use configured service principal - missing tenant ID in configuration");
-                sp = null;
                 return false;
             }
 
             if (split.Length < 2 || string.IsNullOrWhiteSpace(split[1]))
             {
                 _context.Streams.Error.WriteLine("error: unable to use configured service principal - missing client ID in configuration");
-                sp = null;
                 return false;
             }
 
-            string tenantId = split[0];
-            string clientId = split[1];
+            tenantId = split[0];
+            clientId = split[1];
+            return true;
+        }
+
+        private bool TryGetServicePrincipalIdentity(out ServicePrincipalIdentity sp)
+        {
+            if (!UseServicePrincipal(out string tenantId, out string clientId))
+            {
+                sp = null;
+                return false;
+            }
 
             sp = new ServicePrincipalIdentity
             {
