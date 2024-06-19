@@ -30,6 +30,7 @@ namespace Microsoft.AzureRepos
         public const string UrnOrgPrefix = "org";
 
         public const string AutoServicePrincipalFederatedCred = "auto";
+        public const string DefaultFederatedAudience = "api://AzureADTokenExchange";
 
         public static class PersonalAccessTokenScopes
         {
@@ -48,6 +49,7 @@ namespace Microsoft.AzureRepos
             public const string ServicePrincipalCertificateThumbprint = "GCM_AZREPOS_SP_CERT_THUMBPRINT";
             public const string ManagedIdentity = "GCM_AZREPOS_MANAGEDIDENTITY";
             public const string ServicePrincipalFederatedCredential = "GCM_AZREPOS_SP_FEDERATED_CRED";
+            public const string ServicePrincipalFederatedAudience = "GCM_AZREPOS_SP_FEDERATED_AUDIENCE";
         }
 
         public static class GitConfiguration
@@ -63,6 +65,7 @@ namespace Microsoft.AzureRepos
                 public const string ServicePrincipalSecret = "azreposServicePrincipalSecret";
                 public const string ServicePrincipalCertificateThumbprint = "azreposServicePrincipalCertificateThumbprint";
                 public const string ServicePrincipalFederatedCredential = "azreposServicePrincipalFederatedCredential";
+                public const string ServicePrincipalFederatedAudience = "azreposServicePrincipalFederatedAudience";
                 public const string ManagedIdentity = "azreposManagedIdentity";
             }
         }

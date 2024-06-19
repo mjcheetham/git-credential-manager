@@ -562,8 +562,18 @@ namespace Microsoft.AzureRepos
                 if (StringComparer.OrdinalIgnoreCase.Equals(fedCredential, AzureDevOpsConstants.AutoServicePrincipalFederatedCred)
                     && _context.BuildAgent.IsRunningOnBuildAgent)
                 {
-                    // TODO: allow custom audience to be specified
-                    string audience = "api://AzureADTokenExchange";
+                    string audience = AzureDevOpsConstants.DefaultFederatedAudience;
+
+                    // Check for custom audience
+                    if (_context.Settings.TryGetSetting(
+                            AzureDevOpsConstants.EnvironmentVariables.ServicePrincipalFederatedAudience,
+                            Constants.GitConfiguration.Credential.SectionName,
+                            AzureDevOpsConstants.GitConfiguration.Credential.ServicePrincipalFederatedAudience,
+                            out string fedAudience))
+                    {
+                        audience = fedAudience;
+                    }
+
                     _context.Trace.WriteLine($"Attempting to acquire identity token for federation from build agent with audience '{audience}'...");
                     string token = _context.BuildAgent.GetFederatedIdentityToken(audience);
                     if (!string.IsNullOrWhiteSpace(token))

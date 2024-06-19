@@ -1074,6 +1074,29 @@ export GCM_AZREPOS_SP_FEDERATED_CRED="auto"
 
 ---
 
+### GCM_AZREPOS_SP_FEDERATED_AUDIENCE
+
+Specifies the audience to use with [federated credentials][gcm-azrepos-sp-fedcred]
+when authenticating as a [service principal][service-principal] for Azure Repos.
+
+Defaults to `api://AzureADTokenExchange`.
+
+#### Windows
+
+```batch
+SET GCM_AZREPOS_SP_FEDERATED_CRED="my-audience
+```
+
+#### macOS/Linux
+
+```bash
+export GCM_AZREPOS_SP_FEDERATED_CRED="my-audience"
+```
+
+**Also see: [credential.azreposServicePrincipalFederatedAudience][credential-azrepos-sp-fedaud]**
+
+---
+
 ### GIT_TRACE2
 
 Turns on Trace2 Normal Format tracing - see [Git's Trace2 Normal Format
@@ -1225,3 +1248,4 @@ Defaults to disabled.
 [credential-azrepos-sp-secret]: configuration.md#credentialazreposserviceprincipalsecret
 [credential-azrepos-sp-cert-thumbprint]: configuration.md#credentialazreposserviceprincipalcertificatethumbprint
 [credential-azrepos-sp-fedcred]: configuration.md#credentialazreposserviceprincipalfederatedcredential
+[credential-azrepos-sp-fedaud]: configuration.md#credentialazreposserviceprincipalfederatedaudience

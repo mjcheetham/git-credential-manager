@@ -929,6 +929,23 @@ git config --global credential.azreposServicePrincipalFederatedCredential "auto"
 
 ---
 
+### credential.azreposServicePrincipalFederatedAudience
+
+Specifies the audience to use with [federated credentials][credential-azrepos-sp-fedcred]
+when authenticating as a [service principal][service-principal] for Azure Repos.
+
+Defaults to `api://AzureADTokenExchange`.
+
+#### Example
+
+```shell
+git config --global credential.azreposServicePrincipalFederatedAudience "my-audience"
+```
+
+**Also see: [GCM_AZREPOS_SP_FEDERATED_AUDIENCE][gcm-azrepos-sp-fedaud]**
+
+---
+
 ### trace2.normalTarget
 
 Turns on Trace2 Normal Format tracing - see [Git's Trace2 Normal Format
@@ -1065,3 +1082,4 @@ Defaults to disabled.
 [gcm-azrepos-sp-secret]: environment.md#GCM_AZREPOS_SP_SECRET
 [gcm-azrepos-sp-cert-thumbprint]: environment.md#GCM_AZREPOS_SP_CERT_THUMBPRINT
 [gcm-azrepos-sp-fedcred]: environment.md#GCM_AZREPOS_SP_FEDERATED_CRED
+[gcm-azrepos-sp-fedaud]: environment.md#GCM_AZREPOS_SP_FEDERATED_AUDIENCE
