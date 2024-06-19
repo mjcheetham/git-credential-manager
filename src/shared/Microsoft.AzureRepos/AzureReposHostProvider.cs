@@ -593,6 +593,18 @@ namespace Microsoft.AzureRepos
                         sp.FederatedCredential = token;
                     }
                 }
+                else if (Uri.TryCreate(fedCredential, UriKind.Absolute, out Uri fedCredUri) && fedCredUri.IsFile)
+                {
+                    string credFilePath = fedCredUri.LocalPath;
+                    if (!_context.FileSystem.FileExists(credFilePath))
+                    {
+                        _context.Streams.Error.WriteLine($"error: unable to find federated credential file '{credFilePath}' for service principal");
+                        return false;
+                    }
+
+                    _context.Trace.WriteLine($"Found federated credential file '{credFilePath}' for service principal.");
+                    sp.FederatedCredential = _context.FileSystem.ReadAllText(credFilePath);
+                }
                 else
                 {
                     sp.FederatedCredential = fedCredential;

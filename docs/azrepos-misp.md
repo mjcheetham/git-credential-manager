@@ -114,9 +114,11 @@ Client Secret|[`credential.azreposServicePrincipalSecret`][gcm-sp-secret-config]
 Certificate|[`credential.azreposServicePrincipalCertificateThumbprint`][gcm-sp-cert-config]|[`GCM_AZREPOS_SP_CERT_THUMBPRINT`][gcm-sp-cert-env]
 Federated Credential|[`credential.azreposServicePrincipalFederatedCredential`][gcm-sp-fedcred-config]|[`GCM_AZREPOS_SP_FEDERATED_CRED`][gcm-sp-fedcred-env]
 
-The value for these options should be the client secret, the thumbrint of the
-certificate, or the federated credential that is associated with the Service
-Principal.
+For the client secret option the value should be the secret value. For the
+certificate option the value should be the thumbrint of the certificate. For the
+federated credential option the value can be: the actual credential value, a
+`file://` path to a file containing the credential, or the special value`"auto"`
+to acquire a token from the environment, such as from a CI build agent.
 
 The certificate itself should be installed on the machine where GCM is running
 and should be installed in personal store the certificate store for either the

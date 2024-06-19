@@ -1046,6 +1046,9 @@ Specifies the federated credential from a third-party identity provider to use
 when authenticating as a [service principal][service-principal] for Azure Repos
 when [GCM_AZREPOS_SERVICE_PRINCIPAL][gcm-azrepos-sp] is set.
 
+If the credential value is stored in a local file, you can specific the path to
+the file using the `file://` prefix. The path can be a UNIX or Windows path.
+
 When the value is set to `"auto"`, GCM will attempt to automatically acquire an
 identity token to use for federated authentication from the current
 [environment][auto-fedcred].
@@ -1056,6 +1059,9 @@ identity token to use for federated authentication from the current
 REM Explicitly set the federated credential
 SET GCM_AZREPOS_SP_FEDERATED_CRED="eyJhbGciOiJIUzI1NiIs..."
 
+REM Read the federated credential from a file
+SET GCM_AZREPOS_SP_FEDERATED_CRED "file://C:/path/to/credential.jwt"
+
 REM Automatically acquire the federated credential
 SET GCM_AZREPOS_SP_FEDERATED_CRED="auto"
 ```
@@ -1065,6 +1071,9 @@ SET GCM_AZREPOS_SP_FEDERATED_CRED="auto"
 ```bash
 # Explicitly set the federated credential
 export GCM_AZREPOS_SP_FEDERATED_CRED="eyJhbGciOiJIUzI1NiIs..."
+
+# Read the federated credential from a file
+export GCM_AZREPOS_SP_FEDERATED_CRED "file:///path/to/credential.jwt"
 
 # Automatically acquire the federated credential
 export GCM_AZREPOS_SP_FEDERATED_CRED="auto"
