@@ -177,10 +177,11 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential result = await provider.GetCredentialAsync(input);
+            GetCredentialResponse result = await provider.GetCredentialAsync(input);
 
-            Assert.Equal(result.Account, newCredential.Account);
-            Assert.Equal(result.Password, newCredential.Password);
+            Assert.NotNull(result.Credential);
+            Assert.Equal(result.Credential.Account, newCredential.Account);
+            Assert.Equal(result.Credential.Password, newCredential.Password);
             ghAuthMock.Verify(x => x.GetAuthenticationAsync(
                 new Uri("https://github.com"), null, It.IsAny<AuthenticationModes>()),
                 Times.Once);
@@ -207,11 +208,12 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential result = await provider.GetCredentialAsync(input);
+            GetCredentialResponse result = await provider.GetCredentialAsync(input);
 
             Assert.NotNull(result);
-            Assert.Equal("alice", result.Account);
-            Assert.Equal("letmein123", result.Password);
+            Assert.NotNull(result.Credential);
+            Assert.Equal("alice", result.Credential.Account);
+            Assert.Equal("letmein123", result.Credential.Password);
         }
 
         [Fact]
@@ -236,11 +238,12 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential result = await provider.GetCredentialAsync(input);
+            GetCredentialResponse result = await provider.GetCredentialAsync(input);
 
             Assert.NotNull(result);
-            Assert.Equal("bob_contoso", result.Account);
-            Assert.Equal("secret123", result.Password);
+            Assert.NotNull(result.Credential);
+            Assert.Equal("bob_contoso", result.Credential.Account);
+            Assert.Equal("secret123", result.Credential.Password);
         }
 
         [Fact]
@@ -268,11 +271,12 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential result = await provider.GetCredentialAsync(input);
+            GetCredentialResponse result = await provider.GetCredentialAsync(input);
 
             Assert.NotNull(result);
-            Assert.Equal("john_contoso", result.Account);
-            Assert.Equal("who_knows", result.Password);
+            Assert.NotNull(result.Credential);
+            Assert.Equal("john_contoso", result.Credential.Account);
+            Assert.Equal("who_knows", result.Credential.Password);
 
             ghAuthMock.Verify(x => x.SelectAccountAsync(
                     new Uri("https://github.com"), new[] { "bob_contoso", "john_contoso" }),
@@ -311,10 +315,12 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential result = await provider.GetCredentialAsync(input);
+            GetCredentialResponse result = await provider.GetCredentialAsync(input);
 
-            Assert.Equal(newCredential.Account, result.Account);
-            Assert.Equal(newCredential.Password, result.Password);
+            Assert.NotNull(result);
+            Assert.NotNull(result.Credential);
+            Assert.Equal(newCredential.Account, result.Credential.Account);
+            Assert.Equal(newCredential.Password, result.Credential.Password);
 
             ghAuthMock.Verify(x => x.GetAuthenticationAsync(
                     new Uri("https://github.com"), null, It.IsAny<AuthenticationModes>()),

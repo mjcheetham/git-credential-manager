@@ -179,7 +179,7 @@ namespace GitLab
         }
 
         // <remarks>Stores OAuth tokens as a side effect</remarks>
-        public override async Task<ICredential> GetCredentialAsync(InputArguments input)
+        public override async Task<GetCredentialResponse> GetCredentialAsync(InputArguments input)
         {
             string service = GetServiceName(input);
             ICredential credential = Context.CredentialStore.Get(service, input.UserName);
@@ -192,7 +192,7 @@ namespace GitLab
 
             if (credential != null)
             {
-                return credential;
+                return new  GetCredentialResponse(credential);
             }
 
             string refreshService = GetRefreshTokenServiceName(input);
@@ -221,7 +221,8 @@ namespace GitLab
                 // store refresh token under a separate service
                 Context.CredentialStore.AddOrUpdate(refreshService, oAuthCredential.Account, oAuthCredential.RefreshToken);
             }
-            return credential;
+
+            return new GetCredentialResponse(credential);
         }
 
         private async Task<bool> IsOAuthTokenExpired(Uri baseUri, string accessToken)

@@ -78,7 +78,7 @@ namespace Atlassian.Bitbucket
             return supported;
         }
 
-        public async Task<ICredential> GetCredentialAsync(InputArguments input)
+        public async Task<GetCredentialResponse> GetCredentialAsync(InputArguments input)
         {
             // We should not allow unencrypted communication and should inform the user
             if (!_context.Settings.AllowUnsafeRemotes &&
@@ -93,8 +93,10 @@ namespace Atlassian.Bitbucket
 
             var authModes = await GetSupportedAuthenticationModesAsync(input);
 
-            return await GetStoredCredentials(input, authModes) ??
-                   await GetRefreshedCredentials(input, authModes);
+            var credential = await GetStoredCredentials(input, authModes) ??
+                             await GetRefreshedCredentials(input, authModes);
+
+            return new GetCredentialResponse(credential);
         }
 
         private async Task<ICredential> GetStoredCredentials(InputArguments input, AuthenticationModes authModes)
