@@ -14,7 +14,8 @@ namespace GitCredentialManager.Commands
 
         protected override async Task ExecuteInternalAsync(InputArguments input, IHostProvider provider)
         {
-            ICredential credential = await provider.GetCredentialAsync(input);
+            GetCredentialResponse response = await provider.GetCredentialAsync(input);
+            ICredential credential = response.Credential;
 
             var output = new Dictionary<string, string>();
 

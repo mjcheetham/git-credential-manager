@@ -17,6 +17,7 @@ namespace GitCredentialManager.Tests.Commands
             const string testUserName = "john.doe";
             const string testPassword = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
             ICredential testCredential = new GitCredential(testUserName, testPassword);
+            var testResponse = new GetCredentialResponse(testCredential);
             var stdin = $"protocol=http\nhost=example.com\n\n";
             var expectedStdOutDict = new Dictionary<string, string>
             {
@@ -28,7 +29,7 @@ namespace GitCredentialManager.Tests.Commands
 
             var providerMock = new Mock<IHostProvider>();
             providerMock.Setup(x => x.GetCredentialAsync(It.IsAny<InputArguments>()))
-                        .ReturnsAsync(testCredential);
+                        .ReturnsAsync(testResponse);
             var providerRegistry = new TestHostProviderRegistry {Provider = providerMock.Object};
             var context = new TestCommandContext
             {
