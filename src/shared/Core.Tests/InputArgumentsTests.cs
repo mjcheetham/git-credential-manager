@@ -27,6 +27,11 @@ namespace GitCredentialManager.Tests
                 {
                     "basic realm=\"example.com\"",
                     "bearer authorize_uri=https://id.example.com p=1 q=0"
+                },
+                ["capability"] = new[]
+                {
+                    "state",
+                    "authtype"
                 }
             };
 
@@ -43,6 +48,7 @@ namespace GitCredentialManager.Tests
                     "bearer authorize_uri=https://id.example.com p=1 q=0"
                 },
                 inputArgs.WwwAuth);
+            Assert.Equal(GitCapabilities.AuthType | GitCapabilities.State, inputArgs.Capabilities);
         }
 
         [Fact]
@@ -356,6 +362,25 @@ namespace GitCredentialManager.Tests
             bool result = inputArgs.TryGetHostAndPort(out _, out _);
 
             Assert.False(result);
+        }
+
+        [Fact]
+        public void InputArguments_Capabilities_UnknownCapability_SucceedsParsingKnown()
+        {
+            var dict = new Dictionary<string, IList<string>>
+            {
+                ["protocol"] = new []{"https"},
+                ["host"]     = new []{"example.com"},
+                ["capability"] = new[]
+                {
+                    "unknown-capability", // unknown
+                    "state" // known
+                }
+            };
+
+            var inputArgs = new InputArguments(dict);
+
+            Assert.Equal(GitCapabilities.State, inputArgs.Capabilities);
         }
     }
 }

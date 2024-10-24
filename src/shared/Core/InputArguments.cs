@@ -16,6 +16,7 @@ namespace GitCredentialManager
     public class InputArguments
     {
         private readonly IReadOnlyDictionary<string, IList<string>> _dict;
+        private GitCapabilities? _capabilities;
 
         public InputArguments(IDictionary<string, string> dict)
         {
@@ -37,6 +38,7 @@ namespace GitCredentialManager
 
         #region Common Arguments
 
+        public GitCapabilities Capabilities => _capabilities ??= ParseCapabilities();
         public string Protocol => GetArgumentOrDefault("protocol");
         public string Host     => GetArgumentOrDefault("host");
         public string Path     => GetArgumentOrDefault("path");
@@ -165,6 +167,22 @@ namespace GitCredentialManager
             }
 
             return null;
+        }
+
+        private GitCapabilities ParseCapabilities()
+        {
+            IList<string> values = GetMultiArgumentOrDefault("capability");
+            var caps = GitCapabilities.None;
+
+            foreach (string str in values)
+            {
+                if (Enum.TryParse(str, true, out GitCapabilities parsed))
+                {
+                    caps |= parsed;
+                }
+            }
+
+            return caps;
         }
 
         #endregion
