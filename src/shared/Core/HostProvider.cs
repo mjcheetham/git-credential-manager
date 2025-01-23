@@ -65,9 +65,12 @@ namespace GitCredentialManager
         public GetCredentialResponse(ICredential credential)
         {
             Credential = credential;
+            State = new Dictionary<string, string>(StringComparer.Ordinal);
         }
 
         public ICredential Credential { get; }
+
+        public IDictionary<string, string> State { get; }
     }
 
     /// <summary>
