@@ -17,6 +17,7 @@ namespace GitCredentialManager
     {
         private readonly IReadOnlyDictionary<string, IList<string>> _dict;
         private GitCapabilities? _capabilities;
+        private IDictionary<string, string> _state;
 
         public InputArguments(IDictionary<string, string> dict)
         {
@@ -45,6 +46,7 @@ namespace GitCredentialManager
         public string UserName => GetArgumentOrDefault("username");
         public string Password => GetArgumentOrDefault("password");
         public IList<string> WwwAuth => GetMultiArgumentOrDefault("wwwauth");
+        public IDictionary<string, string> State => _state ??= GetState();
 
         #endregion
 
@@ -167,6 +169,39 @@ namespace GitCredentialManager
             }
 
             return null;
+        }
+
+        public IDictionary<string, string> GetState(string prefix = null)
+        {
+            IList<string> values = GetMultiArgumentOrDefault("state");
+            var result = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            foreach (string kvp in values)
+            {
+                string[] kvpParts = kvp.Split('=', 2);
+                if (kvpParts.Length == 2)
+                {
+                    string key = kvpParts[0];
+                    string value = kvpParts[1];
+
+                    // Only read state entries that start with "gcm."
+                    if (!key.StartsWith("gcm.", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    // If a prefix is specified, only read entries that match the prefix
+                    if (prefix?.Length > 0 && !key.StartsWith($"gcm.{prefix}.", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    // Strip "gcm." from the key
+                    result[key[4..]] = value;
+                }
+            }
+
+            return result;
         }
 
         private GitCapabilities ParseCapabilities()
