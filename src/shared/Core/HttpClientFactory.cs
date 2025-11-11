@@ -129,8 +129,13 @@ namespace GitCredentialManager
                     }
 
                     // Import the custom certs
+#if NETFRAMEWORK
                     X509Certificate2Collection certBundle = new X509Certificate2Collection();
                     certBundle.Import(certBundlePath);
+#else
+                    X509Certificate2Collection certBundle =
+                        X509CertificateLoader.LoadPkcs12CollectionFromFile(certBundlePath, null);
+#endif
 
                     try
                     {
