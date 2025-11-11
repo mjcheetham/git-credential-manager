@@ -29,6 +29,20 @@
   #error Installer target property 'InstallTarget' must be 'user' or 'system'
 #endif
 
+#ifndef Runtime
+  #error Runtime property 'Runtime' must be specifed
+#endif
+
+#if Runtime == "win-x86"
+  #define GcmArch "x86"
+#elif Runtime == "win-x64"
+  #define GcmArch "x64"
+#elif Runtime == "win-arm64"
+  #define GcmArch "arm64"
+#else
+  #error Unsupported runtime {Runtime}
+#endif
+
 ; Define core properties
 #define GcmShortName "Git Credential Manager"
 #define GcmPublisher "GitHub"
@@ -40,7 +54,6 @@
 #define GcmRepoRoot "..\..\.."
 #define GcmAssets GcmRepoRoot + "\assets"
 #define GcmExe "git-credential-manager.exe"
-#define GcmArch "x86"
 
 #ifnexist PayloadDir + "\" + GcmExe
   #error Payload files are missing

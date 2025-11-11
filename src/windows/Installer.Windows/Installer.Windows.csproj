@@ -6,7 +6,6 @@
     <TargetFramework>net10.0</TargetFramework>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <EnableDefaultItems>false</EnableDefaultItems>
-    <PayloadPath>$(PlatformOutPath)Installer.Windows\bin\$(Configuration)\net10.0\win-x86</PayloadPath>
     <InnoSetupVersion>6.3.1</InnoSetupVersion>
   </PropertyGroup>
 
@@ -27,16 +26,11 @@
 
   <Target Name="CoreCompile" Condition="'$(OSPlatform)'=='windows'">
     <PropertyGroup>
-      <InnoSetupCommandSystem>"$(NuGetPackageRoot)Tools.InnoSetup\$(InnoSetupVersion)\tools\ISCC.exe" /DPayloadDir="$(PayloadPath)" /DInstallTarget=system "$(RepoSrcPath)\windows\Installer.Windows\Setup.iss" /O"$(OutputPath)"</InnoSetupCommandSystem>
-      <InnoSetupCommandUser>"$(NuGetPackageRoot)Tools.InnoSetup\$(InnoSetupVersion)\tools\ISCC.exe" /DPayloadDir="$(PayloadPath)" /DInstallTarget=user "$(RepoSrcPath)\windows\Installer.Windows\Setup.iss" /O"$(OutputPath)"</InnoSetupCommandUser>
+      <ISCC>$(NuGetPackageRoot)tools.innosetup\$(InnoSetupVersion)\tools\iscc.exe</ISCC>
     </PropertyGroup>
 
-    <Message Text="Lay Out" Importance="High" />
-    <Exec Condition="'$(NoLayout)'!='true'" Command="powershell.exe –NonInteractive –ExecutionPolicy Unrestricted -Command &quot;&amp; {&amp;'$(MSBuildProjectDirectory)\layout.ps1' -Configuration '$(Configuration)' -Output '$(PayloadPath)'}&quot;" />
-    <Message Text="$(InnoSetupCommandSystem)" Importance="High" />
-    <Exec Command="$(InnoSetupCommandSystem)" />
-    <Message Text="$(InnoSetupCommandUser)" Importance="High" />
-    <Exec Command="$(InnoSetupCommandUser)" />
+    <Message Text="powershell.exe -NonInteractive -ExecutionPolicy Unrestricted -Command &quot; &amp; $(MSBuildProjectDirectory)\build.ps1 -Configuration '$(Configuration)' -Runtime '$(RuntimeIdentifier)' -ISCC '$(ISCC)' &quot;" Importance="High" />
+    <Exec Command="powershell.exe -NonInteractive -ExecutionPolicy Unrestricted -Command &quot; &amp; $(MSBuildProjectDirectory)\build.ps1 -Configuration '$(Configuration)' -Runtime '$(RuntimeIdentifier)' -ISCC '$(ISCC)' &quot;" />
   </Target>
 
   <!-- We don't produce or copy any dependent files for this project -->

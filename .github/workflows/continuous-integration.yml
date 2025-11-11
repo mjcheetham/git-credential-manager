@@ -14,6 +14,9 @@ jobs:
   windows:
     name: Windows
     runs-on: windows-latest
+    strategy:
+      matrix:
+        runtime: [ win-x86, win-x64, win-arm64 ]
 
     steps:
     - uses: actions/checkout@v5
@@ -27,7 +30,10 @@ jobs:
       run: dotnet restore
 
     - name: Build
-      run: dotnet build --configuration WindowsRelease
+      run: |
+        dotnet build src/windows/Installer.Windows/*.csproj \
+         --configuration=Release \
+         --runtime=${{ matrix.runtime }}
 
     - name: Test
       run: |
@@ -37,14 +43,14 @@ jobs:
       shell: bash
       run: |
         mkdir -p artifacts/bin
-        mv out/windows/Installer.Windows/bin/Release/net10.0/win-x86 artifacts/bin/
-        cp out/windows/Installer.Windows/bin/Release/net10.0/win-x86.sym/* artifacts/bin/win-x86/
-        mv out/windows/Installer.Windows/bin/Release/net10.0/gcm*.exe artifacts/
+        mv out/windows/Installer.Windows/pkg/Release/${{ matrix.runtime }} artifacts/bin/
+        cp out/windows/Installer.Windows/pkg/Release/${{ matrix.runtime }}.sym/* artifacts/bin/${{ matrix.runtime }}/
+        mv out/windows/Installer.Windows/pkg/Release/gcm*.exe artifacts/
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v5
       with:
-        name: win-x86
+        name: ${{ matrix.runtime }}
         path: |
           artifacts
 

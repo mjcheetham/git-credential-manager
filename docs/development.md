@@ -40,9 +40,9 @@ To build from the command line, run:
 dotnet build -c WindowsDebug
 ```
 
-You can find a copy of the installer .exe file in `out\windows\Installer.Windows\bin\Debug\net10.0`.
+You can find a copy of the installer .exe file in `out\windows\Installer.Windows\pkg\Debug`.
 
-The flat binaries can also be found in `out\windows\Payload.Windows\bin\Debug\net10.0\win-x86`.
+The flat binaries can also be found in `out\windows\Payload.Windows\pkg\Debug\$RUNTIME`.
 
 ### Linux
 
@@ -54,7 +54,8 @@ To build from the command line, run:
 dotnet build -c LinuxDebug
 ```
 
-If you want to build for a specific architecture, you can provide `linux-x64` or `linux-arm64` or `linux-arm` as the runtime:
+If you want to build for a specific architecture, you can provide `linux-x64` or
+`linux-arm64` or `linux-arm` as the runtime:
 
 ```shell
 dotnet build -c LinuxDebug -r linux-arm64
