@@ -41,9 +41,6 @@ OUT="$ROOT/out"
 GCM_SRC="$SRC/shared/Git-Credential-Manager"
 PROJ_OUT="$OUT/linux/Packaging.Linux"
 
-# Build parameters
-FRAMEWORK=net10.0
-
 # Perform pre-execution checks
 CONFIGURATION="${CONFIGURATION:=Debug}"
 
@@ -75,17 +72,13 @@ echo "Publishing core application..."
 if [ -z "$RUNTIME" ]; then
     $DOTNET_ROOT/dotnet publish "$GCM_SRC" \
         --configuration="$CONFIGURATION" \
-        --framework="$FRAMEWORK" \
         --self-contained \
-        -p:PublishSingleFile=true \
         --output="$(make_absolute "$PAYLOAD")" || exit 1
 else
     $DOTNET_ROOT/dotnet publish "$GCM_SRC" \
         --configuration="$CONFIGURATION" \
-        --framework="$FRAMEWORK" \
         --runtime="$RUNTIME" \
         --self-contained \
-        -p:PublishSingleFile=true \
         --output="$(make_absolute "$PAYLOAD")" || exit 1
 fi
 

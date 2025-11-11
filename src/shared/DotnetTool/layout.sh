@@ -38,9 +38,6 @@ PROJ_OUT="$OUT/$DOTNET_TOOL"
 
 CONFIGURATION="${CONFIGURATION:=Debug}"
 
-# Build parameters
-FRAMEWORK=net10.0
-
 # Outputs
 OUTDIR="$PROJ_OUT/nupkg/$CONFIGURATION"
 IMGOUT="$OUTDIR/images"
@@ -64,7 +61,6 @@ fi
 echo "Publishing core application..."
 $DOTNET_ROOT/dotnet publish "$GCM_SRC" \
     --configuration="$CONFIGURATION" \
-    --framework="$FRAMEWORK" \
     --output="$(make_absolute "$PAYLOAD")" \
     -p:UseAppHost=false || exit 1
 
