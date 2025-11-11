@@ -15,10 +15,7 @@ using GitCredentialManager.UI.Controls;
 using GitCredentialManager.UI.ViewModels;
 using GitCredentialManager.UI.Views;
 using Microsoft.Identity.Client.AppConfig;
-
-#if NETFRAMEWORK
 using Microsoft.Identity.Client.Broker;
-#endif
 
 namespace GitCredentialManager.Authentication
 {
@@ -508,7 +505,6 @@ namespace GitCredentialManager.Authentication
             // to save on the distribution size of the .NET builds (no need for MSALRuntime bits).
             if (enableBroker)
             {
-#if NETFRAMEWORK
                 appBuilder.WithBroker(
                     new BrokerOptions(BrokerOptions.OperatingSystems.Windows)
                     {
@@ -516,7 +512,6 @@ namespace GitCredentialManager.Authentication
                         MsaPassthrough = msaPt,
                     }
                 );
-#endif
             }
 
             IPublicClientApplication app = appBuilder.Build();
@@ -808,8 +803,12 @@ namespace GitCredentialManager.Authentication
 
         public bool CanUseBroker()
         {
-#if NETFRAMEWORK
             // We only support the broker on Windows 10+ and in an interactive session
+            if (PlatformUtils.IsWindows())
+            {
+                return false;
+            }
+
             if (!Context.SessionManager.IsDesktopSession || !PlatformUtils.IsWindowsBrokerSupported())
             {
                 return false;
@@ -827,34 +826,27 @@ namespace GitCredentialManager.Authentication
             }
 
             return defaultValue;
-#else
-            // OS broker requires .NET Framework right now until we migrate to .NET 5.0 (net5.0-windows10.x.y.z)
-            return false;
-#endif
         }
 
         private bool CanUseEmbeddedWebView()
         {
-            // If we're in an interactive session and on .NET Framework then MSAL can show the WinForms-based embedded UI
-#if NETFRAMEWORK
-            return Context.SessionManager.IsDesktopSession;
-#else
-            return false;
-#endif
+            // If we're in an interactive session and on Windows then MSAL can show the WinForms-based embedded UI
+            return PlatformUtils.IsWindows() && Context.SessionManager.IsDesktopSession;
         }
 
         private void EnsureCanUseEmbeddedWebView()
         {
-#if NETFRAMEWORK
+            if (!PlatformUtils.IsWindows())
+            {
+                throw new Trace2InvalidOperationException(Context.Trace2,
+                    "Embedded web view is not available on non-Windows platforms.");
+            }
+
             if (!Context.SessionManager.IsDesktopSession)
             {
                 throw new Trace2InvalidOperationException(Context.Trace2,
                     "Embedded web view is not available without a desktop session.");
             }
-#else
-            throw new Trace2InvalidOperationException(Context.Trace2,
-                "Embedded web view is not available on .NET Core.");
-#endif
         }
 
         private bool CanUseSystemWebView(IPublicClientApplication app, Uri redirectUri)
