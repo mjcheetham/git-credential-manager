@@ -21,7 +21,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5.0.0
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
 
     - name: Install dependencies
       run: dotnet restore
@@ -37,9 +37,9 @@ jobs:
       shell: bash
       run: |
         mkdir -p artifacts/bin
-        mv out/windows/Installer.Windows/bin/Release/net472/win-x86 artifacts/bin/
-        cp out/windows/Installer.Windows/bin/Release/net472/win-x86.sym/* artifacts/bin/win-x86/
-        mv out/windows/Installer.Windows/bin/Release/net472/gcm*.exe artifacts/
+        mv out/windows/Installer.Windows/bin/Release/net10.0/win-x86 artifacts/bin/
+        cp out/windows/Installer.Windows/bin/Release/net10.0/win-x86.sym/* artifacts/bin/win-x86/
+        mv out/windows/Installer.Windows/bin/Release/net10.0/gcm*.exe artifacts/
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v5
@@ -64,7 +64,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5.0.0
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
 
     - name: Install dependencies
       run: dotnet restore
@@ -108,7 +108,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v5.0.0
       with:
-        dotnet-version: 8.0.x
+        dotnet-version: 10.0.x
 
     - name: Install dependencies
       run: dotnet restore
