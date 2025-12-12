@@ -38,6 +38,18 @@ namespace GitCredentialManager.Authentication
             string[] scopes, string userName, bool msaPt = false);
 
         /// <summary>
+        /// Acquire an access token for the default operating system user principal.
+        /// </summary>
+        /// <param name="authority">Azure authority.</param>
+        /// <param name="clientId">Client ID.</param>
+        /// <param name="redirectUri">Redirect URI for the client.</param>
+        /// <param name="scopes">Set of scopes to request.</param>
+        /// <param name="msaPt">Use MSA-Passthrough behavior when authenticating.</param>
+        /// <returns>Authentication result.</returns>
+        Task<IMicrosoftAuthenticationResult> GetTokenForCurrentUserAsync(string authority, string clientId, Uri redirectUri,
+            string[] scopes, bool msaPt = false);
+
+        /// <summary>
         /// Acquire an access token for the given service principal with the specified scopes.
         /// </summary>
         /// <param name="sp">Service principal identity.</param>
@@ -266,6 +278,12 @@ namespace GitCredentialManager.Authentication
                 // If we created some global UI (e.g. progress) during authentication we should dismiss them now that we're done
                 uiCts.Cancel();
             }
+        }
+
+        public Task<IMicrosoftAuthenticationResult> GetTokenForCurrentUserAsync(
+            string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt)
+        {
+            throw new NotImplementedException();
         }
 
         public async Task<IMicrosoftAuthenticationResult> GetTokenForServicePrincipalAsync(ServicePrincipalIdentity sp, string[] scopes)

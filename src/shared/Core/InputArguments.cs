@@ -191,7 +191,7 @@ namespace GitCredentialManager
                     }
 
                     // If a prefix is specified, only read entries that match the prefix
-                    if (prefix?.Length > 0 && !key.StartsWith($"gcm.{prefix}", StringComparison.Ordinal))
+                    if (prefix?.Length > 0 && !key.StartsWith($"gcm.{prefix}.", StringComparison.Ordinal))
                     {
                         continue;
                     }

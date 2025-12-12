@@ -123,10 +123,7 @@ namespace Microsoft.AzureRepos
             {
                 // Include the username request here so that we may use it as an override
                 // for user account lookups when getting Azure Access Tokens.
-                var azureResult = await GetAzureAccessTokenAsync(input);
-                return new GetCredentialResponse(
-                    new GitCredential(azureResult.AccountUpn, azureResult.AccessToken)
-                );
+                return await DoAzureUserPrincipalAuthAsync(input);
             }
         }
 
@@ -196,6 +193,13 @@ namespace Microsoft.AzureRepos
             }
             else
             {
+                IDictionary<string, string> state = input.GetState(Id);
+                if (state.TryGetValue("default_account", out string str) && str.IsTruthy())
+                {
+                    _context.Trace.WriteLine("Erase called for default account - no user to sign out.");
+                    return Task.CompletedTask;
+                }
+
                 string orgName = UriHelpers.GetOrganizationName(remoteUri);
 
                 _context.Trace.WriteLine($"Signing out of organization '{orgName}'...");
@@ -267,7 +271,7 @@ namespace Microsoft.AzureRepos
             return new GitCredential(result.AccountUpn, pat);
         }
 
-        private async Task<IMicrosoftAuthenticationResult> GetAzureAccessTokenAsync(InputArguments input)
+        private async Task<GetCredentialResponse> DoAzureUserPrincipalAuthAsync(InputArguments input)
         {
             ThrowIfUnsafeRemote(input);
 
@@ -324,10 +328,51 @@ namespace Microsoft.AzureRepos
                 userName = _bindingManager.GetUser(orgName);
             }
 
-            _context.Trace.WriteLine(string.IsNullOrWhiteSpace(userName) ? "No user found." : $"User is '{userName}'.");
+            // If we have a username at this point, use it to get an Azure AD access token
+            _context.Trace.WriteLine(!string.IsNullOrWhiteSpace(userName) ? $"User is '{userName}'." : "No user found.");
 
-            // Get an AAD access token for the Azure DevOps SPS
-            _context.Trace.WriteLine("Getting Azure AD access token...");
+            //
+            // Check if Git supports the state[] and continue parameters.
+            //
+            // If so then we can attempt to make the authentication process more seamless
+            // when we don't know the specific user up-front by assuming an account.
+            // Git will tell us if this account was incorrect so we can retry with a
+            // user account prompt.
+            //
+            // If not supported, we always prompt the user for their account.
+            //
+            bool supportsContinue = (input.Capabilities & GitCapabilities.State) != 0;
+
+            // Check if the previous authentication attempt was made with the default account.
+            // If this was the case then we failed and should not try again with the default account.
+            IDictionary<string, string> state = input.GetState(Id);
+            bool lastAuthWasDefaultAccount = state.TryGetValue("default_account", out string str) && str.IsTruthy();
+
+            if (!lastAuthWasDefaultAccount && string.IsNullOrWhiteSpace(userName) && supportsContinue)
+            {
+                _context.Trace.WriteLine("Git supports multi-step authentication - getting access token for default account");
+                IMicrosoftAuthenticationResult currentUserResult = await _msAuth.GetTokenForCurrentUserAsync(
+                    authAuthority,
+                    GetClientId(),
+                    GetRedirectUri(),
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    msaPt: true);
+                _context.Trace.WriteLineSecrets(
+                    $"Acquired Azure access token. Account='{currentUserResult.AccountUpn}' Token='{{0}}'",
+                    new object[] { currentUserResult.AccessToken });
+
+                return new GetCredentialResponse(
+                    new GitCredential(currentUserResult.AccountUpn, currentUserResult.AccessToken)
+                )
+                {
+                    State =
+                    {
+                        [$"{Id}.default_account"] = "1"
+                    }
+                };
+            }
+
+            _context.Trace.WriteLine($"Getting Azure AD access token...");
             IMicrosoftAuthenticationResult result = await _msAuth.GetTokenForUserAsync(
                 authAuthority,
                 GetClientId(),
@@ -336,9 +381,12 @@ namespace Microsoft.AzureRepos
                 userName,
                 msaPt: true);
             _context.Trace.WriteLineSecrets(
-                $"Acquired Azure access token. Account='{result.AccountUpn}' Token='{{0}}'", new object[] {result.AccessToken});
+                $"Acquired Azure access token. Account='{result.AccountUpn}' Token='{{0}}'",
+                new object[] { result.AccessToken });
 
-            return result;
+            return new GetCredentialResponse(
+                new GitCredential(result.AccountUpn, result.AccessToken)
+            );
         }
 
         internal /* for testing purposes */ static bool TryGetAuthorityFromHeaders(IEnumerable<string> headers, out string authority)

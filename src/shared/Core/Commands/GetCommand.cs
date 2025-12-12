@@ -49,6 +49,12 @@ namespace GitCredentialManager.Commands
                 }
             }
 
+            // Set the continue flag if requested
+            if (response.Continue)
+            {
+                output["continue"] = [ "1" ];
+            }
+
             // Return the credential to Git
             output["username"] = [ credential.Account ];
             output["password"] = [ credential.Password ];
