@@ -2,68 +2,291 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:generic="clr-namespace:GitCredentialManager.UI.Views;assembly=gcmcore"
-        xmlns:github="clr-namespace:GitHub.UI.Views;assembly=GitHub"
-        xmlns:gitlab="clr-namespace:GitLab.UI.Views;assembly=GitLab"
-        xmlns:bitbucket="clr-namespace:Atlassian.Bitbucket.UI.Views;assembly=Atlassian.Bitbucket"
+        xmlns:local="clr-namespace:GitCredentialManager"
+        xmlns:github="clr-namespace:GitHub.UI.ViewModels;assembly=GitHub"
         mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
         SizeToContent="WidthAndHeight" CanResize="False"
-        x:Class="GitCredentialManager.TestWindow"
-        x:Name="ThisWindow"
+        x:Class="GitCredentialManager.TestWindow" MinWidth="600"
+        x:Name="ThisWindow" x:DataType="local:TestWindowViewModel"
         Title="Git Credential Manager Test Window">
+    <Design.DataContext>
+        <local:TestWindowViewModel/>
+    </Design.DataContext>
     <Window.Styles>
-       <Style Selector="Grid > TextBlock">
-           <Setter Property="FontSize" Value="20"/>
-           <Setter Property="FontWeight" Value="Bold"/>
-           <Setter Property="Margin" Value="0,0,20,5"/>
-       </Style>
-       <Style Selector="Button">
-           <Setter Property="Margin" Value="0,0,20,5"/>
-           <Setter Property="Command" Value="{Binding ElementName=ThisWindow, Path=OpenDialogWindowCommand}" />
-       </Style>
+        <Style Selector="TabItem">
+            <Setter Property="FontSize" Value="14"/>
+            <Setter Property="FontWeight" Value="Normal"/>
+        </Style>
+        <Style Selector="Grid > TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="0,0,10,0"/>
+        </Style>
+        <Style Selector="TextBox">
+            <Setter Property="MinWidth" Value="300"/>
+            <Setter Property="Height" Value="20"/>
+            <Setter Property="Margin" Value="0,5"/>
+        </Style>
+        <Style Selector="Grid > StackPanel">
+            <Setter Property="Margin" Value="0,5,0,0"/>
+        </Style>
     </Window.Styles>
-    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto"
-          RowDefinitions="Auto,*"
-          Margin="15,10">
-        <TextBlock  Grid.Column="0" Grid.Row="0" Text="Generic"/>
-        <StackPanel Grid.Column="0" Grid.Row="1" >
-            <Button Content="Credentials"
-                    CommandParameter="{x:Type generic:CredentialsView}" />
-            <Button Content="DefaultAccount"
-                    CommandParameter="{x:Type generic:DefaultAccountView}"/>
-            <Button Content="DeviceCode"
-                    CommandParameter="{x:Type generic:DeviceCodeView}"/>
-            <Button Content="OAuth"
-                    CommandParameter="{x:Type generic:OAuthView}"/>
-        </StackPanel>
+    <DockPanel>
+        <DockPanel DockPanel.Dock="Bottom" Height="30"
+                   Background="{DynamicResource SystemChromeMediumColor}">
+            <DockPanel.Styles>
+                <Style Selector="TextBlock">
+                    <Setter Property="FontSize" Value="12"/>
+                </Style>
+                <Style Selector="Button">
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="Padding" Value="4,2" />
+                </Style>
+                <Style Selector="ComboBox">
+                    <Setter Property="FontSize" Value="12"/>
+                    <Setter Property="Padding" Value="4,2" />
+                    <Setter Property="Height" Value="10"/>
+                </Style>
+            </DockPanel.Styles>
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right">
+                <TextBlock Text="Theme:" VerticalAlignment="Center" Margin="0,0,5,0"/>
+                <ComboBox ItemsSource="{x:Static local:TestWindowViewModel.ThemeVariants}"
+                          SelectedItem="{Binding SelectedThemeVariant}"
+                          PlaceholderText="Theme Variant"
+                          VerticalAlignment="Center" MinHeight="25"
+                          MinWidth="80"/>
+                <Button Content="Reset Models" Click="Reset" Margin="10,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="Last window result: " VerticalAlignment="Center" Margin="10,0,0,0" />
+                <TextBlock Text="{Binding LastWindowResult, TargetNullValue='(unknown)'}" VerticalAlignment="Center" />
+            </StackPanel>
+        </DockPanel>
 
-        <TextBlock  Grid.Column="1" Grid.Row="0" Text="Azure Repos"/>
-        <StackPanel Grid.Column="1" Grid.Row="1" >
-            <TextBlock Text="(none)"/>
-        </StackPanel>
+        <TabControl Margin="5,5,0,15">
+            <TabItem Header="Generic">
+                <TabControl TabStripPlacement="Left">
+                    <TabItem Header="Credentials">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="Username" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GenericCredentials.UserName }" />
+                            <TextBlock  Grid.Row="1" Grid.Column="0" Text="Password" />
+                            <TextBox    Grid.Row="1" Grid.Column="1" Text="{Binding GenericCredentials.Password}" />
+                            <CheckBox   Grid.Row="2" Grid.Column="1" Content="Show Product Header"
+                                        IsChecked="{Binding GenericCredentials.ShowProductHeader}" />
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGenericCredentials"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
 
-        <TextBlock  Grid.Column="2" Grid.Row="0" Text="Bitbucket"/>
-        <StackPanel Grid.Column="2" Grid.Row="1" >
-            <Button Content="Credentials"
-                    CommandParameter="{x:Type bitbucket:CredentialsView}" />
-        </StackPanel>
+                    <TabItem Header="Default Account">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="Username" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GenericDefaultAccount.UserName }" />
+                            <CheckBox   Grid.Row="1" Grid.Column="1" Content="Show Product Header"
+                                        IsChecked="{Binding GenericDefaultAccount.ShowProductHeader}" />
+                            <StackPanel Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGenericDefaultAccount"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
 
-        <TextBlock  Grid.Column="3" Grid.Row="0" Text="GitHub"/>
-        <StackPanel Grid.Column="3" Grid.Row="1" >
-            <Button Content="Credentials"
-                    CommandParameter="{x:Type github:CredentialsView}" />
-            <Button Content="SelectAccount"
-                    CommandParameter="{x:Type github:SelectAccountView}"/>
-            <Button Content="DeviceCode"
-                    CommandParameter="{x:Type github:DeviceCodeView}"/>
-            <Button Content="TwoFactor"
-                    CommandParameter="{x:Type github:TwoFactorView}"/>
-        </StackPanel>
+                    <TabItem Header="Device Code">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="User Code" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GenericDeviceCode.UserCode }" />
+                            <TextBlock  Grid.Row="1" Grid.Column="0" Text="Verification URL" />
+                            <TextBox    Grid.Row="1" Grid.Column="1" Text="{Binding GenericDeviceCode.VerificationUrl}" />
+                            <CheckBox   Grid.Row="2" Grid.Column="1" Content="Show Product Header"
+                                        IsChecked="{Binding GenericDeviceCode.ShowProductHeader}" />
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGenericDeviceCode"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
 
-        <TextBlock  Grid.Column="4" Grid.Row="0" Text="GitLab"/>
-        <StackPanel Grid.Column="4" Grid.Row="1" >
-            <Button Content="Credentials"
-                    CommandParameter="{x:Type gitlab:CredentialsView}" />
-        </StackPanel>
-     </Grid>
+                    <TabItem Header="OAuth">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <CheckBox   Grid.Row="0" Grid.Column="1" Content="Show Browser"
+                                        IsChecked="{Binding GenericOAuth.ShowBrowserLogin}" />
+                            <CheckBox   Grid.Row="1" Grid.Column="1" Content="Show Device Code"
+                                        IsChecked="{Binding GenericOAuth.ShowDeviceCodeLogin}" />
+                            <CheckBox   Grid.Row="2" Grid.Column="1" Content="Show Product Header"
+                                        IsChecked="{Binding GenericOAuth.ShowProductHeader}" />
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGenericOAuth"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </TabItem>
+
+            <TabItem Header="Bitbucket">
+                <TabControl TabStripPlacement="Left">
+                    <TabItem Header="Credentials">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="URL" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding BitbucketCredentials.Url}" />
+                            <TextBlock  Grid.Row="2" Grid.Column="0" Text="Username" />
+                            <TextBox    Grid.Row="2" Grid.Column="1" Text="{Binding BitbucketCredentials.UserName }" />
+                            <TextBlock  Grid.Row="3" Grid.Column="0" Text="Password/token" />
+                            <TextBox    Grid.Row="3" Grid.Column="1" Text="{Binding BitbucketCredentials.Password}" />
+                            <UniformGrid Grid.Row="4" Grid.Column="1" Columns="2" Rows="2">
+                                <CheckBox Content="Show OAuth"
+                                          IsChecked="{Binding BitbucketCredentials.ShowOAuth}" />
+                                <CheckBox Content="Show Basic"
+                                          IsChecked="{Binding BitbucketCredentials.ShowBasic}" />
+                            </UniformGrid>
+                            <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowBitbucketCredentials"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </TabItem>
+
+            <TabItem Header="GitHub">
+                <TabControl TabStripPlacement="Left">
+                    <TabItem Header="Credentials">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="Enterprise URL" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GitHubCredentials.EnterpriseUrl}" />
+                            <TextBlock  Grid.Row="1" Grid.Column="0" Text="Token" />
+                            <TextBox    Grid.Row="1" Grid.Column="1" Text="{Binding GitHubCredentials.Token}" />
+                            <TextBlock  Grid.Row="2" Grid.Column="0" Text="Basic username" />
+                            <TextBox    Grid.Row="2" Grid.Column="1" Text="{Binding GitHubCredentials.UserName }" />
+                            <TextBlock  Grid.Row="3" Grid.Column="0" Text="Basic password" />
+                            <TextBox    Grid.Row="3" Grid.Column="1" Text="{Binding GitHubCredentials.Password}" />
+                            <UniformGrid Grid.Row="4" Grid.Column="1" Columns="2" Rows="2">
+                                <CheckBox Content="Show Browser"
+                                          IsChecked="{Binding GitHubCredentials.ShowBrowserLogin}" />
+                                <CheckBox Content="Show Device"
+                                          IsChecked="{Binding GitHubCredentials.ShowDeviceLogin}" />
+                                <CheckBox Content="Show Token"
+                                          IsChecked="{Binding GitHubCredentials.ShowTokenLogin}" />
+                                <CheckBox Content="Show Basic"
+                                          IsChecked="{Binding GitHubCredentials.ShowBasicLogin}" />
+                            </UniformGrid>
+                            <StackPanel Grid.Row="5" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGitHubCredentials"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="Select Account">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="Enterprise URL" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GitHubSelectAccount.EnterpriseUrl}" />
+                            <TextBlock  Grid.Row="1" Grid.Column="0" Text="Accounts" />
+                            <TextBox Grid.Row="1" Grid.Column="1" Margin="0,5,0,0"
+                                     Watermark="Username" FontSize="12"
+                                     Text="{Binding GitHubSelectAccountNewAccountUserName, Mode=TwoWay}">
+                                <TextBox.KeyBindings>
+                                    <KeyBinding Gesture="Enter" Command="{Binding GitHubSelectAccountAddAccountCommand}" />
+                                </TextBox.KeyBindings>
+                                <TextBox.InnerRightContent>
+                                    <Button Content="Add" Command="{Binding GitHubSelectAccountAddAccountCommand}"
+                                            FontSize="10" Margin="4,0" Padding="8,4"/>
+                                </TextBox.InnerRightContent>
+                            </TextBox>
+                            <ListBox Grid.Row="2" Grid.Column="1" x:Name="GitHubSelectAccountListBox"
+                                     Margin="0,5,0,0" Background="Transparent"
+                                     BorderThickness="1" BorderBrush="{DynamicResource TextControlBorderBrush}" CornerRadius="3"
+                                     Height="120" SelectionMode="Single" FontSize="12"
+                                     ItemsSource="{Binding GitHubSelectAccount.Accounts}"
+                                     SelectedItem="{Binding GitHubSelectAccount.SelectedAccount, Mode=TwoWay}">
+                                <ListBox.Styles>
+                                    <Style Selector="ListBoxItem">
+                                        <Setter Property="Padding" Value="5"/>
+                                    </Style>
+                                </ListBox.Styles>
+                                <ListBox.KeyBindings>
+                                    <KeyBinding Gesture="Delete"
+                                                Command="{Binding GitHubSelectAccountRemoveAccountCommand}"
+                                                CommandParameter="{Binding GitHubSelectAccount.SelectedAccount}"/>
+                                </ListBox.KeyBindings>
+                                <ListBox.DataTemplates>
+                                    <DataTemplate DataType="{x:Type github:AccountViewModel}">
+                                        <Grid ColumnDefinitions="*,Auto">
+                                            <TextBlock Text="{Binding UserName}" Margin="5,0"/>
+                                            <Button Grid.Column="1" Content="Remove" FontSize="10" Padding="8,4"
+                                                    Command="{Binding DataContext.GitHubSelectAccountRemoveAccountCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                    CommandParameter="{Binding}"/>
+                                        </Grid>
+                                    </DataTemplate>
+                                </ListBox.DataTemplates>
+                            </ListBox>
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGitHubSelectAccount"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="Device Code">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="User Code" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GitHubDeviceCode.UserCode }" />
+                            <TextBlock  Grid.Row="1" Grid.Column="0" Text="Verification URL" />
+                            <TextBox    Grid.Row="1" Grid.Column="1" Text="{Binding GitHubDeviceCode.VerificationUrl}" />
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGitHubDeviceCode"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+
+                    <TabItem Header="Two Factor">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="User Code" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GitHubTwoFactor.Code }" />
+                            <CheckBox   Grid.Row="1" Grid.Column="1" Content="Is SMS"
+                                        IsChecked="{Binding GitHubTwoFactor.IsSms}" />
+                            <StackPanel Grid.Row="3" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGitHubTwoFactor"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </TabItem>
+
+            <TabItem Header="GitLab">
+                <TabControl TabStripPlacement="Left">
+                    <TabItem Header="Credentials">
+                        <Grid ColumnDefinitions="Auto,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto,Auto">
+                            <TextBlock  Grid.Row="0" Grid.Column="0" Text="URL" />
+                            <TextBox    Grid.Row="0" Grid.Column="1" Text="{Binding GitLabCredentials.Url}" />
+                            <TextBlock  Grid.Row="1" Grid.Column="0" Text="Token username" />
+                            <TextBox    Grid.Row="1" Grid.Column="1" Text="{Binding GitLabCredentials.TokenUserName }" />
+                            <TextBlock  Grid.Row="2" Grid.Column="0" Text="Token value" />
+                            <TextBox    Grid.Row="2" Grid.Column="1" Text="{Binding GitLabCredentials.Token}" />
+                            <TextBlock  Grid.Row="3" Grid.Column="0" Text="Basic username" />
+                            <TextBox    Grid.Row="3" Grid.Column="1" Text="{Binding GitLabCredentials.UserName }" />
+                            <TextBlock  Grid.Row="4" Grid.Column="0" Text="Basic password" />
+                            <TextBox    Grid.Row="4" Grid.Column="1" Text="{Binding GitLabCredentials.Password}" />
+                            <UniformGrid Grid.Row="5" Grid.Column="1" Columns="2" Rows="2">
+                                <CheckBox Content="Show Browser"
+                                          IsChecked="{Binding GitLabCredentials.ShowBrowserLogin}" />
+                                <CheckBox Content="Show Token"
+                                          IsChecked="{Binding GitLabCredentials.ShowTokenLogin}" />
+                                <CheckBox Content="Show Basic"
+                                          IsChecked="{Binding GitLabCredentials.ShowBasicLogin}" />
+                            </UniformGrid>
+                            <StackPanel Grid.Row="6" Grid.Column="0" Grid.ColumnSpan="2" Orientation="Horizontal"
+                                        HorizontalAlignment="Right">
+                                <Button Content="Show" Click="ShowGitLabCredentials"/>
+                            </StackPanel>
+                        </Grid>
+                    </TabItem>
+                </TabControl>
+            </TabItem>
+        </TabControl>
+    </DockPanel>
 </Window>

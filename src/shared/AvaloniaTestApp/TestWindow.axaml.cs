@@ -1,101 +1,96 @@
-﻿using Avalonia.Controls;
-using GitCredentialManager.UI;
+﻿using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Interactivity;
 using GitCredentialManager.UI.Controls;
+using GitCredentialManager.UI.Views;
+using CredentialsView = GitCredentialManager.UI.Views.CredentialsView;
+using DeviceCodeView = GitCredentialManager.UI.Views.DeviceCodeView;
 
 namespace GitCredentialManager;
 
 public partial class TestWindow : Window
 {
-    private static readonly CommandContext Context = new();
-
-    private static readonly Dictionary<Type, UI.ViewModels.ViewModel> ViewModels = new()
-    {
-        //
-        // Generic
-        //
-        {
-            typeof(UI.Views.CredentialsView),
-            new UI.ViewModels.CredentialsViewModel()
-        },
-        {
-            typeof(UI.Views.DefaultAccountView),
-            new UI.ViewModels.DefaultAccountViewModel(Context.Environment)
-                { UserName = "TestUser" }
-        },
-        {
-            typeof(UI.Views.DeviceCodeView),
-            new UI.ViewModels.DeviceCodeViewModel(Context.Environment)
-                { UserCode = "ABCD-1234", VerificationUrl = "https://example.com" }
-        },
-        {
-            typeof(UI.Views.OAuthView),
-            new UI.ViewModels.OAuthViewModel { ShowBrowserLogin = true, ShowDeviceCodeLogin = true }
-        },
-
-        //
-        // Bitbucket
-        //
-        {
-            typeof(Atlassian.Bitbucket.UI.Views.CredentialsView),
-            new Atlassian.Bitbucket.UI.ViewModels.CredentialsViewModel(Context.Environment)
-                { ShowBasic = true, ShowOAuth = true }
-        },
-
-        //
-        // GitHub
-        //
-        {
-            typeof(GitHub.UI.Views.CredentialsView),
-            new GitHub.UI.ViewModels.CredentialsViewModel(Context.Environment, Context.ProcessManager)
-                { ShowBrowserLogin = true, ShowDeviceLogin = true, ShowBasicLogin = true, ShowTokenLogin = true }
-        },
-        {
-            typeof(GitHub.UI.Views.SelectAccountView),
-            new GitHub.UI.ViewModels.SelectAccountViewModel(Context.Environment)
-            {
-                Accounts =
-                [
-                    new GitHub.UI.ViewModels.AccountViewModel { UserName = "User1" },
-                    new GitHub.UI.ViewModels.AccountViewModel { UserName = "User2" }
-                ]
-            }
-        },
-        {
-            typeof(GitHub.UI.Views.DeviceCodeView),
-            new GitHub.UI.ViewModels.DeviceCodeViewModel(Context.Environment)
-                { UserCode = "ABCD-1234", VerificationUrl = "https://example.com" }
-        },
-        {
-            typeof(GitHub.UI.Views.TwoFactorView),
-            new GitHub.UI.ViewModels.TwoFactorViewModel(Context.Environment, Context.ProcessManager)
-        },
-
-        //
-        // GitLab
-        //
-        {
-            typeof(GitLab.UI.Views.CredentialsView),
-            new GitLab.UI.ViewModels.CredentialsViewModel(Context.Environment)
-                { ShowBrowserLogin = true, ShowTokenLogin = true, ShowBasicLogin = true }
-        }
-    };
-
     public TestWindow() => InitializeComponent();
 
-    public RelayCommand<Type> OpenDialogWindowCommand => new(OpenDialogWindow);
+    private TestWindowViewModel? ViewModel => DataContext as TestWindowViewModel;
 
-    private void OpenDialogWindow(Type viewType)
+    private async void OpenDialogWindow<T>(UI.ViewModels.WindowViewModel? viewModel = null)
     {
-        Control view = Activator.CreateInstance(viewType) as Control
-                       ?? throw new InvalidOperationException($"Could not create view of type {viewType.FullName}.");
-
-        var window = new DialogWindow(view)
+        try
         {
-            DataContext = ViewModels.TryGetValue(viewType, out var viewModel)
-                ? viewModel
-                : new UI.ViewModels.WindowViewModel()
-        };
+            Control view = Activator.CreateInstance(typeof(T)) as Control
+                           ?? throw new InvalidOperationException($"Could not create view of type {typeof(T).FullName}.");
 
-        window.Show(this);
+            viewModel ??= new UI.ViewModels.WindowViewModel();
+
+            var window = new DialogWindow(view)
+            {
+                DataContext = viewModel
+            };
+
+            if (ViewModel is not null)
+            {
+                ViewModel.LastWindowResult = "(open)";
+            }
+
+            await window.ShowDialog(this);
+
+            if (ViewModel is not null)
+            {
+                ViewModel.LastWindowResult = viewModel.WindowResult.ToString().ToLowerInvariant();
+            }
+        }
+        catch
+        {
+            // do nothing
+        }
     }
+
+    private void Reset(object? sender, RoutedEventArgs e) => DataContext = new TestWindowViewModel();
+
+    #region Generic
+
+    private void ShowGenericCredentials(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<CredentialsView>(ViewModel?.GenericCredentials);
+
+    private void ShowGenericDefaultAccount(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<DefaultAccountView>(ViewModel?.GenericDefaultAccount);
+
+    private void ShowGenericDeviceCode(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<DeviceCodeView>(ViewModel?.GenericDeviceCode);
+
+    private void ShowGenericOAuth(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<OAuthView>(ViewModel?.GenericOAuth);
+
+    #endregion
+
+    #region Bitbucket
+
+    private void ShowBitbucketCredentials(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<Atlassian.Bitbucket.UI.Views.CredentialsView>(ViewModel?.BitbucketCredentials);
+
+    #endregion
+
+    #region GitHub
+
+    private void ShowGitHubCredentials(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<GitHub.UI.Views.CredentialsView>(ViewModel?.GitHubCredentials);
+
+    private void ShowGitHubSelectAccount(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<GitHub.UI.Views.SelectAccountView>(ViewModel?.GitHubSelectAccount);
+
+    private void ShowGitHubDeviceCode(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<GitHub.UI.Views.DeviceCodeView>(ViewModel?.GitHubDeviceCode);
+
+    private void ShowGitHubTwoFactor(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<GitHub.UI.Views.TwoFactorView>(ViewModel?.GitHubTwoFactor);
+
+    #endregion
+
+    #region GitLab
+
+    private void ShowGitLabCredentials(object? sender, RoutedEventArgs e) =>
+        OpenDialogWindow<GitLab.UI.Views.CredentialsView>(ViewModel?.GitLabCredentials);
+
+    #endregion
 }

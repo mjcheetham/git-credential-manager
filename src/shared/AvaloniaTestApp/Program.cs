@@ -9,10 +9,13 @@ static class Program
     public static void Main(string[] args)
     {
         AppBuilder builder = BuildAvaloniaApp().SetupWithoutStarting();
-        builder.Instance!.RunWithMainWindow<TestWindow>();
-// Required for Avalonia designer
+        var window = new TestWindow { DataContext = new TestWindowViewModel() };
+        window.Show();
+        window.Activate();
+        builder.Instance!.Run(window);
     }
 
+// Required for Avalonia designer
     static AppBuilder BuildAvaloniaApp() =>
         AppBuilder.Configure<AvaloniaApp>()
             .UsePlatformDetect()
