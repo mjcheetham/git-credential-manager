@@ -1,0 +1,69 @@
+﻿<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:generic="clr-namespace:GitCredentialManager.UI.Views;assembly=gcmcore"
+        xmlns:github="clr-namespace:GitHub.UI.Views;assembly=GitHub"
+        xmlns:gitlab="clr-namespace:GitLab.UI.Views;assembly=GitLab"
+        xmlns:bitbucket="clr-namespace:Atlassian.Bitbucket.UI.Views;assembly=Atlassian.Bitbucket"
+        mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
+        SizeToContent="WidthAndHeight" CanResize="False"
+        x:Class="GitCredentialManager.TestWindow"
+        x:Name="ThisWindow"
+        Title="Git Credential Manager Test Window">
+    <Window.Styles>
+       <Style Selector="Grid > TextBlock">
+           <Setter Property="FontSize" Value="20"/>
+           <Setter Property="FontWeight" Value="Bold"/>
+           <Setter Property="Margin" Value="0,0,20,5"/>
+       </Style>
+       <Style Selector="Button">
+           <Setter Property="Margin" Value="0,0,20,5"/>
+           <Setter Property="Command" Value="{Binding ElementName=ThisWindow, Path=OpenDialogWindowCommand}" />
+       </Style>
+    </Window.Styles>
+    <Grid ColumnDefinitions="Auto,Auto,Auto,Auto,Auto"
+          RowDefinitions="Auto,*"
+          Margin="15,10">
+        <TextBlock  Grid.Column="0" Grid.Row="0" Text="Generic"/>
+        <StackPanel Grid.Column="0" Grid.Row="1" >
+            <Button Content="Credentials"
+                    CommandParameter="{x:Type generic:CredentialsView}" />
+            <Button Content="DefaultAccount"
+                    CommandParameter="{x:Type generic:DefaultAccountView}"/>
+            <Button Content="DeviceCode"
+                    CommandParameter="{x:Type generic:DeviceCodeView}"/>
+            <Button Content="OAuth"
+                    CommandParameter="{x:Type generic:OAuthView}"/>
+        </StackPanel>
+
+        <TextBlock  Grid.Column="1" Grid.Row="0" Text="Azure Repos"/>
+        <StackPanel Grid.Column="1" Grid.Row="1" >
+            <TextBlock Text="(none)"/>
+        </StackPanel>
+
+        <TextBlock  Grid.Column="2" Grid.Row="0" Text="Bitbucket"/>
+        <StackPanel Grid.Column="2" Grid.Row="1" >
+            <Button Content="Credentials"
+                    CommandParameter="{x:Type bitbucket:CredentialsView}" />
+        </StackPanel>
+
+        <TextBlock  Grid.Column="3" Grid.Row="0" Text="GitHub"/>
+        <StackPanel Grid.Column="3" Grid.Row="1" >
+            <Button Content="Credentials"
+                    CommandParameter="{x:Type github:CredentialsView}" />
+            <Button Content="SelectAccount"
+                    CommandParameter="{x:Type github:SelectAccountView}"/>
+            <Button Content="DeviceCode"
+                    CommandParameter="{x:Type github:DeviceCodeView}"/>
+            <Button Content="TwoFactor"
+                    CommandParameter="{x:Type github:TwoFactorView}"/>
+        </StackPanel>
+
+        <TextBlock  Grid.Column="4" Grid.Row="0" Text="GitLab"/>
+        <StackPanel Grid.Column="4" Grid.Row="1" >
+            <Button Content="Credentials"
+                    CommandParameter="{x:Type gitlab:CredentialsView}" />
+        </StackPanel>
+     </Grid>
+</Window>

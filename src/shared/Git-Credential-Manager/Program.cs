@@ -1,11 +1,9 @@
 using System;
 using System.Threading;
 using Atlassian.Bitbucket;
-using Avalonia;
 using GitHub;
 using GitLab;
 using Microsoft.AzureRepos;
-using GitCredentialManager.Authentication;
 using GitCredentialManager.UI;
 
 namespace GitCredentialManager
@@ -72,16 +70,5 @@ namespace GitCredentialManager
                 Dispatcher.MainThread.Shutdown();
             }
         }
-
-        // Required for Avalonia designer
-        static AppBuilder BuildAvaloniaApp() =>
-            AppBuilder.Configure<AvaloniaApp>()
-#if NETFRAMEWORK
-                .UseWin32()
-                .UseSkia()
-#else
-                .UsePlatformDetect()
-#endif
-                .LogToTrace();
     }
 }

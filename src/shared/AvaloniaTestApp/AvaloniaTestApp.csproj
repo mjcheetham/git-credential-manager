@@ -1,0 +1,19 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>GitCredentialManager</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Core\Core.csproj" />
+    <ProjectReference Include="..\Atlassian.Bitbucket\Atlassian.Bitbucket.csproj" />
+    <ProjectReference Include="..\GitHub\GitHub.csproj" />
+    <ProjectReference Include="..\GitLab\GitLab.csproj" />
+    <ProjectReference Include="..\Microsoft.AzureRepos\Microsoft.AzureRepos.csproj" />
+  </ItemGroup>
+
+</Project>
