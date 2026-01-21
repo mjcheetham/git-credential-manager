@@ -49,6 +49,17 @@ namespace GitCredentialManager.Commands
                 }
             }
 
+            // Set the continue flag if requested
+            if (response.Continue)
+            {
+                if ((input.Capabilities & GitCapabilities.State) == 0)
+                {
+                    throw new Exception("Multi-stage authentication not supported with this version of Git!");
+                }
+
+                output["continue"] = [ "1" ];
+            }
+
             // Return the credential to Git
             output["username"] = [ credential.Account ];
             output["password"] = [ credential.Password ];

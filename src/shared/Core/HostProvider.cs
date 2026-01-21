@@ -71,6 +71,11 @@ namespace GitCredentialManager
         public ICredential Credential { get; }
 
         public IDictionary<string, string> State { get; }
+
+        /// <summary>
+        /// Set to true to indicate to Git that it should expect further challenges for this request.
+        /// </summary>
+        public bool Continue { get; set; }
     }
 
     /// <summary>
