@@ -881,7 +881,7 @@ namespace Microsoft.AzureRepos.Tests
             var msAuthMock = new Mock<IMicrosoftAuthentication>();
 
             msAuthMock.Setup(x =>
-                    x.GetTokenForServicePrincipalAsync(It.IsAny<ServicePrincipalIdentity>(), It.IsAny<string[]>()))
+                    x.GetTokenForServicePrincipalAsync(It.IsAny<MicrosoftServicePrincipalIdentity>(), It.IsAny<string[]>()))
                 .ReturnsAsync(new MockMsAuthResult { AccessToken = accessToken });
 
             var provider = new AzureReposHostProvider(context, azDevOps, msAuthMock.Object, authorityCache, userMgr);
@@ -894,7 +894,7 @@ namespace Microsoft.AzureRepos.Tests
             Assert.Equal(accessToken, credential.Password);
 
             msAuthMock.Verify(x => x.GetTokenForServicePrincipalAsync(
-                It.Is<ServicePrincipalIdentity>(sp => sp.TenantId == tenantId && sp.Id == clientId),
+                It.Is<MicrosoftServicePrincipalIdentity>(sp => sp.TenantId == tenantId && sp.Id == clientId),
                 It.Is<string[]>(scopes => scopes.Length == 1 && scopes[0] == AzureDevOpsConstants.AzureDevOpsDefaultScopes[0])),
                 Times.Once);
         }
