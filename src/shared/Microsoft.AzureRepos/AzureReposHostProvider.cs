@@ -94,7 +94,7 @@ namespace Microsoft.AzureRepos
                 );
             }
 
-            if (UseServicePrincipal(out ServicePrincipalIdentity sp))
+            if (UseServicePrincipal(out MicrosoftServicePrincipalIdentity sp))
             {
                 _context.Trace.WriteLine($"Getting Azure Access Token for service principal {sp.TenantId}/{sp.Id}...");
                 var azureResult = await _msAuth.GetTokenForServicePrincipalAsync(sp, AzureDevOpsConstants.AzureDevOpsDefaultScopes);
@@ -516,7 +516,7 @@ namespace Microsoft.AzureRepos
             return defaultValue;
         }
 
-        private bool UseServicePrincipal(out ServicePrincipalIdentity sp)
+        private bool UseServicePrincipal(out MicrosoftServicePrincipalIdentity sp)
         {
             if (!_context.Settings.TryGetSetting(
                     AzureDevOpsConstants.EnvironmentVariables.ServicePrincipalId,
@@ -547,7 +547,7 @@ namespace Microsoft.AzureRepos
             string tenantId = split[0];
             string clientId = split[1];
 
-            sp = new ServicePrincipalIdentity
+            sp = new MicrosoftServicePrincipalIdentity
             {
                 Id = clientId,
                 TenantId = tenantId,
