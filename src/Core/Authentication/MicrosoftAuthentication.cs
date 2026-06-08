@@ -24,6 +24,14 @@ namespace GitCredentialManager.Authentication
     public interface IMicrosoftAuthentication
     {
         /// <summary>
+        /// Enumerate the user accounts that are available and have cached tokens for the given client.
+        /// </summary>
+        /// <param name="clientId">Client ID.</param>
+        /// <param name="msaPt">Use MSA-Passthrough behavior when constructing the client.</param>
+        /// <returns>User accounts.</returns>
+        Task<IReadOnlyList<IMicrosoftAccount>> GetUserAccountsAsync(string clientId, bool msaPt = false);
+
+        /// <summary>
         /// Acquire an access token for a user principal.
         /// </summary>
         /// <param name="authority">Azure authority.</param>
@@ -78,6 +86,57 @@ namespace GitCredentialManager.Authentication
         string AccountUpn { get; }
     }
 
+    public interface IMicrosoftAccount : IEquatable<IMicrosoftAccount>
+    {
+        /// <summary>
+        /// Opaque, stable identifier for the account in MSAL's cache. Use this to refer to
+        /// the account from persistent records — it survives UPN renames.
+        /// </summary>
+        string HomeAccountId { get; }
+
+        /// <summary>
+        /// User principal name (typically an email address); suitable for display.
+        /// </summary>
+        string UserName { get; }
+    }
+
+    public sealed class MicrosoftAccount : IMicrosoftAccount
+    {
+        internal static MicrosoftAccount FromMsalAccount(IAccount msalAccount)
+        {
+            EnsureArgument.NotNull(msalAccount, nameof(msalAccount));
+            return new MicrosoftAccount(msalAccount.HomeAccountId.Identifier, msalAccount.Username);
+        }
+
+        public MicrosoftAccount(string homeAccountId, string userName)
+        {
+            UserName = userName;
+            HomeAccountId = homeAccountId;
+        }
+
+        public string HomeAccountId { get; }
+        public string UserName { get; }
+
+        // Both fields are compared case-insensitively to match MSAL: AccountId.Equals on the
+        // identifier uses OrdinalIgnoreCase, and UPNs are case-insensitive per RFC 5321.
+        public bool Equals(IMicrosoftAccount other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return StringComparer.OrdinalIgnoreCase.Equals(HomeAccountId, other.HomeAccountId)
+                && StringComparer.OrdinalIgnoreCase.Equals(UserName, other.UserName);
+        }
+
+        public override bool Equals(object obj) => obj is IMicrosoftAccount other && Equals(other);
+
+        public override int GetHashCode()
+        {
+            int h1 = HomeAccountId is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(HomeAccountId);
+            int h2 = UserName      is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(UserName);
+            unchecked { return (h1 * 397) ^ h2; }
+        }
+    }
+
     public class MicrosoftAuthentication : AuthenticationBase, IMicrosoftAuthentication
     {
         public static readonly string[] AuthorityIds =
@@ -91,6 +150,23 @@ namespace GitCredentialManager.Authentication
             : base(context) { }
 
         #region IMicrosoftAuthentication
+
+        public async Task<IReadOnlyList<IMicrosoftAccount>> GetUserAccountsAsync(string clientId, bool msaPt = false)
+        {
+            var uiCts = new CancellationTokenSource();
+
+            bool useBroker = CanUseBroker();
+            Context.Trace.WriteLine(useBroker
+                ? "OS broker is available and enabled."
+                : "OS broker is not available or enabled.");
+
+            IPublicClientApplication app = await CreatePublicClientApplicationAsync(
+                authority: null, clientId, redirectUri: null, useBroker, msaPt, uiCts);
+
+            IEnumerable<IAccount> accounts = await app.GetAccountsAsync();
+
+            return accounts.Select(MicrosoftAccount.FromMsalAccount).ToList();
+        }
 
         public async Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(
             string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt)
@@ -497,9 +573,19 @@ namespace GitCredentialManager.Authentication
             var httpFactoryAdaptor = new MsalHttpClientFactoryAdaptor(Context.HttpClientFactory);
 
             var appBuilder = PublicClientApplicationBuilder.Create(clientId)
-                .WithAuthority(authority)
-                .WithRedirectUri(redirectUri.ToString())
                 .WithHttpClientFactory(httpFactoryAdaptor);
+
+            // Authority and redirect URI are only relevant for token-acquisition flows; when omitted we let
+            // MSAL fall back to its built-in defaults (currently AAD /common and the native-client redirect).
+            // Cache-only operations such as account enumeration do not depend on either.
+            if (!string.IsNullOrWhiteSpace(authority))
+            {
+                appBuilder.WithAuthority(authority);
+            }
+            if (redirectUri != null)
+            {
+                appBuilder.WithRedirectUri(redirectUri.ToString());
+            }
 
             // Listen to MSAL logs if GCM_TRACE_MSAUTH is set
             if (Context.Settings.IsMsalTracingEnabled)
