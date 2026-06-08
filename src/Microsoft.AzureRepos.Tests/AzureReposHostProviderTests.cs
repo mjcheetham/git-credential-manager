@@ -1071,7 +1071,7 @@ namespace Microsoft.AzureRepos.Tests
         {
             return new MockMsAuthResult
             {
-                AccountUpn = upn,
+                Account = new MicrosoftAccount(homeAccountId: null, userName: upn),
                 AccessToken = token,
             };
         }
@@ -1079,8 +1079,7 @@ namespace Microsoft.AzureRepos.Tests
         private class MockMsAuthResult : IMicrosoftAuthenticationResult
         {
             public string AccessToken { get; set; }
-            public string AccountUpn { get; set; }
-            public string TokenSource { get; set; }
+            public IMicrosoftAccount Account { get; set; }
         }
     }
 }
