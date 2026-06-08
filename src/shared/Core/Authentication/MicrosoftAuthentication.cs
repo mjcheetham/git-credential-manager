@@ -79,14 +79,6 @@ namespace GitCredentialManager.Authentication
         string AccountUpn { get; }
     }
 
-    public enum MicrosoftAuthenticationFlowType
-    {
-        Auto = 0,
-        EmbeddedWebView = 1,
-        SystemWebView = 2,
-        DeviceCode = 3
-    }
-
     public class MicrosoftAuthentication : AuthenticationBase, IMicrosoftAuthentication
     {
         public static readonly string[] AuthorityIds =
@@ -187,20 +179,20 @@ namespace GitCredentialManager.Authentication
                     else
                     {
                         // Check for a user flow preference if they've specified one
-                        MicrosoftAuthenticationFlowType flowType = GetFlowType();
+                        InteractiveFlowType flowType = GetFlowType();
                         switch (flowType)
                         {
-                            case MicrosoftAuthenticationFlowType.Auto:
+                            case InteractiveFlowType.Auto:
                                 if (CanUseEmbeddedWebView())
-                                    goto case MicrosoftAuthenticationFlowType.EmbeddedWebView;
+                                    goto case InteractiveFlowType.EmbeddedWebView;
 
                                 if (CanUseSystemWebView(app, redirectUri))
-                                    goto case MicrosoftAuthenticationFlowType.SystemWebView;
+                                    goto case InteractiveFlowType.SystemWebView;
 
                                 // Fall back to device code flow
-                                goto case MicrosoftAuthenticationFlowType.DeviceCode;
+                                goto case InteractiveFlowType.DeviceCode;
 
-                            case MicrosoftAuthenticationFlowType.EmbeddedWebView:
+                            case InteractiveFlowType.EmbeddedWebView:
                                 Context.Trace.WriteLine("Performing interactive auth with embedded web view...");
                                 EnsureCanUseEmbeddedWebView();
                                 result = await app.AcquireTokenInteractive(scopes)
@@ -210,7 +202,7 @@ namespace GitCredentialManager.Authentication
                                     .ExecuteAsync();
                                 break;
 
-                            case MicrosoftAuthenticationFlowType.SystemWebView:
+                            case InteractiveFlowType.SystemWebView:
                                 Context.Trace.WriteLine("Performing interactive auth with system web view...");
                                 EnsureCanUseSystemWebView(app, redirectUri);
                                 result = await app.AcquireTokenInteractive(scopes)
@@ -219,7 +211,7 @@ namespace GitCredentialManager.Authentication
                                     .ExecuteAsync();
                                 break;
 
-                            case MicrosoftAuthenticationFlowType.DeviceCode:
+                            case InteractiveFlowType.DeviceCode:
                                 Context.Trace.WriteLine("Performing interactive auth with device code...");
                                 // We don't have a way to display a device code without a terminal at the moment
                                 // TODO: introduce a small GUI window to show a code if no TTY exists
@@ -228,7 +220,7 @@ namespace GitCredentialManager.Authentication
                                 break;
 
                             default:
-                                goto case MicrosoftAuthenticationFlowType.Auto;
+                                goto case InteractiveFlowType.Auto;
                         }
                     }
                 }
@@ -422,7 +414,7 @@ namespace GitCredentialManager.Authentication
             }
         }
 
-        internal MicrosoftAuthenticationFlowType GetFlowType()
+        internal InteractiveFlowType GetFlowType()
         {
             if (Context.Settings.TryGetSetting(
                 Constants.EnvironmentVariables.MsAuthFlow,
@@ -434,13 +426,13 @@ namespace GitCredentialManager.Authentication
                 switch (valueStr.ToLowerInvariant())
                 {
                     case "auto":
-                        return MicrosoftAuthenticationFlowType.Auto;
+                        return InteractiveFlowType.Auto;
                     case "embedded":
-                        return MicrosoftAuthenticationFlowType.EmbeddedWebView;
+                        return InteractiveFlowType.EmbeddedWebView;
                     case "system":
-                        return MicrosoftAuthenticationFlowType.SystemWebView;
+                        return InteractiveFlowType.SystemWebView;
                     default:
-                        if (Enum.TryParse(valueStr, ignoreCase: true, out MicrosoftAuthenticationFlowType value))
+                        if (Enum.TryParse(valueStr, ignoreCase: true, out InteractiveFlowType value))
                             return value;
                         break;
                 }
@@ -448,7 +440,7 @@ namespace GitCredentialManager.Authentication
                 Context.Streams.Error.WriteLine($"warning: unknown Microsoft Authentication flow type '{valueStr}'; using 'auto'");
             }
 
-            return MicrosoftAuthenticationFlowType.Auto;
+            return InteractiveFlowType.Auto;
         }
 
         /// <summary>
@@ -978,6 +970,14 @@ namespace GitCredentialManager.Authentication
                 throw new Trace2InvalidOperationException(Context.Trace2,
                     "System web view is not available for this service configuration.");
             }
+        }
+
+        internal enum InteractiveFlowType
+        {
+            Auto = 0,
+            EmbeddedWebView = 1,
+            SystemWebView = 2,
+            DeviceCode = 3
         }
 
         #endregion
