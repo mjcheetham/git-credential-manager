@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 using GitCredentialManager.Interop.Windows.Native;
 using Microsoft.Identity.Client;
@@ -43,7 +42,7 @@ namespace GitCredentialManager.Authentication
         /// <param name="sp">Service principal identity.</param>
         /// <param name="scopes">Scopes to request.</param>
         /// <returns>Authentication result.</returns>
-        Task<IMicrosoftAuthenticationResult> GetTokenForServicePrincipalAsync(ServicePrincipalIdentity sp, string[] scopes);
+        Task<IMicrosoftAuthenticationResult> GetTokenForServicePrincipalAsync(MicrosoftServicePrincipalIdentity sp, string[] scopes);
 
         /// <summary>
         /// Acquire a token using the managed identity in the current environment.
@@ -71,40 +70,6 @@ namespace GitCredentialManager.Authentication
         /// <param name="scopes">Scopes to request.</param>
         /// <returns>Authentication result including access token.</returns>
         Task<IMicrosoftAuthenticationResult> GetTokenUsingWorkloadFederationAsync(MicrosoftWorkloadFederationOptions fedOpts, string[] scopes);
-    }
-
-    public class ServicePrincipalIdentity
-    {
-        /// <summary>
-        /// Client ID of the service principal.
-        /// </summary>
-        public string Id { get; set; }
-
-        /// <summary>
-        /// Tenant ID of the service principal.
-        /// </summary>
-        public string TenantId { get; set; }
-
-        /// <summary>
-        /// Certificate used to authenticate the service principal.
-        /// </summary>
-        /// <remarks>
-        /// If both <see cref="Certificate"/> and <see cref="ClientSecret"/> are set, the certificate will be used.
-        /// </remarks>
-        public X509Certificate2 Certificate { get; set; }
-
-        /// <summary>
-        /// Secret used to authenticate the service principal.
-        /// </summary>
-        /// <remarks>
-        /// If both <see cref="Certificate"/> and <see cref="ClientSecret"/> are set, the certificate will be used.
-        /// </remarks>
-        public string ClientSecret { get; set; }
-
-        /// <summary>
-        /// Whether the authentication should send X5C
-        /// </summary>
-        public bool SendX5C { get; set; }
     }
 
     public interface IMicrosoftAuthenticationResult
@@ -276,7 +241,7 @@ namespace GitCredentialManager.Authentication
             }
         }
 
-        public async Task<IMicrosoftAuthenticationResult> GetTokenForServicePrincipalAsync(ServicePrincipalIdentity sp, string[] scopes)
+        public async Task<IMicrosoftAuthenticationResult> GetTokenForServicePrincipalAsync(MicrosoftServicePrincipalIdentity sp, string[] scopes)
         {
             IConfidentialClientApplication app = await CreateConfidentialClientApplicationAsync(sp);
 
@@ -606,7 +571,7 @@ namespace GitCredentialManager.Authentication
             return app;
         }
 
-        private async Task<IConfidentialClientApplication> CreateConfidentialClientApplicationAsync(ServicePrincipalIdentity sp)
+        private async Task<IConfidentialClientApplication> CreateConfidentialClientApplicationAsync(MicrosoftServicePrincipalIdentity sp)
         {
             var httpFactoryAdaptor = new MsalHttpClientFactoryAdaptor(Context.HttpClientFactory);
 
