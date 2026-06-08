@@ -84,7 +84,7 @@ namespace GitCredentialManager.Authentication
     public interface IMicrosoftAuthenticationResult
     {
         string AccessToken { get; }
-        string AccountUpn { get; }
+        IMicrosoftAccount Account { get; }
     }
 
     public interface IMicrosoftAccount : IEquatable<IMicrosoftAccount>
@@ -1070,15 +1070,14 @@ namespace GitCredentialManager.Authentication
 
         private class MsalResult : IMicrosoftAuthenticationResult
         {
-            private readonly AuthenticationResult _msalResult;
-
             public MsalResult(AuthenticationResult msalResult)
             {
-                _msalResult = msalResult;
+                AccessToken = msalResult.AccessToken;
+                Account = MicrosoftAccount.FromMsalAccount(msalResult.Account);
             }
 
-            public string AccessToken => _msalResult.AccessToken;
-            public string AccountUpn => _msalResult.Account?.Username;
+            public string AccessToken { get; }
+            public IMicrosoftAccount Account { get; }
         }
     }
 }
