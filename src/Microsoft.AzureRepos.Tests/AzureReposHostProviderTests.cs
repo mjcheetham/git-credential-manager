@@ -142,7 +142,7 @@ namespace Microsoft.AzureRepos.Tests
         [Fact]
         public async Task AzureReposProvider_GetCredentialAsync_JwtMode_CachedAuthority_VsComUrlUser_ReturnsCredential()
         {
-            var urlAccount = "jane.doe";
+            var urlAccount = "jane.doe@contoso.com";
 
             var request = new GitRequest(new Dictionary<string, string>
             {
@@ -192,7 +192,7 @@ namespace Microsoft.AzureRepos.Tests
         [Fact]
         public async Task AzureReposProvider_GetCredentialAsync_JwtMode_CachedAuthority_DevAzureUrlUser_ReturnsCredential()
         {
-            var urlAccount = "jane.doe";
+            var urlAccount = "jane.doe@contoso.com";
 
             var request = new GitRequest(new Dictionary<string, string>
             {
@@ -241,6 +241,60 @@ namespace Microsoft.AzureRepos.Tests
         }
 
         [Fact]
+        public async Task AzureReposProvider_GetCredentialAsync_JwtMode_CachedAuthority_DevAzureUrlHomeAccountId_ReturnsCredential()
+        {
+            // A user can pin a clone to a specific MSAL account by embedding its HomeAccountId
+            // in the URL/credential.username. `MicrosoftAccount.FromIdentifier` routes the
+            // GUID-dot-GUID value into the HomeAccountId slot rather than the UPN slot so msauth
+            // resolves it correctly.
+            var urlAccount = "00000000-0000-0000-0000-000000000002.00000000-0000-0000-0000-000000000001";
+
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/project/_git/repo",
+                ["username"] = urlAccount
+            });
+
+            var expectedOrgUri = new Uri("https://dev.azure.com/org");
+            var authorityUrl = "https://login.microsoftonline.com/common";
+            var expectedClientId = AzureDevOpsConstants.AadClientId;
+            var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
+            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            var accessToken = "ACCESS-TOKEN";
+            var resolvedUpn = "jane.doe@contoso.com";
+            var expectedAccount = new MicrosoftAccount(homeAccountId: urlAccount, userName: null);
+            var authResult = CreateAuthResult(resolvedUpn, accessToken);
+
+            var context = new TestCommandContext();
+
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+
+            var azDevOpsMock = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+            azDevOpsMock.Setup(x => x.GetAuthorityAsync(expectedOrgUri)).ReturnsAsync(authorityUrl);
+
+            var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
+                      .ReturnsAsync(authResult);
+
+            var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
+            authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
+
+            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
+
+            var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, msAuthMock.Object, authorityCacheMock.Object, userMgrMock.Object);
+
+            var result = await provider.GetCredentialAsync(request);
+            ICredential credential = result.Credential;
+
+            Assert.NotNull(credential);
+            Assert.Equal(resolvedUpn, credential.Account);
+            Assert.Equal(accessToken, credential.Password);
+        }
+
+        [Fact]
         public async Task AzureReposProvider_GetCredentialAsync_JwtMode_CachedAuthority_DevAzureUrlOrgName_ReturnsCredential()
         {
             var request = new GitRequest(new Dictionary<string, string>
@@ -277,7 +331,7 @@ namespace Microsoft.AzureRepos.Tests
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
             var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName)).Returns((AzureReposBinding)null);
+            userMgrMock.Setup(x => x.GetAccount(It.IsAny<AzureReposBindingScope>())).Returns((IMicrosoftAccount)null);
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, msAuthMock.Object, authorityCacheMock.Object, userMgrMock.Object);
 
@@ -326,7 +380,7 @@ namespace Microsoft.AzureRepos.Tests
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
             var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName)).Returns((AzureReposBinding)null);
+            userMgrMock.Setup(x => x.GetAccount(It.IsAny<AzureReposBindingScope>())).Returns((IMicrosoftAccount)null);
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, msAuthMock.Object, authorityCacheMock.Object, userMgrMock.Object);
 
@@ -356,7 +410,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
-            var account = "john.doe";
+            var account = "john.doe@example.com";
             var expectedAccount = new MicrosoftAccount(homeAccountId: null, userName: account);
             var authResult = CreateAuthResult(account, accessToken);
 
@@ -371,13 +425,17 @@ namespace Microsoft.AzureRepos.Tests
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
             msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
+            msAuthMock.Setup(x => x.GetUserAccountsAsync(expectedClientId, true))
+                      .ReturnsAsync(System.Array.Empty<IMicrosoftAccount>());
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
             var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName))
-                .Returns(new AzureReposBinding(OrgName, account, null));
+            userMgrMock.Setup(x => x.GetAccount(AzureReposBindingScope.ForOrg(OrgName, isLocal: false)))
+                .Returns(expectedAccount);
+            userMgrMock.Setup(x => x.GetAccount(AzureReposBindingScope.ForOrg(OrgName, isLocal: true)))
+                .Returns((IMicrosoftAccount)null);
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, msAuthMock.Object, authorityCacheMock.Object, userMgrMock.Object);
 
@@ -428,7 +486,7 @@ namespace Microsoft.AzureRepos.Tests
             authorityCacheMock.Setup(x => x.UpdateAuthority(OrgName, authorityUrl));
 
             var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName)).Returns((AzureReposBinding)null);
+            userMgrMock.Setup(x => x.GetAccount(It.IsAny<AzureReposBindingScope>())).Returns((IMicrosoftAccount)null);
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, msAuthMock.Object, authorityCacheMock.Object, userMgrMock.Object);
 

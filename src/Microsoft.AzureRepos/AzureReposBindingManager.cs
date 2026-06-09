@@ -1,347 +1,287 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using GitCredentialManager;
+using GitCredentialManager.Authentication;
 
-namespace Microsoft.AzureRepos
+namespace Microsoft.AzureRepos;
+
+/// <summary>
+/// Manages bindings between Microsoft accounts and Azure DevOps tenants or organizations
+/// for the Azure Repos provider.
+/// </summary>
+/// <remarks>
+/// Bindings are pure preferences ("for this scope, prefer this account") and have no
+/// authentication state. They sit on top of the MSAL account cache (the source of truth
+/// for "which accounts do we have credentials for") and are resolved most-specific-first
+/// at credential time.
+/// </remarks>
+public interface IAzureReposBindingManager
 {
     /// <summary>
-    /// Manages bindings of users and organizations for Azure Repos.
+    /// Set the binding for the given scope to the given account.
     /// </summary>
-    public interface IAzureReposBindingManager
+    /// <param name="scope">Scope at which to bind.</param>
+    /// <param name="account">Account to bind. At least one of
+    /// <see cref="IMicrosoftAccount.HomeAccountId"/> or
+    /// <see cref="IMicrosoftAccount.UserName"/> must be populated; both is preferred so the
+    /// binding survives independently of the MSAL cache being able to resolve one to the
+    /// other.</param>
+    void Bind(AzureReposBindingScope scope, IMicrosoftAccount account);
+
+    /// <summary>
+    /// Remove the binding at the given scope, if any.
+    /// </summary>
+    void Unbind(AzureReposBindingScope scope);
+
+    /// <summary>
+    /// Read the account currently bound at the given scope, or <see langword="null"/> if none.
+    /// </summary>
+    /// <remarks>
+    /// The returned account carries whichever of <c>HomeAccountId</c> and <c>UserName</c> the
+    /// stored binding has on disk. New bindings always store both; legacy bindings written by
+    /// earlier releases stored only <c>UserName</c>.
+    /// </remarks>
+    IMicrosoftAccount GetAccount(AzureReposBindingScope scope);
+
+    /// <summary>
+    /// Enumerate every binding the manager knows about. Local-level entries are only enumerated
+    /// when inside a git repository.
+    /// </summary>
+    IEnumerable<AzureReposBinding> GetBindings();
+}
+
+/// <summary>
+/// A single stored binding: which scope it applies to and which account it points at.
+/// </summary>
+public sealed record AzureReposBinding(AzureReposBindingScope Scope, IMicrosoftAccount Account);
+
+public class AzureReposBindingManager : IAzureReposBindingManager
+{
+    private const string AccountIdProperty = "accountid";
+    private const string UserNameProperty = "username";
+
+    private readonly ITrace _trace;
+    private readonly IGit _git;
+
+    public AzureReposBindingManager(ICommandContext context) : this(context.Trace, context.Git) { }
+
+    public AzureReposBindingManager(ITrace trace, IGit git)
     {
-        /// <summary>
-        /// Get the binding for the given Azure DevOps organization.
-        /// </summary>
-        /// <param name="orgName">Organization name.</param>
-        /// <returns>Binding for the organization, or null if no binding exists.</returns>
-        AzureReposBinding GetBinding(string orgName);
+        EnsureArgument.NotNull(trace, nameof(trace));
+        EnsureArgument.NotNull(git, nameof(git));
 
-        /// <summary>
-        /// Bind a user to the given organization.
-        /// </summary>
-        /// <param name="orgName">Organization to bind the user to.</param>
-        /// <param name="userName">User identifier to bind.</param>
-        /// <param name="local">If true then bind local configuration, otherwise unbind global configuration.</param>
-        /// <remarks>
-        /// To prevent inheritance of a user binding at the global level, you can "bind" an organization
-        /// to a special <paramref name="userName"/> value <see cref="AzureReposBinding.NoInherit"/>.
-        /// <para/>
-        /// The special value <see cref="AzureReposBinding.NoInherit"/> can be used as the <paramref name="userName"/>
-        /// only when <paramref name="local"/> is true.
-        /// </remarks>
-        void Bind(string orgName, string userName, bool local);
-
-        /// <summary>
-        /// Unbind the given organization.
-        /// </summary>
-        /// <param name="orgName">Organization to unbind.</param>
-        /// <param name="local">If true then unbind local configuration, otherwise unbind global configuration.</param>
-        void Unbind(string orgName, bool local);
-
-        /// <summary>
-        /// Get all bindings to Azure DevOps organizations.
-        /// </summary>
-        /// <param name="orgName">Optional organization filter.</param>
-        /// <returns>All organization bindings.</returns>
-        IEnumerable<AzureReposBinding> GetBindings(string orgName = null);
+        _trace = trace;
+        _git = git;
     }
 
-    public class AzureReposBinding
+    public void Bind(AzureReposBindingScope scope, IMicrosoftAccount account)
     {
-        /// <summary>
-        /// Do not inherit any higher-level binding.
-        /// </summary>
-        public const string NoInherit = "";
-
-        public AzureReposBinding(string organization, string globalUserName, string localUserName)
+        EnsureArgument.NotNull(scope, nameof(scope));
+        EnsureArgument.NotNull(account, nameof(account));
+        if (string.IsNullOrWhiteSpace(account.HomeAccountId) &&
+            string.IsNullOrWhiteSpace(account.UserName))
         {
-            Organization = organization;
-            GlobalUserName = globalUserName;
-            LocalUserName = localUserName;
+            throw new ArgumentException(
+                "Account must have at least one of HomeAccountId or UserName populated.",
+                nameof(account));
         }
 
-        public string Organization { get; }
-        public string GlobalUserName { get; }
-        public string LocalUserName { get; }
+        GitConfigurationLevel level = GetConfigLevel(scope);
+        if (level == GitConfigurationLevel.Local && !_git.IsInsideRepository())
+        {
+            _trace.WriteLine("Cannot record local-scoped binding - not inside a repository.");
+            return;
+        }
+
+        string keyPrefix = GetKeyPrefix(scope);
+        _trace.WriteLine(
+            $"Recording binding for scope '{keyPrefix}' at {level} " +
+            $"(accountid='{account.HomeAccountId}', username='{account.UserName}').");
+
+        IGitConfiguration config = _git.GetConfiguration();
+        WriteOrClear(config, level, $"{keyPrefix}.{AccountIdProperty}", account.HomeAccountId);
+        WriteOrClear(config, level, $"{keyPrefix}.{UserNameProperty}", account.UserName);
     }
 
-    public class AzureReposBindingManager : IAzureReposBindingManager
+    public void Unbind(AzureReposBindingScope scope)
     {
-        private readonly ITrace _trace;
-        private readonly IGit _git;
+        EnsureArgument.NotNull(scope, nameof(scope));
 
-        public AzureReposBindingManager(ICommandContext context) : this(context.Trace, context.Git) { }
-
-        public AzureReposBindingManager(ITrace trace, IGit git)
+        GitConfigurationLevel level = GetConfigLevel(scope);
+        if (level == GitConfigurationLevel.Local && !_git.IsInsideRepository())
         {
-            EnsureArgument.NotNull(trace, nameof(trace));
-            EnsureArgument.NotNull(git, nameof(git));
-
-            _trace = trace;
-            _git = git;
+            _trace.WriteLine("Cannot remove local-scoped binding - not inside a repository.");
+            return;
         }
 
-        public AzureReposBinding GetBinding(string orgName)
+        string keyPrefix = GetKeyPrefix(scope);
+        _trace.WriteLine($"Removing binding for scope '{keyPrefix}' at {level}.");
+
+        IGitConfiguration config = _git.GetConfiguration();
+        config.Unset(level, $"{keyPrefix}.{AccountIdProperty}");
+        config.Unset(level, $"{keyPrefix}.{UserNameProperty}");
+    }
+
+    public IMicrosoftAccount GetAccount(AzureReposBindingScope scope)
+    {
+        EnsureArgument.NotNull(scope, nameof(scope));
+
+        GitConfigurationLevel level = GetConfigLevel(scope);
+        if (level == GitConfigurationLevel.Local && !_git.IsInsideRepository())
         {
-            EnsureArgument.NotNullOrWhiteSpace(orgName, nameof(orgName));
-
-            string orgKey = GetOrgUserKey(orgName);
-
-            IGitConfiguration config = _git.GetConfiguration();
-
-            _trace.WriteLine($"Looking up organization binding for '{orgName}'...");
-
-            string localUser = null;
-            bool hasLocal = _git.IsInsideRepository() && // Can only check local config if we are inside a repository
-                            config.TryGet(GitConfigurationLevel.Local, GitConfigurationType.Raw,
-                                orgKey, out localUser);
-
-            bool hasGlobal = config.TryGet(GitConfigurationLevel.Global, GitConfigurationType.Raw,
-                orgKey, out string globalUser);
-
-            if (hasLocal || hasGlobal)
-            {
-                return new AzureReposBinding(orgName, globalUser, localUser);
-            }
-
-            // No bound user
             return null;
         }
 
-        public void Bind(string orgName, string userName, bool local)
+        string keyPrefix = GetKeyPrefix(scope);
+        IGitConfiguration config = _git.GetConfiguration();
+
+        string accountId = TryGet(config, level, $"{keyPrefix}.{AccountIdProperty}");
+        string userName  = TryGet(config, level, $"{keyPrefix}.{UserNameProperty}");
+
+        if (accountId is null && userName is null) return null;
+        return new MicrosoftAccount(accountId, userName);
+    }
+
+    public IEnumerable<AzureReposBinding> GetBindings()
+    {
+        IGitConfiguration config = _git.GetConfiguration();
+
+        foreach (AzureReposBinding b in EnumerateBindings(config, GitConfigurationLevel.Global, isLocal: false))
+            yield return b;
+
+        if (_git.IsInsideRepository())
         {
-            EnsureArgument.NotNullOrWhiteSpace(orgName, nameof(orgName));
-
-            IGitConfiguration config = _git.GetConfiguration();
-
-            string key = GetOrgUserKey(orgName);
-
-            if (local)
-            {
-                _trace.WriteLine(userName == AzureReposBinding.NoInherit
-                    ? $"Setting binding to 'do not inherit' for organization '{orgName}' in local repository..."
-                    : $"Binding user '{userName}' to organization '{orgName}' in local repository...");
-
-                if (_git.IsInsideRepository())
-                {
-                    config.Set(GitConfigurationLevel.Local, key, userName);
-                }
-                else
-                {
-                    _trace.WriteLine("Cannot set local configuration binding - not inside a repository!");
-                }
-            }
-            else
-            {
-                EnsureArgument.NotNullOrWhiteSpace(userName, nameof(userName));
-
-                _trace.WriteLine($"Binding user '{userName}' to organization '{orgName}' in global configuration...");
-                config.Set(GitConfigurationLevel.Global, key, userName);
-            }
-        }
-
-        public void Unbind(string orgName, bool local)
-        {
-            EnsureArgument.NotNullOrWhiteSpace(orgName, nameof(orgName));
-
-            IGitConfiguration config = _git.GetConfiguration();
-
-            string key = GetOrgUserKey(orgName);
-
-            if (local)
-            {
-                _trace.WriteLine($"Unbinding organization '{orgName}' in local repository...");
-                if (_git.IsInsideRepository())
-                {
-                    config.Unset(GitConfigurationLevel.Local, key);
-                }
-                else
-                {
-                    _trace.WriteLine("Cannot set local configuration binding - not inside a repository!");
-                }
-            }
-            else
-            {
-                _trace.WriteLine($"Unbinding organization '{orgName}' in global configuration...");
-                config.Unset(GitConfigurationLevel.Global, key);
-            }
-        }
-
-        public IEnumerable<AzureReposBinding> GetBindings(string orgName = null)
-        {
-            var globalUsers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-            var localUsers  = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-
-            IGitConfiguration config = _git.GetConfiguration();
-
-            string orgPrefix = $"{AzureDevOpsConstants.UrnOrgPrefix}/";
-
-            bool ExtractUserBinding(GitConfigurationEntry entry, IDictionary<string, string> dict)
-            {
-                if (GitConfigurationKeyComparer.TrySplit(entry.Key, out _, out string scope, out _) &&
-                    Uri.TryCreate(scope, UriKind.Absolute, out Uri uri) &&
-                    uri.Scheme == AzureDevOpsConstants.UrnScheme && uri.AbsolutePath.StartsWith(orgPrefix))
-                {
-                    string entryOrgName = uri.AbsolutePath.Substring(orgPrefix.Length);
-                    if (string.IsNullOrWhiteSpace(orgName) || StringComparer.OrdinalIgnoreCase.Equals(entryOrgName, orgName))
-                    {
-                        dict[entryOrgName] = entry.Value;
-                    }
-                }
-
-                return true;
-            }
-
-            // Only enumerate local configuration if we are inside a repository
-            if (_git.IsInsideRepository())
-            {
-                config.Enumerate(
-                    GitConfigurationLevel.Local,
-                    Constants.GitConfiguration.Credential.SectionName,
-                    Constants.GitConfiguration.Credential.UserName,
-                    entry => ExtractUserBinding(entry, localUsers));
-            }
-
-            config.Enumerate(
-                GitConfigurationLevel.Global,
-                Constants.GitConfiguration.Credential.SectionName,
-                Constants.GitConfiguration.Credential.UserName,
-                entry => ExtractUserBinding(entry, globalUsers));
-
-            foreach (string org in globalUsers.Keys.Union(localUsers.Keys))
-            {
-                // NOT using the short-circuiting OR operator here on purpose - we need both branches to be evaluated
-                if (globalUsers.TryGetValue(org, out string globalUser) | localUsers.TryGetValue(org, out string localUser))
-                {
-                    yield return new AzureReposBinding(org, globalUser, localUser);
-                }
-            }
-        }
-
-        private static string GetOrgUserKey(string orgName)
-        {
-            return string.Format(CultureInfo.InvariantCulture, "{0}.{1}:{2}/{3}.{4}",
-                Constants.GitConfiguration.Credential.SectionName,
-                AzureDevOpsConstants.UrnScheme, AzureDevOpsConstants.UrnOrgPrefix, orgName,
-                "username"
-            );
+            foreach (AzureReposBinding b in EnumerateBindings(config, GitConfigurationLevel.Local, isLocal: true))
+                yield return b;
         }
     }
 
-    public static class AzureReposUserManagerExtensions
+    private static IEnumerable<AzureReposBinding> EnumerateBindings(
+        IGitConfiguration config, GitConfigurationLevel level, bool isLocal)
     {
-        /// <summary>
-        /// Get the user that is bound to the specified Azure DevOps organization.
-        /// </summary>
-        /// <param name="bindingManager">Binding manager.</param>
-        /// <param name="orgName">Organization name.</param>
-        /// <returns>User identifier bound to the organization, or null if no such bound user exists.</returns>
-        public static string GetUser(this IAzureReposBindingManager bindingManager, string orgName)
-        {
-            AzureReposBinding binding = bindingManager.GetBinding(orgName);
-            if (binding is null || binding.LocalUserName == AzureReposBinding.NoInherit)
-            {
-                return null;
-            }
+        var accountIds = new Dictionary<AzureReposBindingScope, string>();
+        var userNames  = new Dictionary<AzureReposBindingScope, string>();
 
-            return binding.LocalUserName ?? binding.GlobalUserName;
+        config.Enumerate(level, Constants.GitConfiguration.Credential.SectionName,
+            AccountIdProperty, entry =>
+        {
+            AzureReposBindingScope scope = ParseScopeFromKey(entry.Key, isLocal);
+            if (scope is not null) accountIds[scope] = entry.Value;
+            return true;
+        });
+
+        config.Enumerate(level, Constants.GitConfiguration.Credential.SectionName,
+            UserNameProperty, entry =>
+        {
+            AzureReposBindingScope scope = ParseScopeFromKey(entry.Key, isLocal);
+            if (scope is not null) userNames[scope] = entry.Value;
+            return true;
+        });
+
+        var scopes = new HashSet<AzureReposBindingScope>(accountIds.Keys);
+        scopes.UnionWith(userNames.Keys);
+
+        var bindings = new List<AzureReposBinding>(scopes.Count);
+        foreach (AzureReposBindingScope scope in scopes)
+        {
+            accountIds.TryGetValue(scope, out string accountId);
+            userNames.TryGetValue(scope, out string userName);
+            bindings.Add(new AzureReposBinding(scope, new MicrosoftAccount(accountId, userName)));
+        }
+        return bindings;
+    }
+
+    private static AzureReposBindingScope ParseScopeFromKey(string key, bool isLocal)
+    {
+        if (!GitConfigurationKeyComparer.TrySplit(key, out _, out string subsection, out _))
+            return null;
+
+        if (!Uri.TryCreate(subsection, UriKind.Absolute, out Uri uri))
+            return null;
+        if (!StringComparer.OrdinalIgnoreCase.Equals(uri.Scheme, AzureDevOpsConstants.UrnScheme))
+            return null;
+
+        string path = uri.AbsolutePath;
+        if (path.StartsWith(AzureDevOpsConstants.UrnOrgPrefix + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return AzureReposBindingScope.ForOrg(path.Substring(AzureDevOpsConstants.UrnOrgPrefix.Length + 1), isLocal);
+        }
+        if (path.StartsWith(AzureDevOpsConstants.UrnTenantPrefix + "/", StringComparison.OrdinalIgnoreCase))
+        {
+            return AzureReposBindingScope.ForTenant(path.Substring(AzureDevOpsConstants.UrnTenantPrefix.Length + 1), isLocal);
+        }
+        return null;
+    }
+
+    private static GitConfigurationLevel GetConfigLevel(AzureReposBindingScope scope) =>
+        scope.IsLocal ? GitConfigurationLevel.Local : GitConfigurationLevel.Global;
+
+    private static string GetKeyPrefix(AzureReposBindingScope scope)
+    {
+        (string k, string v) = scope switch
+        {
+            AzureReposBindingScope.Tenant t => (AzureDevOpsConstants.UrnTenantPrefix, t.TenantId),
+            AzureReposBindingScope.Org o    => (AzureDevOpsConstants.UrnOrgPrefix, o.OrgName),
+            _ => throw new ArgumentException("Unknown scope", nameof(scope))
+        };
+
+        return string.Format(
+            CultureInfo.InvariantCulture, "{0}.{1}:{2}/{3}",
+            Constants.GitConfiguration.Credential.SectionName,
+            AzureDevOpsConstants.UrnScheme, k, v
+        );
+    }
+
+    private static void WriteOrClear(IGitConfiguration config, GitConfigurationLevel level, string key, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            config.Unset(level, key);
+        else
+            config.Set(level, key, value);
+    }
+
+    private static string TryGet(IGitConfiguration config, GitConfigurationLevel level, string key) =>
+        config.TryGet(level, GitConfigurationType.Raw, key, out string value) ? value : null;
+}
+
+public static class AzureReposBindingManagerExtensions
+{
+    /// <summary>
+    /// Resolve the account to use for a credential request against the given Azure DevOps
+    /// organization and/or Microsoft Entra tenant.
+    /// </summary>
+    /// <remarks>
+    /// Precedence (most specific to least): Org local, Org global, Tenant local, Tenant global.
+    /// Tenant lookup is skipped when <paramref name="tenantId"/> is <see langword="null"/>
+    /// (caller couldn't resolve the org's tenant).
+    /// </remarks>
+    public static IMicrosoftAccount ResolveAccountBinding(this IAzureReposBindingManager manager, string orgName, string tenantId)
+    {
+        EnsureArgument.NotNull(manager, nameof(manager));
+        EnsureArgument.NotNullOrWhiteSpace(orgName, nameof(orgName));
+
+        // Local binding for an org
+        IMicrosoftAccount account = manager.GetAccount(AzureReposBindingScope.ForOrg(orgName, isLocal: true));
+        if (account is not null) return account;
+
+        // Global binding for an org
+        account = manager.GetAccount(AzureReposBindingScope.ForOrg(orgName, isLocal: false));
+        if (account is not null) return account;
+
+        // Look for a less scoped tenant-binding
+        if (!string.IsNullOrWhiteSpace(tenantId))
+        {
+            // Local binding for a tenant
+            account = manager.GetAccount(AzureReposBindingScope.ForTenant(tenantId, isLocal: true));
+            if (account is not null) return account;
+
+            // Global binding for a tenant
+            account = manager.GetAccount(AzureReposBindingScope.ForTenant(tenantId, isLocal: false));
+            if (account is not null) return account;
         }
 
-        /// <summary>
-        /// Marks a user as 'signed in' to an Azure DevOps organization.
-        /// </summary>
-        /// <param name="bindingManager">Binding manager.</param>
-        /// <param name="orgName">Organization name.</param>
-        /// <param name="userName">User identifier to bind to this organization.</param>
-        public static void SignIn(this IAzureReposBindingManager bindingManager, string orgName, string userName)
-        {
-            EnsureArgument.NotNullOrWhiteSpace(orgName, nameof(orgName));
-            EnsureArgument.NotNullOrWhiteSpace(userName, nameof(userName));
-
-            //
-            // Try to bind the user to the organization.
-            //
-            //   A = User to sign-in
-            //   B = Another user
-            //   - = No user
-            //
-            //  Global | Local | -> | Global | Local
-            // --------|-------|----|--------|-------
-            //    -    |   -   | -> |   A    |   -
-            //    -    |   A   | -> |   A    |   -
-            //    -    |   B   | -> |   A    |   -
-            //    A    |   -   | -> |   A    |   -
-            //    A    |   A   | -> |   A    |   -
-            //    A    |   B   | -> |   A    |   -
-            //    B    |   -   | -> |   B    |   A
-            //    B    |   A   | -> |   B    |   A
-            //    B    |   B   | -> |   B    |   A
-            //
-            AzureReposBinding existingBinding = bindingManager.GetBinding(orgName);
-            if (existingBinding?.GlobalUserName != null &&
-                !StringComparer.OrdinalIgnoreCase.Equals(existingBinding.GlobalUserName, userName))
-            {
-                // Global is bound to a different user (B); bind this user locally (-> B | A).
-                // Skip the write if local is already correct.
-                if (!StringComparer.OrdinalIgnoreCase.Equals(existingBinding.LocalUserName, userName))
-                {
-                    bindingManager.Bind(orgName, userName, local: true);
-                }
-            }
-            else
-            {
-                // Global is absent or already matches; ensure global is set and local is clear.
-                if (existingBinding?.GlobalUserName is null)
-                {
-                    bindingManager.Bind(orgName, userName, local: false);
-                }
-                if (existingBinding?.LocalUserName is not null)
-                {
-                    bindingManager.Unbind(orgName, local: true);
-                }
-            }
-        }
-
-        /// <summary>
-        /// Marks a user as 'signed out' of an Azure DevOps organization.
-        /// </summary>
-        /// <param name="bindingManager">Binding manager.</param>
-        /// <param name="orgName">Organization name.</param>
-        public static void SignOut(this IAzureReposBindingManager bindingManager, string orgName)
-        {
-            EnsureArgument.NotNullOrWhiteSpace(orgName, nameof(orgName));
-
-            //
-            // Unbind the organization so we prompt the user to select a user on the next attempt.
-            //
-            //   U = User
-            //   X = Do not inherit (valid in local only)
-            //   - = No user
-            //
-            //  Global | Local | -> | Global | Local
-            // --------|-------|----|--------|-------
-            //    -    |   -   | -> |   -    |   -
-            //    -    |   U   | -> |   -    |   -
-            //    -    |   X   | -> |   -    |   -
-            //    U    |   -   | -> |   U    |   X
-            //    U    |   X   | -> |   U    |   X
-            //    U    |   U   | -> |   U    |   X
-            //
-            AzureReposBinding existingBinding = bindingManager.GetBinding(orgName);
-            if (existingBinding is null)
-            {
-                // Nothing to do!
-            }
-            else if (existingBinding.GlobalUserName is null)
-            {
-                bindingManager.Unbind(orgName, local: true);
-            }
-            else
-            {
-                bindingManager.Bind(orgName, AzureReposBinding.NoInherit, local: true);
-            }
-        }
+        // No binding available!
+        return null;
     }
 }
