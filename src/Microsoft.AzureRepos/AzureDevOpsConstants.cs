@@ -28,6 +28,7 @@ namespace Microsoft.AzureRepos
 
         public const string UrnScheme = "azrepos";
         public const string UrnOrgPrefix = "org";
+        public const string UrnTenantPrefix = "tenant";
 
         public static class PersonalAccessTokenScopes
         {
