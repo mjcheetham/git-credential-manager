@@ -70,4 +70,69 @@ namespace GitCredentialManager.Tests.Authentication
             Assert.Throws<ArgumentException>(() => MicrosoftAuthentication.GetManagedIdentity(str));
         }
     }
+
+    public class MicrosoftAccountTests
+    {
+        [Theory]
+        // Classic Entra ID: two GUIDs
+        [InlineData("00000000-0000-0000-0000-000000000002.00000000-0000-0000-0000-000000000001")]
+        [InlineData("12345678-1234-1234-1234-123456789abc.fedcba98-7654-3210-fedc-ba9876543210")]
+        // Non-GUID object id; tenant id is still a GUID — split on LAST dot
+        [InlineData("contoso.onmicrosoft.com.00000000-0000-0000-0000-000000000001")]
+        [InlineData("b2c-policy.tenant.00000000-0000-0000-0000-000000000001")]
+        public void MicrosoftAccount_IsHomeAccountIdShape_ObjectIdAnyAndGuidTenantId_True(string value)
+        {
+            Assert.True(MicrosoftAccount.IsHomeAccountIdShape(value));
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        [InlineData("alice@example.com")]
+        [InlineData("alice")]                                                                  // ADFS-shape / bare word
+        [InlineData("00000000-0000-0000-0000-000000000002")]                                   // single guid, no dot
+        [InlineData("00000000-0000-0000-0000-000000000002.")]                                  // trailing dot
+        [InlineData(".00000000-0000-0000-0000-000000000001")]                                  // leading dot
+        [InlineData("00000000-0000-0000-0000-000000000002.not-a-guid")]                        // tid is not a GUID
+        [InlineData("alice@example.com.contoso")]                                              // tid is not a GUID
+        public void MicrosoftAccount_IsHomeAccountIdShape_NotEntraHomeAccountId_False(string value)
+        {
+            Assert.False(MicrosoftAccount.IsHomeAccountIdShape(value));
+        }
+
+        [Fact]
+        public void MicrosoftAccount_FromIdentifier_HomeAccountIdShape_PopulatesHomeAccountId()
+        {
+            const string id = "00000000-0000-0000-0000-000000000002.00000000-0000-0000-0000-000000000001";
+
+            MicrosoftAccount account = MicrosoftAccount.FromIdentifier(id);
+
+            Assert.Equal(id, account.HomeAccountId);
+            Assert.Null(account.UserName);
+        }
+
+        [Theory]
+        [InlineData("alice@example.com")]
+        [InlineData("alice@contoso.onmicrosoft.com")]
+        [InlineData("alice")]                                  // ambiguous → UserName
+        [InlineData("contoso")]                                // ambiguous → UserName
+        [InlineData("00000000-0000-0000-0000-000000000002")]   // single guid, not HomeAccountId-shaped
+        public void MicrosoftAccount_FromIdentifier_NonHomeAccountIdShape_PopulatesUserName(string id)
+        {
+            MicrosoftAccount account = MicrosoftAccount.FromIdentifier(id);
+
+            Assert.Null(account.HomeAccountId);
+            Assert.Equal(id, account.UserName);
+        }
+
+        [Theory]
+        [InlineData(null)]
+        [InlineData("")]
+        [InlineData("   ")]
+        public void MicrosoftAccount_FromIdentifier_NullOrWhitespace_Throws(string id)
+        {
+            Assert.ThrowsAny<ArgumentException>(() => MicrosoftAccount.FromIdentifier(id));
+        }
+    }
 }

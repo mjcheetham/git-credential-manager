@@ -138,7 +138,7 @@ namespace Microsoft.AzureRepos
             }
         }
 
-        public Task StoreCredentialAsync(GitRequest request)
+        public async Task StoreCredentialAsync(GitRequest request)
         {
             Uri remoteUri = request.GetRemoteUri();
 
@@ -170,11 +170,20 @@ namespace Microsoft.AzureRepos
             else
             {
                 string orgName = UriHelpers.GetOrganizationName(remoteUri);
-                _context.Trace.WriteLine($"Signing user {request.UserName} in to organization '{orgName}'...");
-                _bindingManager.SignIn(orgName, request.UserName);
-            }
+                _context.Trace.WriteLine($"Recording binding for user {request.UserName} -> organization '{orgName}'...");
 
-            return Task.CompletedTask;
+                // The incoming user name can be either a UPN or a HomeAccountId — match the cache
+                // by either field, then fall back to a `MicrosoftAccount.FromIdentifier`-classified
+                // binding when the cache has nothing to say. The binding manager always writes both
+                // fields it knows.
+                IReadOnlyList<IMicrosoftAccount> cached =
+                    await _msAuth.GetUserAccountsAsync(GetClientId(), msaPt: true);
+                IMicrosoftAccount match = cached.FirstOrDefault(a =>
+                    StringComparer.OrdinalIgnoreCase.Equals(a.UserName, request.UserName) ||
+                    StringComparer.Ordinal.Equals(a.HomeAccountId, request.UserName));
+                IMicrosoftAccount toBind = match ?? MicrosoftAccount.FromIdentifier(request.UserName);
+                _bindingManager.Bind(AzureReposBindingScope.ForOrg(orgName), toBind);
+            }
         }
 
         public Task EraseCredentialAsync(GitRequest request)
@@ -214,8 +223,19 @@ namespace Microsoft.AzureRepos
             {
                 string orgName = UriHelpers.GetOrganizationName(remoteUri);
 
-                _context.Trace.WriteLine($"Signing out of organization '{orgName}'...");
-                _bindingManager.SignOut(orgName);
+                _context.Trace.WriteLine($"Clearing binding for organization '{orgName}'...");
+
+                // Remove the most specific binding first; a global binding remains if a local one
+                // covered it and only the local one was the cause of the credential failure.
+                var localOrg = AzureReposBindingScope.ForOrg(orgName, isLocal: true);
+                if (_bindingManager.GetAccount(localOrg) != null)
+                {
+                    _bindingManager.Unbind(localOrg);
+                }
+                else
+                {
+                    _bindingManager.Unbind(AzureReposBindingScope.ForOrg(orgName, isLocal: false));
+                }
 
                 // Clear the authority cache in case this was the reason for failure
                 _authorityCache.EraseAuthority(orgName);
@@ -324,29 +344,37 @@ namespace Microsoft.AzureRepos
             // match the Azure DevOps organization name. Our friends in Azure DevOps decided "borrow" the username
             // part of the remote URL to include the organization name (not an actual username).
             //
-            // If we have no specified user from the remote (or this is org@dev.azure.com/org/..) then query the
-            // user manager for a bound user for this organization, if one exists...
+            // The user-info string can be either a UPN or a HomeAccountId —
+            // `MicrosoftAccount.FromIdentifier` decides which field of the `IMicrosoftAccount`
+            // to populate so msauth's HomeAccountId-first / UPN-fallback resolution sees it in
+            // the right slot.
             //
+            // If we have no specified user from the remote (or this is org@dev.azure.com/org/..) then query the
+            // binding manager for the account to use for this organization, if one is bound. The tenant id
+            // (derived from the authority URL) lets us also consider tenant-scoped bindings.
+            //
+            IMicrosoftAccount account = null;
             var icmp = StringComparer.OrdinalIgnoreCase;
             if (!string.IsNullOrWhiteSpace(userName) &&
                 (UriHelpers.IsVisualStudioComHost(remoteWithUserUri.Host) ||
                  (UriHelpers.IsAzureDevOpsHost(remoteWithUserUri.Host) && !icmp.Equals(orgName, userName))))
             {
                 _context.Trace.WriteLine("Using username as specified in remote.");
+                account = MicrosoftAccount.FromIdentifier(userName);
             }
             else
             {
-                _context.Trace.WriteLine($"Looking up user for organization '{orgName}'...");
-                userName = _bindingManager.GetUser(orgName);
+                _context.Trace.WriteLine($"Resolving account for organization '{orgName}'...");
+                string tenantId = TryExtractTenantIdFromAuthority(authAuthority);
+                account = _bindingManager.ResolveAccountBinding(orgName, tenantId);
             }
 
-            _context.Trace.WriteLine(string.IsNullOrWhiteSpace(userName) ? "No user found." : $"User is '{userName}'.");
+            _context.Trace.WriteLine(account is null
+                ? "No bound account; msauth will pick interactively."
+                : $"Using account '{account.UserName ?? account.HomeAccountId}'.");
 
             // Get an AAD access token for the Azure DevOps SPS
             _context.Trace.WriteLine("Getting Azure AD access token...");
-            IMicrosoftAccount account = string.IsNullOrWhiteSpace(userName)
-                ? null
-                : new MicrosoftAccount(homeAccountId: null, userName: userName);
             IMicrosoftAuthenticationResult result = await _msAuth.GetTokenForUserAsync(
                 authAuthority,
                 GetClientId(),
@@ -358,6 +386,28 @@ namespace Microsoft.AzureRepos
                 $"Acquired Azure access token. Account='{result.Account.UserName}' Token='{{0}}'", new object[] {result.AccessToken});
 
             return result;
+        }
+
+        /// <summary>
+        /// Extract the tenant id from a Microsoft authentication authority URL of the form
+        /// <c>https://login.microsoftonline.com/{tenant}[/...]</c>. Returns <see langword="null"/>
+        /// for malformed or unrecognized authorities (including the wildcard <c>common</c> and
+        /// <c>organizations</c> values, which don't identify a specific tenant).
+        /// </summary>
+        private static string TryExtractTenantIdFromAuthority(string authority)
+        {
+            if (string.IsNullOrWhiteSpace(authority)) return null;
+            if (!Uri.TryCreate(authority, UriKind.Absolute, out Uri uri)) return null;
+
+            string first = uri.AbsolutePath.Trim('/').Split('/')[0];
+            if (string.IsNullOrEmpty(first)) return null;
+            if (StringComparer.OrdinalIgnoreCase.Equals(first, "common") ||
+                StringComparer.OrdinalIgnoreCase.Equals(first, "organizations") ||
+                StringComparer.OrdinalIgnoreCase.Equals(first, "consumers"))
+            {
+                return null;
+            }
+            return first;
         }
 
         internal /* for testing purposes */ static bool TryGetAuthorityFromHeaders(IEnumerable<string> headers, out string authority)
@@ -873,33 +923,32 @@ namespace Microsoft.AzureRepos
             listBindingsCmd.SetHandler(ListBindingsCmd, orgFilterArg, remoteOpt, verboseOpt);
 
             //
-            // bind <organization> <username> [--local]
+            // bind <account> [--tenant <id> | --org <name>] [--local]
             //
-            var bindCmd = new Command("bind", "Bind a user account to an Azure DevOps organization");
-            var orgArg = new Argument<string>("organization", "Azure DevOps organization name")
+            var bindCmd = new Command("bind", "Bind a Microsoft account to a tenant or Azure DevOps organization");
+            var bindAccountArg = new Argument<string>("account", "Account to bind (UPN or HomeAccountId of an account from `azure-repos list`)")
             {
                 Arity = ArgumentArity.ExactlyOne
             };
-            var userNameArg = new Argument<string>("username", "Username or email (e.g.: alice@example.com)")
-            {
-                Arity = ArgumentArity.ExactlyOne
-            };
+            var bindTenantOpt = new Option<string>("--tenant", "Bind for any organization backed by the given Microsoft Entra tenant");
+            var bindOrgOpt = new Option<string>("--org", "Bind for the given Azure DevOps organization");
             var localOpt = new Option<bool>("--local", "Target the local repository Git configuration");
-            bindCmd.AddArgument(orgArg);
-            bindCmd.AddArgument(userNameArg);
+            bindCmd.AddArgument(bindAccountArg);
+            bindCmd.AddOption(bindTenantOpt);
+            bindCmd.AddOption(bindOrgOpt);
             bindCmd.AddOption(localOpt);
-            bindCmd.SetHandler(BindCmd, orgArg, userNameArg, localOpt);
+            bindCmd.SetHandler(BindCmd, bindAccountArg, bindTenantOpt, bindOrgOpt, localOpt);
 
             //
-            // unbind <organization> [--local]
+            // unbind [--tenant <id> | --org <name>] [--local]
             //
-            var unbindCmd = new Command("unbind")
-            {
-                Description = "Remove user account binding for an Azure DevOps organization",
-            };
-            unbindCmd.AddArgument(orgArg);
+            var unbindCmd = new Command("unbind", "Remove a Microsoft account binding for a tenant or Azure DevOps organization");
+            var unbindTenantOpt = new Option<string>("--tenant", "Remove the binding for the given Microsoft Entra tenant");
+            var unbindOrgOpt = new Option<string>("--org", "Remove the binding for the given Azure DevOps organization");
+            unbindCmd.AddOption(unbindTenantOpt);
+            unbindCmd.AddOption(unbindOrgOpt);
             unbindCmd.AddOption(localOpt);
-            unbindCmd.SetHandler(UnbindCmd, orgArg, localOpt);
+            unbindCmd.SetHandler(UnbindCmd, unbindTenantOpt, unbindOrgOpt, localOpt);
 
             var rootCmd = new ProviderCommand(this);
             rootCmd.AddCommand(loginCmd);
@@ -1044,15 +1093,44 @@ namespace Microsoft.AzureRepos
             public Uri Uri { get; set; }
         }
 
-        private void ListBindingsCmd(string organization, bool showRemotes, bool verbose)
+        private async Task<int> ListBindingsCmd(string organization, bool showRemotes, bool verbose)
         {
-            // Get all organization bindings from the user manager
-            IList<AzureReposBinding> bindings = _bindingManager.GetBindings(organization).ToList();
-            IDictionary<string, IEnumerable<AzureReposBinding>> orgBindingMap =
-                bindings.GroupBy(x => x.Organization).ToDictionary();
+            // Group bindings into per-scope-key buckets so we can render one heading per
+            // tenant/org with its global and local bindings beneath.
+            var byHeading = new SortedDictionary<string, (IMicrosoftAccount Global, IMicrosoftAccount Local)>(StringComparer.OrdinalIgnoreCase);
+            foreach (AzureReposBinding b in _bindingManager.GetBindings())
+            {
+                string heading = b.Scope switch
+                {
+                    AzureReposBindingScope.Org o    => $"dev.azure.com/{o.OrgName}",
+                    AzureReposBindingScope.Tenant t => $"login.microsoftonline.com/{t.TenantId}",
+                    _ => null,
+                };
+                if (heading is null) continue;
+                if (!string.IsNullOrWhiteSpace(organization) &&
+                    b.Scope is AzureReposBindingScope.Org filterOrg &&
+                    !StringComparer.OrdinalIgnoreCase.Equals(filterOrg.OrgName, organization))
+                {
+                    continue;
+                }
+                if (!byHeading.TryGetValue(heading, out var pair)) pair = (null, null);
+                if (b.Scope.IsLocal) pair.Local = b.Account; else pair.Global = b.Account;
+                byHeading[heading] = pair;
+            }
 
-            // If we are asked to also show remotes we build the remote binding map
-            var orgRemotesMap = new Dictionary<string, ICollection<RemoteBinding>>();
+            // Cache MSAL accounts once so we can enrich legacy `.accountid`-only bindings with
+            // a UPN for display. New bindings carry both fields and don't need this lookup.
+            IReadOnlyList<IMicrosoftAccount> cached =
+                await _msAuth.GetUserAccountsAsync(GetClientId(), msaPt: true);
+            var upnByAccountId = cached.ToDictionary(a => a.HomeAccountId, a => a.UserName, StringComparer.OrdinalIgnoreCase);
+            string Display(IMicrosoftAccount a)
+            {
+                if (a is null) return null;
+                if (!string.IsNullOrWhiteSpace(a.UserName)) return a.UserName;
+                return upnByAccountId.TryGetValue(a.HomeAccountId, out string upn) ? upn : a.HomeAccountId;
+            }
+
+            var orgRemotes = new Dictionary<string, ICollection<RemoteBinding>>();
             if (showRemotes)
             {
                 if (!_context.Git.IsInsideRepository())
@@ -1073,109 +1151,146 @@ namespace Microsoft.AzureRepos
                     if (IsAzureDevOpsHttpRemote(remote.FetchUrl, out Uri fetchUri))
                     {
                         string fetchOrg = UriHelpers.GetOrganizationName(fetchUri);
-                        var binding = new RemoteBinding {IsPush = false, Remote = remote.Name, Uri = fetchUri};
-                        orgRemotesMap.Append(fetchOrg, binding);
+                        orgRemotes.Append($"dev.azure.com/{fetchOrg}",
+                            new RemoteBinding { IsPush = false, Remote = remote.Name, Uri = fetchUri });
                     }
-
                     if (IsAzureDevOpsHttpRemote(remote.PushUrl, out Uri pushUri))
                     {
                         string pushOrg = UriHelpers.GetOrganizationName(pushUri);
-                        var binding = new RemoteBinding {IsPush = true, Remote = remote.Name, Uri = pushUri};
-                        orgRemotesMap.Append(pushOrg, binding);
+                        orgRemotes.Append($"dev.azure.com/{pushOrg}",
+                            new RemoteBinding { IsPush = true, Remote = remote.Name, Uri = pushUri });
                     }
                 }
             }
 
-            bool isFiltered = !string.IsNullOrWhiteSpace(organization);
-            string indent = isFiltered ? string.Empty : "  ";
-
-            // Get the set of all organization names (organization names are not case sensitive)
-            ISet<string> orgNames = new HashSet<string>(orgBindingMap.Keys, StringComparer.OrdinalIgnoreCase);
-            orgNames.UnionWith(orgRemotesMap.Keys);
+            var headings = new SortedSet<string>(byHeading.Keys, StringComparer.OrdinalIgnoreCase);
+            headings.UnionWith(orgRemotes.Keys);
 
             var icmp = StringComparer.OrdinalIgnoreCase;
-
-            foreach (string orgName in orgNames)
+            foreach (string heading in headings)
             {
-                if (!isFiltered)
-                {
-                    _context.Streams.Out.WriteLine($"{orgName}:");
-                }
+                _context.Streams.Out.WriteLine($"{heading}:");
 
-                // Print organization bindings
-                foreach (AzureReposBinding binding in orgBindingMap.GetValues(orgName))
+                if (byHeading.TryGetValue(heading, out var pair))
                 {
-                    if (binding.GlobalUserName != null)
+                    if (pair.Global != null)
                     {
-                        _context.Streams.Out.WriteLine($"{indent}(global) -> {binding.GlobalUserName}");
+                        _context.Streams.Out.WriteLine($"  (global) -> {Display(pair.Global)}");
                     }
-
-                    if (binding.LocalUserName != null)
+                    if (pair.Local != null)
                     {
-                        string value = string.IsNullOrEmpty(binding.LocalUserName)
-                            ? "(no inherit)"
-                            : binding.LocalUserName;
-                        _context.Streams.Out.WriteLine($"{indent}(local)  -> {value}");
+                        _context.Streams.Out.WriteLine($"  (local)  -> {Display(pair.Local)}");
                     }
                 }
 
-                // Print remote bindings
-                IEnumerable<IGrouping<string, RemoteBinding>> remoteBindingMap =
-                    orgRemotesMap.GetValues(orgName).GroupBy(x => x.Remote);
+                if (!orgRemotes.TryGetValue(heading, out var remotes)) continue;
 
-                foreach (var remoteBinding in remoteBindingMap)
+                IEnumerable<IGrouping<string, RemoteBinding>> byRemote = remotes.GroupBy(r => r.Remote);
+                string orgForRemote = heading.StartsWith("dev.azure.com/", StringComparison.OrdinalIgnoreCase)
+                    ? heading.Substring("dev.azure.com/".Length)
+                    : null;
+                foreach (var group in byRemote)
                 {
-                    _context.Streams.Out.WriteLine($"{indent}{remoteBinding.Key}:");
-                    foreach (RemoteBinding binding in remoteBinding)
+                    _context.Streams.Out.WriteLine($"  {group.Key}:");
+                    foreach (RemoteBinding rb in group)
                     {
-                        // User names in dev.azure.com URLs cannot always be used as *actual user names*
-                        // because of the unfortunate decision to use this field to get the Azure DevOps
-                        // organization name to be sent by Git to credential helpers.
-                        //
-                        // We show dev.azure.com URLs as "inherit", if there is a username that matches
-                        // the organization name.
-                        if (!binding.Uri.TryGetUserInfo(out string userName, out _) ||
-                            UriHelpers.IsDevAzureComHost(binding.Uri.Host) && icmp.Equals(userName, orgName))
+                        // dev.azure.com URLs use the user-info slot to carry the org name; ignore that
+                        // pseudo-user when reporting the remote's preferred account.
+                        if (!rb.Uri.TryGetUserInfo(out string remoteUser, out _) ||
+                            (UriHelpers.IsDevAzureComHost(rb.Uri.Host) &&
+                             orgForRemote != null && icmp.Equals(remoteUser, orgForRemote)))
                         {
-                            userName = "(inherit)";
+                            remoteUser = "(inherit)";
                         }
 
-                        string url = null;
-                        if (verbose)
-                        {
-                            url = $"{binding.Uri.WithoutUserInfo()} ";
-                        }
-
-                        _context.Streams.Out.WriteLine(binding.IsPush
-                            ? $"{indent}  {url}(push)  -> {userName}"
-                            : $"{indent}  {url}(fetch) -> {userName}");
+                        string url = verbose ? $"{rb.Uri.WithoutUserInfo()} " : null;
+                        _context.Streams.Out.WriteLine(rb.IsPush
+                            ? $"    {url}(push)  -> {remoteUser}"
+                            : $"    {url}(fetch) -> {remoteUser}");
                     }
                 }
             }
+
+            return 0;
         }
 
-        private Task<int> BindCmd(string organization, string userName, bool local)
+        private async Task<int> BindCmd(string account, string tenantId, string orgName, bool local)
         {
-            if (local && !_context.Git.IsInsideRepository())
+            if (!TryParseBindingScope(tenantId, orgName, local, out AzureReposBindingScope scope, out string error))
             {
-                _context.Streams.Error.WriteLine("error: not inside a git repository (cannot use --local)");
+                _context.Streams.Error.WriteLine(error);
+                return -1;
+            }
+
+            if (string.IsNullOrWhiteSpace(account))
+            {
+                _context.Streams.Error.WriteLine("error: account is required");
+                return -1;
+            }
+
+            // Look the account up in the MSAL cache. If found, bind the cached account directly
+            // — it carries both a UPN and a stable HomeAccountId. If not found we warn but still
+            // record a UPN-or-HomeAccountId binding from whatever the user supplied; one classify
+            // here decides which field of the IMicrosoftAccount we populate.
+            IReadOnlyList<IMicrosoftAccount> cached =
+                await _msAuth.GetUserAccountsAsync(GetClientId(), msaPt: true);
+            IMicrosoftAccount match = cached.FirstOrDefault(a =>
+                StringComparer.OrdinalIgnoreCase.Equals(a.UserName, account) ||
+                StringComparer.Ordinal.Equals(a.HomeAccountId, account));
+            IMicrosoftAccount toBind;
+            if (match != null)
+            {
+                toBind = match;
+            }
+            else
+            {
+                _context.Streams.Error.WriteLine(
+                    $"warning: '{account}' is not in the MSAL cache. Recording the binding anyway; "
+                    + "run `azure-repos login` first to sign in.");
+                toBind = MicrosoftAccount.FromIdentifier(account);
+            }
+
+            _bindingManager.Bind(scope, toBind);
+            return 0;
+        }
+
+        private Task<int> UnbindCmd(string tenantId, string orgName, bool local)
+        {
+            if (!TryParseBindingScope(tenantId, orgName, local, out AzureReposBindingScope scope, out string error))
+            {
+                _context.Streams.Error.WriteLine(error);
                 return Task.FromResult(-1);
             }
 
-            _bindingManager.Bind(organization, userName, local);
+            _bindingManager.Unbind(scope);
             return Task.FromResult(0);
         }
 
-        private Task<int> UnbindCmd(string organization, bool local)
+        private bool TryParseBindingScope(
+            string tenantId, string orgName, bool local,
+            out AzureReposBindingScope scope, out string error)
         {
-            if (local && !_context.Git.IsInsideRepository())
+            scope = null;
+            error = null;
+
+            int specified = (string.IsNullOrWhiteSpace(tenantId) ? 0 : 1)
+                          + (string.IsNullOrWhiteSpace(orgName) ? 0 : 1);
+            if (specified != 1)
             {
-                _context.Streams.Error.WriteLine("error: not inside a git repository (cannot use --local)");
-                return Task.FromResult(-1);
+                error = "error: specify exactly one of --tenant or --org";
+                return false;
             }
 
-            _bindingManager.Unbind(organization, local);
-            return Task.FromResult(0);
+            if (local && !_context.Git.IsInsideRepository())
+            {
+                error = "error: not inside a git repository (cannot use --local)";
+                return false;
+            }
+
+            scope = !string.IsNullOrWhiteSpace(tenantId)
+                ? AzureReposBindingScope.ForTenant(tenantId, local)
+                : AzureReposBindingScope.ForOrg(orgName, local);
+            return true;
         }
 
         #endregion
