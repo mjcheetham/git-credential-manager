@@ -829,9 +829,36 @@ namespace Microsoft.AzureRepos
             clearCacheCmd.SetHandler(ClearCacheCmd);
 
             //
-            // list <organization> [--show-remotes] [--verbose]
+            // login [--tenant <id|domain>]
             //
-            var listCmd = new Command("list", "List all user account bindings");
+            var loginCmd = new Command("login", "Sign in to a Microsoft account and add it to the credential cache");
+            var loginTenantOpt = new Option<string>("--tenant", "Sign in to a specific Microsoft Entra tenant (GUID or domain). Required when adding a guest account whose home tenant is different from the tenant you want to use it for.");
+            loginCmd.AddOption(loginTenantOpt);
+            loginCmd.SetHandler(LoginCmd, loginTenantOpt);
+
+            //
+            // logout (<account> | --all)
+            //
+            var logoutCmd = new Command("logout", "Remove a Microsoft account from the credential cache");
+            var logoutAccountArg = new Argument<string>("account", "Account to remove (UPN or HomeAccountId)")
+            {
+                Arity = ArgumentArity.ZeroOrOne
+            };
+            var logoutAllOpt = new Option<bool>("--all", "Remove every cached Microsoft account");
+            logoutCmd.AddArgument(logoutAccountArg);
+            logoutCmd.AddOption(logoutAllOpt);
+            logoutCmd.SetHandler(LogoutCmd, logoutAccountArg, logoutAllOpt);
+
+            //
+            // list
+            //
+            var listCmd = new Command("list", "List Microsoft accounts in the credential cache");
+            listCmd.SetHandler(ListCmd);
+
+            //
+            // list-bindings [<organization>] [--show-remotes] [--verbose]
+            //
+            var listBindingsCmd = new Command("list-bindings", "List all user account bindings");
             var orgFilterArg = new Argument<string>("organization", "(optional) Filter results by Azure DevOps organization name")
             {
                 Arity = ArgumentArity.ZeroOrOne
@@ -841,10 +868,10 @@ namespace Microsoft.AzureRepos
                 Description = "Also show Azure DevOps remote user bindings for the current repository"
             };
             var verboseOpt = new Option<bool>(new[] { "--verbose", "-v" }, "Verbose output - show remote URLs");
-            listCmd.AddArgument(orgFilterArg);
-            listCmd.AddOption(remoteOpt);
-            listCmd.AddOption(verboseOpt);
-            listCmd.SetHandler(ListCmd, orgFilterArg, remoteOpt, verboseOpt);
+            listBindingsCmd.AddArgument(orgFilterArg);
+            listBindingsCmd.AddOption(remoteOpt);
+            listBindingsCmd.AddOption(verboseOpt);
+            listBindingsCmd.SetHandler(ListBindingsCmd, orgFilterArg, remoteOpt, verboseOpt);
 
             //
             // bind <organization> <username> [--local]
@@ -876,7 +903,10 @@ namespace Microsoft.AzureRepos
             unbindCmd.SetHandler(UnbindCmd, orgArg, localOpt);
 
             var rootCmd = new ProviderCommand(this);
+            rootCmd.AddCommand(loginCmd);
+            rootCmd.AddCommand(logoutCmd);
             rootCmd.AddCommand(listCmd);
+            rootCmd.AddCommand(listBindingsCmd);
             rootCmd.AddCommand(bindCmd);
             rootCmd.AddCommand(unbindCmd);
             rootCmd.AddCommand(clearCacheCmd);
@@ -889,6 +919,125 @@ namespace Microsoft.AzureRepos
             _context.Console.WriteLine("Authority cache cleared");
         }
 
+        private async Task<int> LoginCmd(string tenantId)
+        {
+            // Pick the authority MSAL signs in against. By default we use the wildcard
+            // `organizations` authority so the user can pick any work/school account; an
+            // explicit --tenant constrains to one tenant (the only way to pre-stage a
+            // guest-account record for a non-home tenant).
+            string authority = !string.IsNullOrWhiteSpace(tenantId)
+                ? $"{AzureDevOpsConstants.AadAuthorityBaseUrl}/{tenantId}"
+                : $"{AzureDevOpsConstants.AadAuthorityBaseUrl}/organizations";
+
+            IMicrosoftAuthenticationResult result;
+            try
+            {
+                result = await _msAuth.GetTokenForUserAsync(
+                    authority,
+                    GetClientId(),
+                    GetRedirectUri(),
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    account: null,
+                    msaPt: true);
+            }
+            catch (Exception ex)
+            {
+                _context.Streams.Error.WriteLine($"error: sign-in failed: {ex.Message}");
+                return -1;
+            }
+
+            if (result.Account is null || string.IsNullOrWhiteSpace(result.Account.HomeAccountId))
+            {
+                _context.Streams.Error.WriteLine(
+                    "error: sign-in succeeded but no account identifier was returned");
+                return -1;
+            }
+
+            _context.Streams.Out.WriteLine($"Signed in as {result.Account.UserName}.");
+            return 0;
+        }
+
+        private async Task<int> LogoutCmd(string account, bool all)
+        {
+            bool hasAccount = !string.IsNullOrWhiteSpace(account);
+            if (all == hasAccount)
+            {
+                _context.Streams.Error.WriteLine("error: specify either <account> or --all");
+                return -1;
+            }
+
+            IReadOnlyList<IMicrosoftAccount> cached =
+                await _msAuth.GetUserAccountsAsync(GetClientId(), msaPt: true);
+
+            if (cached.Count == 0)
+            {
+                _context.Streams.Out.WriteLine("No accounts cached.");
+                return 0;
+            }
+
+            IEnumerable<IMicrosoftAccount> targets;
+            if (all)
+            {
+                targets = cached;
+            }
+            else
+            {
+                IMicrosoftAccount[] matches = cached.Where(a =>
+                        StringComparer.OrdinalIgnoreCase.Equals(a.UserName, account) ||
+                        StringComparer.Ordinal.Equals(a.HomeAccountId, account))
+                    .ToArray();
+                if (matches.Length == 0)
+                {
+                    _context.Streams.Error.WriteLine($"error: no cached account matches '{account}'");
+                    return -1;
+                }
+                if (matches.Length > 1)
+                {
+                    _context.Streams.Error.WriteLine(
+                        $"error: '{account}' is ambiguous; specify the HomeAccountId of the account to remove:");
+                    foreach (IMicrosoftAccount m in matches)
+                    {
+                        _context.Streams.Error.WriteLine($"  {m.UserName}  ({m.HomeAccountId})");
+                    }
+                    return -1;
+                }
+                targets = matches;
+            }
+
+            int removed = 0;
+            foreach (IMicrosoftAccount target in targets)
+            {
+                if (await _msAuth.RemoveUserAccountAsync(GetClientId(), target, msaPt: true))
+                {
+                    _context.Streams.Out.WriteLine($"Signed out {target.UserName}.");
+                    removed++;
+                }
+            }
+
+            return removed > 0 ? 0 : -1;
+        }
+
+        private async Task<int> ListCmd()
+        {
+            IReadOnlyList<IMicrosoftAccount> cached =
+                await _msAuth.GetUserAccountsAsync(GetClientId(), msaPt: true);
+
+            if (cached.Count == 0)
+            {
+                _context.Streams.Out.WriteLine("No accounts cached.");
+                return 0;
+            }
+
+            foreach (IMicrosoftAccount account in cached
+                         .OrderBy(a => a.UserName ?? string.Empty, StringComparer.OrdinalIgnoreCase))
+            {
+                _context.Streams.Out.WriteLine(account.UserName ?? "(unknown)");
+                _context.Streams.Out.WriteLine($"  {account.HomeAccountId}");
+            }
+
+            return 0;
+        }
+
         private class RemoteBinding
         {
             public string Remote { get; set; }
@@ -896,7 +1045,7 @@ namespace Microsoft.AzureRepos
             public Uri Uri { get; set; }
         }
 
-        private void ListCmd(string organization, bool showRemotes, bool verbose)
+        private void ListBindingsCmd(string organization, bool showRemotes, bool verbose)
         {
             // Get all organization bindings from the user manager
             IList<AzureReposBinding> bindings = _bindingManager.GetBindings(organization).ToList();
