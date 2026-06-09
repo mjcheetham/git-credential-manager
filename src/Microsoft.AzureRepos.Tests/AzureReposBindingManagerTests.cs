@@ -1,865 +1,340 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
-using GitCredentialManager;
+using GitCredentialManager.Authentication;
+using GitCredentialManager.Authentication.Entra;
 using GitCredentialManager.Tests.Objects;
 using Xunit;
 
-namespace Microsoft.AzureRepos.Tests
+namespace Microsoft.AzureRepos.Tests;
+
+public class AzureReposBindingManagerTests
 {
-    public class AzureReposBindingManagerTests
+    private const string OrgName = "contoso";
+    private const string TenantId = "00000000-0000-0000-0000-000000000001";
+    private const string HomeAccountId = "00000000-0000-0000-0000-000000000002.00000000-0000-0000-0000-000000000001";
+    private const string UserName = "alice@example.com";
+
+    private static string OrgAccountIdKey() => $"credential.azrepos:org/{OrgName}.accountid";
+    private static string OrgUserNameKey()  => $"credential.azrepos:org/{OrgName}.username";
+    private static string TenantAccountIdKey() => $"credential.azrepos:tenant/{TenantId}.accountid";
+    private static string TenantUserNameKey()  => $"credential.azrepos:tenant/{TenantId}.username";
+
+    private static EntraAccount Account(string hai = HomeAccountId, string upn = UserName) =>
+        new(hai, upn);
+
+    // -------- Bind --------
+
+    [Fact]
+    public void Bind_OrgGlobal_WithBothFields_WritesBothKeysAtGlobal()
     {
-        #region Bind
-
-        [Fact]
-        public void AzureReposBindingManager_Bind_NullOrganization_ThrowException()
-        {
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            Assert.Throws<ArgumentNullException>(() => manager.Bind(null, "user", false));
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_Bind_NoUser_SetsOrgKey()
-        {
-            const string expectedUser = "user1";
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            manager.Bind(orgName, expectedUser, false);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var users));
-            Assert.Single(users);
-            string actualUser = users[0];
-            Assert.Equal(expectedUser, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_BindLocal_NoUser_SetsOrgKey()
-        {
-            const string expectedUser = "user1";
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            manager.Bind(orgName, expectedUser, true);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var users));
-            Assert.Single(users);
-            string actualUser = users[0];
-            Assert.Equal(expectedUser, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_Bind_ExistingUser_SetsOrgKey()
-        {
-            const string expectedUser = "user1";
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {"org-user"};
-
-            manager.Bind(orgName, expectedUser, false);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var users));
-            Assert.Single(users);
-            string actualUser = users[0];
-            Assert.Equal(expectedUser, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_BindLocal_ExistingUser_SetsOrgKey()
-        {
-            const string expectedUser = "user1";
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new[] {"org-user"};
-
-            manager.Bind(orgName, expectedUser, true);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var users));
-            Assert.Single(users);
-            string actualUser = users[0];
-            Assert.Equal(expectedUser, actualUser);
-        }
-
-        #endregion
-
-        #region Unbind
-
-        [Fact]
-        public void AzureReposBindingManager_Unbind_NullOrganization_ThrowException()
-        {
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            Assert.Throws<ArgumentNullException>(() => manager.Unbind(null, false));
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_Unbind_NoUser_DoesNothing()
-        {
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            manager.Unbind(orgName, false);
-
-            Assert.Empty(git.Configuration.Global);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_UnbindLocal_NoUser_DoesNothing()
-        {
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            manager.Unbind(orgName, true);
-
-            Assert.Empty(git.Configuration.Local);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_Unbind_ExistingUser_RemovesKey()
-        {
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {"org-user"};
-
-            manager.Unbind(orgName, false);
-
-            Assert.Empty(git.Configuration.Global);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_UnbindLocal_ExistingUser_RemovesKey()
-        {
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new[] {"org-user"};
-
-            manager.Unbind(orgName, true);
-
-            Assert.Empty(git.Configuration.Local);
-        }
-
-        #endregion
-
-        #region GetBinding
-
-        [Fact]
-        public void AzureReposBindingManager_GetBinding_Null_ThrowException()
-        {
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            Assert.Throws<ArgumentNullException>(() => manager.GetBinding(null));
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetBinding_NoUser_ReturnsNull()
-        {
-            const string orgName = "org";
-
-            var trace = new NullTrace();
-            var git = new TestGit();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            AzureReposBinding binding = manager.GetBinding(orgName);
-
-            Assert.Null(binding);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetBinding_GlobalUser_ReturnsBinding()
-        {
-            const string orgUser = "john.doe";
-            const string orgName = "org";
-            string orgKey = CreateKey(orgName);
-
-            var git = new TestGit
-            {
-                Configuration =
-                {
-                    Global =
-                    {
-                        [orgKey] = new[] {orgUser}
-                    }
-                }
-            };
-
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            AzureReposBinding binding = manager.GetBinding(orgName);
-
-            Assert.Equal(orgName, binding.Organization);
-            Assert.Equal(orgUser, binding.GlobalUserName);
-            Assert.Null(binding.LocalUserName);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetBinding_LocalUser_ReturnsBinding()
-        {
-            const string orgUser = "john.doe";
-            const string orgName = "org";
-            string orgKey = CreateKey(orgName);
-
-            var git = new TestGit
-            {
-                Configuration =
-                {
-                    Local =
-                    {
-                        [orgKey] = new[] {orgUser}
-                    }
-                }
-            };
-
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            AzureReposBinding binding = manager.GetBinding(orgName);
-
-            Assert.Equal(orgName, binding.Organization);
-            Assert.Null(binding.GlobalUserName);
-            Assert.Equal(orgUser, binding.LocalUserName);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetBinding_LocalAndGlobalUsers_ReturnsBinding()
-        {
-            const string orgUserLocal = "john.doe";
-            const string orgUserGlobal = "jane.doe";
-            const string orgName = "org";
-            string orgKey = CreateKey(orgName);
-
-            var git = new TestGit
-            {
-                Configuration =
-                {
-                    Global = { [orgKey] = new[] {orgUserGlobal} },
-                    Local  = { [orgKey] = new[] {orgUserLocal} }
-                }
-            };
-
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            AzureReposBinding binding = manager.GetBinding(orgName);
-
-            Assert.Equal(orgName, binding.Organization);
-            Assert.Equal(orgUserGlobal, binding.GlobalUserName);
-            Assert.Equal(orgUserLocal, binding.LocalUserName);
-        }
-
-        #endregion
-
-        #region GetBindings
-
-        [Fact]
-        public void AzureReposBindingManager_GetBindings_NoUsers_ReturnsEmpty()
-        {
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            IList<AzureReposBinding> actual = manager.GetBindings().ToList();
-
-            Assert.Empty(actual);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetBindings_Users_ReturnsUsers()
-        {
-            const string org1 = "org1";
-            const string org2 = "org2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(org1)] = new[] {"user1"};
-            git.Configuration.Global[CreateKey(org2)] = new[] {"user2"};
-
-            AzureReposBinding[] bindings = manager.GetBindings().ToArray();
-
-            static void AssertBinding(
-                string expectedOrg, string expectedGlobalUser, string expectedLocalUser, AzureReposBinding binding)
-            {
-                Assert.Equal(expectedOrg, binding.Organization);
-                Assert.Equal(expectedGlobalUser, binding.GlobalUserName);
-                Assert.Equal(expectedLocalUser, binding.LocalUserName);
-            }
-
-            Assert.Equal(2, bindings.Length);
-            AssertBinding(org1, "user1", null, bindings[0]);
-            AssertBinding(org2, "user2", null, bindings[1]);
-        }
-
-        #endregion
-
-        #region GetUser
-
-        [Fact]
-        public void AzureReposBindingManager_GetUser_NullOrg_ThrowsException()
-        {
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            Assert.Throws<ArgumentNullException>(() => manager.GetUser(null));
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetUser_NoUser_ReturnsNull()
-        {
-            const string orgName = "org";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            string actualUser = manager.GetUser(orgName);
-
-            Assert.Null(actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetUser_GlobalUser_ReturnsGlobalUser()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {user1};
-
-            string actualUser = manager.GetUser(orgName);
-
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetUser_LocalUser_ReturnsLocalUser()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new[] {user1};
-
-            string actualUser = manager.GetUser(orgName);
-
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_GetUser_GlobalAndLocalUsers_ReturnsLocalUser()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {user1};
-            git.Configuration.Local[CreateKey(orgName)] = new[] {user2};
-
-            string actualUser = manager.GetUser(orgName);
-
-            Assert.Equal(user2, actualUser);
-        }
-
-        #endregion
-
-        #region SignIn
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_NullOrg_ThrowsException()
-        {
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            Assert.Throws<ArgumentNullException>(() => manager.SignIn(null, "user1"));
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_NullUser_ThrowsException()
-        {
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            Assert.Throws<ArgumentNullException>(() => manager.SignIn("org", null));
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_NoGlobalNoLocal_BindsGlobal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualUser = globalUsers[0];
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_NoGlobalSameLocal_BindsGlobalUnbindLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new []{user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualUser = globalUsers[0];
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_NoGlobalOtherLocal_BindsGlobalUnbindLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new []{user2};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualUser = globalUsers[0];
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_SameGlobalNoLocal_DoesNothing()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new []{user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualUser = globalUsers[0];
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_SameGlobalSameLocal_UnbindLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new []{user1};
-            git.Configuration.Local[CreateKey(orgName)] = new []{user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualUser = globalUsers[0];
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_SameGlobalOtherLocal_UnbindLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new []{user1};
-            git.Configuration.Local[CreateKey(orgName)] = new []{user2};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualUser = globalUsers[0];
-            Assert.Equal(user1, actualUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_OtherGlobalNoLocal_BindsLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new []{user2};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var localUsers));
-            string actualLocalUser = localUsers[0];
-            Assert.Equal(user1, actualLocalUser);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualGlobalUser = globalUsers[0];
-            Assert.Equal(user2, actualGlobalUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_OtherGlobalSameLocal_DoesNothing()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new []{user2};
-            git.Configuration.Local[CreateKey(orgName)] = new []{user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var localUsers));
-            string actualLocalUser = localUsers[0];
-            Assert.Equal(user1, actualLocalUser);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualGlobalUser = globalUsers[0];
-            Assert.Equal(user2, actualGlobalUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_OtherGlobalOtherLocal_BindsLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new []{user2};
-            git.Configuration.Local[CreateKey(orgName)] = new []{user2};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var localUsers));
-            string actualLocalUser = localUsers[0];
-            Assert.Equal(user1, actualLocalUser);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            string actualGlobalUser = globalUsers[0];
-            Assert.Equal(user2, actualGlobalUser);
-        }
-
-        // Idempotency: SignIn when state is already correct should not write to git config
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_SameGlobalNoLocal_NoConfigWrites()
-        {
-            // Steady-state: global already bound to signing-in user, no local override.
-            // This is the common case on every 'git fetch' after the first sign-in.
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Equal(0, git.Configuration.SetCallCount);
-            Assert.Equal(0, git.Configuration.UnsetCallCount);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_OtherGlobalSameLocal_NoConfigWrites()
-        {
-            // Steady-state: a different user holds the global binding, and local is already
-            // bound to the signing-in user. No change needed.
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {user2};
-            git.Configuration.Local[CreateKey(orgName)] = new[] {user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Equal(0, git.Configuration.SetCallCount);
-            Assert.Equal(0, git.Configuration.UnsetCallCount);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_SameGlobalSameLocal_OnlyUnbindsLocal()
-        {
-            // Global already matches, local redundantly mirrors it.
-            // Only the local unset is needed; re-writing the global value is wasteful.
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {user1};
-            git.Configuration.Local[CreateKey(orgName)] = new[] {user1};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Equal(0, git.Configuration.SetCallCount);
-            Assert.Equal(1, git.Configuration.UnsetCallCount);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignIn_SameGlobalOtherLocal_OnlyUnbindsLocal()
-        {
-            // Global already matches, local has a different user that needs removing.
-            // Only the local unset is needed; re-writing the global value is wasteful.
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] {user1};
-            git.Configuration.Local[CreateKey(orgName)] = new[] {user2};
-
-            manager.SignIn(orgName, user1);
-
-            Assert.Equal(0, git.Configuration.SetCallCount);
-            Assert.Equal(1, git.Configuration.UnsetCallCount);
-        }
-
-        #endregion
-
-        #region SignOut
-
-        [Fact]
-        public void AzureReposBindingManager_SignOut_NoGlobalNoLocal_DoesNothing()
-        {
-            const string orgName = "org";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            manager.SignOut(orgName);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.Empty(git.Configuration.Global);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignOut_NoGlobalUserLocal_UnbindsLocal()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new[] { user1 };
-
-            manager.SignOut(orgName);
-
-            Assert.Empty(git.Configuration.Local);
-            Assert.Empty(git.Configuration.Global);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignOut_NoGlobalNoInheritLocal_UnbindsLocal()
-        {
-            const string orgName = "org";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Local[CreateKey(orgName)] = new[] { AzureReposBinding.NoInherit };
-
-            manager.SignOut(orgName);
-
-            Assert.Empty(git.Configuration.Global);
-            Assert.Empty(git.Configuration.Local);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignOut_UserGlobalNoLocal_BindLocalNoInherit()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] { user1 };
-
-            manager.SignOut(orgName);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var localUsers));
-            Assert.Single(localUsers);
-            string actualLocalUser = localUsers[0];
-            Assert.Equal(AzureReposBinding.NoInherit, actualLocalUser);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            Assert.Single(globalUsers);
-            string actualGlobalUser = globalUsers[0];
-            Assert.Equal(user1, actualGlobalUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignOut_UserGlobalNoInheritLocal_DoesNothing()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] { user1 };
-            git.Configuration.Local[CreateKey(orgName)] = new[] { AzureReposBinding.NoInherit };
-
-            manager.SignOut(orgName);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var localUsers));
-            Assert.Single(localUsers);
-            string actualLocalUser = localUsers[0];
-            Assert.Equal(AzureReposBinding.NoInherit, actualLocalUser);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            Assert.Single(globalUsers);
-            string actualGlobalUser = globalUsers[0];
-            Assert.Equal(user1, actualGlobalUser);
-        }
-
-        [Fact]
-        public void AzureReposBindingManager_SignOut_UserGlobalUserLocal_BindLocalNoInherit()
-        {
-            const string orgName = "org";
-            const string user1 = "user1";
-            const string user2 = "user2";
-
-            var git = new TestGit();
-            var trace = new NullTrace();
-            var manager = new AzureReposBindingManager(trace, git);
-
-            git.Configuration.Global[CreateKey(orgName)] = new[] { user1 };
-            git.Configuration.Local[CreateKey(orgName)] = new[] { user2 };
-
-            manager.SignOut(orgName);
-
-            Assert.True(git.Configuration.Local.TryGetValue(CreateKey(orgName), out var localUsers));
-            Assert.Single(localUsers);
-            string actualLocalUser = localUsers[0];
-            Assert.Equal(AzureReposBinding.NoInherit, actualLocalUser);
-
-            Assert.True(git.Configuration.Global.TryGetValue(CreateKey(orgName), out var globalUsers));
-            Assert.Single(globalUsers);
-            string actualGlobalUser = globalUsers[0];
-            Assert.Equal(user1, actualGlobalUser);
-        }
-
-
-        #endregion
-
-        #region Helpers
-
-        private static string CreateKey(string orgName)
-        {
-            return string.Format(CultureInfo.InvariantCulture, "{0}.{1}:{2}/{3}.{4}",
-                Constants.GitConfiguration.Credential.SectionName,
-                AzureDevOpsConstants.UrnScheme, AzureDevOpsConstants.UrnOrgPrefix, orgName,
-                Constants.GitConfiguration.Credential.UserName);
-        }
-
-        #endregion
+        var git = new TestGit();
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Bind(AzureReposBindingScope.ForOrg(OrgName), Account());
+
+        Assert.Equal(HomeAccountId, git.Configuration.Global[OrgAccountIdKey()].Single());
+        Assert.Equal(UserName,      git.Configuration.Global[OrgUserNameKey()].Single());
+        Assert.False(git.Configuration.Local.ContainsKey(OrgAccountIdKey()));
+        Assert.False(git.Configuration.Local.ContainsKey(OrgUserNameKey()));
+    }
+
+    [Fact]
+    public void Bind_HomeAccountIdOnly_WritesAccountIdAndClearsUserName()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgUserNameKey()] = new List<string> { "stale@example.com" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Bind(AzureReposBindingScope.ForOrg(OrgName), Account(upn: null));
+
+        Assert.Equal(HomeAccountId, git.Configuration.Global[OrgAccountIdKey()].Single());
+        Assert.False(git.Configuration.Global.ContainsKey(OrgUserNameKey()));
+    }
+
+    [Fact]
+    public void Bind_UserNameOnly_WritesUserNameAndClearsAccountId()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { "stale-id" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Bind(AzureReposBindingScope.ForOrg(OrgName), Account(hai: null));
+
+        Assert.Equal(UserName, git.Configuration.Global[OrgUserNameKey()].Single());
+        Assert.False(git.Configuration.Global.ContainsKey(OrgAccountIdKey()));
+    }
+
+    [Fact]
+    public void Bind_NeitherField_Throws()
+    {
+        var git = new TestGit();
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        Assert.Throws<ArgumentException>(() =>
+            manager.Bind(AzureReposBindingScope.ForOrg(OrgName), new EntraAccount(null, null)));
+    }
+
+    [Fact]
+    public void Bind_OrgLocal_WritesAtLocal()
+    {
+        var git = new TestGit();
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Bind(AzureReposBindingScope.ForOrg(OrgName, isLocal: true), Account());
+
+        Assert.Equal(HomeAccountId, git.Configuration.Local[OrgAccountIdKey()].Single());
+        Assert.False(git.Configuration.Global.ContainsKey(OrgAccountIdKey()));
+    }
+
+    [Fact]
+    public void Bind_TenantGlobal_WritesAtGlobal()
+    {
+        var git = new TestGit();
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Bind(AzureReposBindingScope.ForTenant(TenantId), Account());
+
+        Assert.Equal(HomeAccountId, git.Configuration.Global[TenantAccountIdKey()].Single());
+        Assert.Equal(UserName,      git.Configuration.Global[TenantUserNameKey()].Single());
+    }
+
+    [Fact]
+    public void Bind_LocalScope_OutsideRepository_DoesNothing()
+    {
+        var git = new TestGit(insideRepo: false);
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Bind(AzureReposBindingScope.ForOrg(OrgName, isLocal: true), Account());
+
+        Assert.False(git.Configuration.Local.ContainsKey(OrgAccountIdKey()));
+        Assert.False(git.Configuration.Local.ContainsKey(OrgUserNameKey()));
+    }
+
+    // -------- Unbind --------
+
+    [Fact]
+    public void Unbind_OrgGlobal_RemovesBothKeysAtGlobalOnly()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        git.Configuration.Global[OrgUserNameKey()]  = new List<string> { UserName };
+        git.Configuration.Local[OrgAccountIdKey()]  = new List<string> { HomeAccountId };
+        git.Configuration.Local[OrgUserNameKey()]   = new List<string> { UserName };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Unbind(AzureReposBindingScope.ForOrg(OrgName));
+
+        Assert.False(git.Configuration.Global.ContainsKey(OrgAccountIdKey()));
+        Assert.False(git.Configuration.Global.ContainsKey(OrgUserNameKey()));
+        Assert.True(git.Configuration.Local.ContainsKey(OrgAccountIdKey()));
+        Assert.True(git.Configuration.Local.ContainsKey(OrgUserNameKey()));
+    }
+
+    [Fact]
+    public void Unbind_LocalScope_OutsideRepository_DoesNothing()
+    {
+        var git = new TestGit(insideRepo: false);
+        git.Configuration.Local[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        manager.Unbind(AzureReposBindingScope.ForOrg(OrgName, isLocal: true));
+
+        Assert.True(git.Configuration.Local.ContainsKey(OrgAccountIdKey()));
+    }
+
+    // -------- GetAccount --------
+
+    [Fact]
+    public void GetAccount_BothKeys_ReturnsBothFields()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        git.Configuration.Global[OrgUserNameKey()]  = new List<string> { UserName };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount account = manager.GetAccount(AzureReposBindingScope.ForOrg(OrgName));
+
+        Assert.NotNull(account);
+        Assert.Equal(HomeAccountId, account.HomeAccountId);
+        Assert.Equal(UserName,      account.UserName);
+    }
+
+    [Fact]
+    public void GetAccount_AccountIdOnly_ReturnsHomeAccountIdField()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount account = manager.GetAccount(AzureReposBindingScope.ForOrg(OrgName));
+
+        Assert.NotNull(account);
+        Assert.Equal(HomeAccountId, account.HomeAccountId);
+        Assert.Null(account.UserName);
+    }
+
+    [Fact]
+    public void GetAccount_UserNameOnly_ReturnsUserNameField()
+    {
+        // Both legacy `.username`-only and new UPN-only bindings read the same way.
+        var git = new TestGit();
+        git.Configuration.Global[OrgUserNameKey()] = new List<string> { UserName };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount account = manager.GetAccount(AzureReposBindingScope.ForOrg(OrgName));
+
+        Assert.NotNull(account);
+        Assert.Null(account.HomeAccountId);
+        Assert.Equal(UserName, account.UserName);
+    }
+
+    [Fact]
+    public void GetAccount_TenantWithUserNameOnly_FallsBack()
+    {
+        // Tenant scope didn't exist before the rewrite, so this case only ever arises from
+        // a user editing git config by hand — but the read path treats it symmetrically.
+        var git = new TestGit();
+        git.Configuration.Global[TenantUserNameKey()] = new List<string> { UserName };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount account = manager.GetAccount(AzureReposBindingScope.ForTenant(TenantId));
+
+        Assert.NotNull(account);
+        Assert.Equal(UserName, account.UserName);
+    }
+
+    [Fact]
+    public void GetAccount_NoEntry_ReturnsNull()
+    {
+        var git = new TestGit();
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        Assert.Null(manager.GetAccount(AzureReposBindingScope.ForOrg(OrgName)));
+        Assert.Null(manager.GetAccount(AzureReposBindingScope.ForTenant(TenantId)));
+    }
+
+    [Fact]
+    public void GetAccount_LocalScope_OutsideRepository_ReturnsNull()
+    {
+        var git = new TestGit(insideRepo: false);
+        git.Configuration.Local[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        Assert.Null(manager.GetAccount(AzureReposBindingScope.ForOrg(OrgName, isLocal: true)));
+    }
+
+    // -------- GetBindings --------
+
+    [Fact]
+    public void GetBindings_EnumeratesEveryStoredBinding()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()]    = new List<string> { HomeAccountId };
+        git.Configuration.Global[OrgUserNameKey()]     = new List<string> { UserName };
+        git.Configuration.Global[TenantAccountIdKey()] = new List<string> { "tenant-id" };
+        git.Configuration.Local[OrgUserNameKey()]      = new List<string> { "local-only@example.com" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        List<AzureReposBinding> bindings = manager.GetBindings().ToList();
+
+        Assert.Equal(3, bindings.Count);
+        Assert.Contains(bindings, b =>
+            b.Scope is AzureReposBindingScope.Org { OrgName: OrgName, IsLocal: false } &&
+            b.Account.HomeAccountId == HomeAccountId && b.Account.UserName == UserName);
+        Assert.Contains(bindings, b =>
+            b.Scope is AzureReposBindingScope.Tenant { TenantId: TenantId, IsLocal: false } &&
+            b.Account.HomeAccountId == "tenant-id" && b.Account.UserName is null);
+        Assert.Contains(bindings, b =>
+            b.Scope is AzureReposBindingScope.Org { OrgName: OrgName, IsLocal: true } &&
+            b.Account.HomeAccountId is null && b.Account.UserName == "local-only@example.com");
+    }
+
+    [Fact]
+    public void GetBindings_OutsideRepository_SkipsLocalEntries()
+    {
+        var git = new TestGit(insideRepo: false);
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        git.Configuration.Local[OrgAccountIdKey()]  = new List<string> { "ignored" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        List<AzureReposBinding> bindings = manager.GetBindings().ToList();
+
+        Assert.Single(bindings);
+        Assert.False(bindings[0].Scope.IsLocal);
+    }
+
+    // -------- ResolveAccountBinding (extension) --------
+
+    [Fact]
+    public void ResolveAccountBinding_PrefersLocalOrgOverGlobalOrg()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        git.Configuration.Local[OrgAccountIdKey()]  = new List<string> { "local-id" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount resolved = manager.ResolveAccountBinding(OrgName, tenantId: null);
+
+        Assert.Equal("local-id", resolved.HomeAccountId);
+    }
+
+    [Fact]
+    public void ResolveAccountBinding_FallsBackToGlobalWhenNoLocal()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()] = new List<string> { HomeAccountId };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount resolved = manager.ResolveAccountBinding(OrgName, tenantId: null);
+
+        Assert.Equal(HomeAccountId, resolved.HomeAccountId);
+    }
+
+    [Fact]
+    public void ResolveAccountBinding_FallsBackToTenantWhenNoOrgBinding()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[TenantAccountIdKey()] = new List<string> { "tenant-id" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount resolved = manager.ResolveAccountBinding(OrgName, TenantId);
+
+        Assert.Equal("tenant-id", resolved.HomeAccountId);
+    }
+
+    [Fact]
+    public void ResolveAccountBinding_OrgWinsOverTenant()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[OrgAccountIdKey()]    = new List<string> { HomeAccountId };
+        git.Configuration.Global[TenantAccountIdKey()] = new List<string> { "tenant-id" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount resolved = manager.ResolveAccountBinding(OrgName, TenantId);
+
+        Assert.Equal(HomeAccountId, resolved.HomeAccountId);
+    }
+
+    [Fact]
+    public void ResolveAccountBinding_LocalTenantWinsOverGlobalTenant()
+    {
+        var git = new TestGit();
+        git.Configuration.Global[TenantAccountIdKey()] = new List<string> { "global-tenant" };
+        git.Configuration.Local[TenantAccountIdKey()]  = new List<string> { "local-tenant" };
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        IEntraAccount resolved = manager.ResolveAccountBinding(OrgName, TenantId);
+
+        Assert.Equal("local-tenant", resolved.HomeAccountId);
+    }
+
+    [Fact]
+    public void ResolveAccountBinding_NoMatch_ReturnsNull()
+    {
+        var git = new TestGit();
+        var manager = new AzureReposBindingManager(new NullTrace(), git);
+
+        Assert.Null(manager.ResolveAccountBinding(OrgName, TenantId));
     }
 }
