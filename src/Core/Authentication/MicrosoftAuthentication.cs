@@ -32,6 +32,20 @@ namespace GitCredentialManager.Authentication
         Task<IReadOnlyList<IMicrosoftAccount>> GetUserAccountsAsync(string clientId, bool msaPt = false);
 
         /// <summary>
+        /// Remove a user account from the cache for the given client.
+        /// </summary>
+        /// <param name="clientId">Client ID.</param>
+        /// <param name="account">Account to remove. Resolved against the MSAL cache by
+        /// <see cref="IMicrosoftAccount.HomeAccountId"/> when present, otherwise by
+        /// <see cref="IMicrosoftAccount.UserName"/>.</param>
+        /// <param name="msaPt">Use MSA-Passthrough behavior when constructing the client.</param>
+        /// <returns>
+        /// <see langword="true"/> if a matching account was found and removed, otherwise
+        /// <see langword="false"/>.
+        /// </returns>
+        Task<bool> RemoveUserAccountAsync(string clientId, IMicrosoftAccount account, bool msaPt = false);
+
+        /// <summary>
         /// Acquire an access token for a user principal.
         /// </summary>
         /// <param name="authority">Azure authority.</param>
@@ -167,6 +181,76 @@ namespace GitCredentialManager.Authentication
 
             return accounts.Select(MicrosoftAccount.FromMsalAccount).ToList();
         }
+
+        public async Task<bool> RemoveUserAccountAsync(string clientId, IMicrosoftAccount account, bool msaPt = false)
+        {
+            EnsureArgument.NotNull(account, nameof(account));
+
+            var uiCts = new CancellationTokenSource();
+
+            bool useBroker = CanUseBroker();
+            Context.Trace.WriteLine(useBroker
+                ? "OS broker is available and enabled."
+                : "OS broker is not available or enabled.");
+
+            IPublicClientApplication app = await CreatePublicClientApplicationAsync(
+                authority: null, clientId, redirectUri: null, useBroker, msaPt, uiCts);
+
+            IReadOnlyList<IAccount> cached = (await app.GetAccountsAsync()).ToList();
+            IAccount match = ResolveAccount(cached, account);
+            if (match is null)
+            {
+                Context.Trace.WriteLine($"No cached account matches '{DescribeAccount(account)}'.");
+                return false;
+            }
+
+            await app.RemoveAsync(match);
+            Context.Trace.WriteLine($"Removed cached account '{match.HomeAccountId?.Identifier}' ({match.Username}).");
+            return true;
+        }
+
+        /// <summary>
+        /// Resolve an <see cref="IMicrosoftAccount"/> against a set of MSAL-cached accounts.
+        /// Precedence: when <see cref="IMicrosoftAccount.HomeAccountId"/> is set, match on it and
+        /// trace-warn when the cached account's UPN differs from the supplied one (HomeAccountId
+        /// wins). When only <see cref="IMicrosoftAccount.UserName"/> is set, match on UPN and
+        /// trace-warn when multiple cached accounts share that UPN (first-match returned).
+        /// </summary>
+        private IAccount ResolveAccount(IReadOnlyList<IAccount> cached, IMicrosoftAccount account)
+        {
+            if (!string.IsNullOrWhiteSpace(account.HomeAccountId))
+            {
+                IAccount byId = cached.FirstOrDefault(a =>
+                    StringComparer.OrdinalIgnoreCase.Equals(a.HomeAccountId?.Identifier, account.HomeAccountId));
+                if (byId != null && !string.IsNullOrWhiteSpace(account.UserName) &&
+                    !StringComparer.OrdinalIgnoreCase.Equals(byId.Username, account.UserName))
+                {
+                    Context.Trace.WriteLine(
+                        $"Cached account UPN '{byId.Username}' differs from supplied UPN '{account.UserName}' " +
+                        $"for HomeAccountId '{account.HomeAccountId}'; using HomeAccountId.");
+                }
+                return byId;
+            }
+
+            if (!string.IsNullOrWhiteSpace(account.UserName))
+            {
+                IAccount[] byName = cached
+                    .Where(a => StringComparer.OrdinalIgnoreCase.Equals(a.Username, account.UserName))
+                    .ToArray();
+                if (byName.Length > 1)
+                {
+                    Context.Trace.WriteLine(
+                        $"{byName.Length} cached accounts share UPN '{account.UserName}'; using the first " +
+                        "(provide a HomeAccountId to disambiguate).");
+                }
+                return byName.FirstOrDefault();
+            }
+
+            return null;
+        }
+
+        private static string DescribeAccount(IMicrosoftAccount account) =>
+            !string.IsNullOrWhiteSpace(account.HomeAccountId) ? account.HomeAccountId : account.UserName;
 
         public async Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(
             string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt)
