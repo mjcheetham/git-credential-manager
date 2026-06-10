@@ -78,6 +78,15 @@ namespace GitCredentialManager
         void DeleteFile(string path);
 
         /// <summary>
+        /// Move (rename) a file. The destination must not already exist unless
+        /// <paramref name="overwrite"/> is true.
+        /// </summary>
+        /// <param name="sourcePath">Path to the source file.</param>
+        /// <param name="destinationPath">Path to the destination file.</param>
+        /// <param name="overwrite">If true, an existing destination file will be replaced.</param>
+        void MoveFile(string sourcePath, string destinationPath, bool overwrite = false);
+
+        /// <summary>
         /// Returns an enumerable collection of full file names that match a search pattern in a specified path.
         /// </summary>
         /// <param name="path">The relative or absolute path to the directory to search.</param>
@@ -157,6 +166,9 @@ namespace GitCredentialManager
         public void CreateDirectory(string path) => Directory.CreateDirectory(path);
 
         public void DeleteFile(string path) => File.Delete(path);
+
+        public void MoveFile(string sourcePath, string destinationPath, bool overwrite = false)
+            => File.Move(sourcePath, destinationPath, overwrite);
 
         public IEnumerable<string> EnumerateFiles(string path, string searchPattern) => Directory.EnumerateFiles(path, searchPattern);
 

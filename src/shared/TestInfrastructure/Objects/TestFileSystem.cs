@@ -68,6 +68,17 @@ namespace GitCredentialManager.Tests.Objects
                 return new TestFileStream(this, path);
             }
 
+            if (fileMode == FileMode.Append)
+            {
+                var s = new TestFileStream(this, path);
+                if (Files.TryGetValue(path, out byte[] existing))
+                {
+                    s.Write(existing, 0, existing.Length);
+                }
+                s.Seek(0, SeekOrigin.End);
+                return s;
+            }
+
             return new MemoryStream(Files[path], writable);
         }
 
@@ -79,6 +90,22 @@ namespace GitCredentialManager.Tests.Objects
         void IFileSystem.DeleteFile(string path)
         {
             Files.Remove(path);
+        }
+
+        void IFileSystem.MoveFile(string sourcePath, string destinationPath, bool overwrite)
+        {
+            if (!Files.ContainsKey(sourcePath))
+                throw new FileNotFoundException("File not found", sourcePath);
+
+            if (Files.ContainsKey(destinationPath))
+            {
+                if (!overwrite)
+                    throw new IOException($"Destination already exists: {destinationPath}");
+                Files.Remove(destinationPath);
+            }
+
+            Files[destinationPath] = Files[sourcePath];
+            Files.Remove(sourcePath);
         }
 
         IEnumerable<string> IFileSystem.EnumerateFiles(string path, string searchPattern)
@@ -186,6 +213,18 @@ namespace GitCredentialManager.Tests.Objects
         {
             base.Flush();
             _fs.Files[_path] = base.ToArray();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                // Persist contents on dispose so callers using `using { ... }` without
+                // an explicit Flush still observe their writes in the in-memory FS.
+                try { Flush(); } catch { /* ignore */ }
+            }
+
+            base.Dispose(disposing);
         }
     }
 }
