@@ -213,25 +213,6 @@ namespace GitCredentialManager.Authentication
         }
     }
 
-    public static class MicrosoftAuthenticationExtensions
-    {
-        /// <summary>
-        /// Convenience overload of <see cref="IMicrosoftAuthentication.GetTokenForUserAsync"/>
-        /// that takes a bare UPN string.
-        /// </summary>
-        [Obsolete("Construct a MicrosoftAccount and call the IMicrosoftAccount overload directly.")]
-        public static Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(
-            this IMicrosoftAuthentication msAuth,
-            string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt = false)
-        {
-            EnsureArgument.NotNull(msAuth, nameof(msAuth));
-            IMicrosoftAccount account = string.IsNullOrWhiteSpace(userName)
-                ? null
-                : new MicrosoftAccount(homeAccountId: null, userName: userName);
-            return msAuth.GetTokenForUserAsync(authority, clientId, redirectUri, scopes, account, msaPt);
-        }
-    }
-
     public class MicrosoftAuthentication : AuthenticationBase, IMicrosoftAuthentication
     {
         public static readonly string[] AuthorityIds =

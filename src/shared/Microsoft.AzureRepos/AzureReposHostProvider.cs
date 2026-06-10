@@ -344,12 +344,15 @@ namespace Microsoft.AzureRepos
 
             // Get an AAD access token for the Azure DevOps SPS
             _context.Trace.WriteLine("Getting Azure AD access token...");
+            IMicrosoftAccount account = string.IsNullOrWhiteSpace(userName)
+                ? null
+                : new MicrosoftAccount(homeAccountId: null, userName: userName);
             IMicrosoftAuthenticationResult result = await _msAuth.GetTokenForUserAsync(
                 authAuthority,
                 GetClientId(),
                 GetRedirectUri(),
                 AzureDevOpsConstants.AzureDevOpsDefaultScopes,
-                userName,
+                account,
                 msaPt: true);
             _context.Trace.WriteLineSecrets(
                 $"Acquired Azure access token. Account='{result.Account.UserName}' Token='{{0}}'", new object[] {result.AccessToken});
