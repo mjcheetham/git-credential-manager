@@ -16,7 +16,7 @@ namespace GitCredentialManager.Tests.Authentication
             const string clientId = "C9E8FDA6-1D46-484C-917C-3DBD518F27C3";
             Uri redirectUri = new Uri("https://localhost");
             string[] scopes = {"user.read"};
-            const string userName = null; // No user to ensure we do not use an existing token
+            IMicrosoftAccount account = null; // No account to ensure we do not use an existing token
 
             var context = new TestCommandContext
             {
@@ -26,7 +26,7 @@ namespace GitCredentialManager.Tests.Authentication
             var msAuth = new MicrosoftAuthentication(context);
 
             await Assert.ThrowsAsync<Trace2InvalidOperationException>(
-                () => msAuth.GetTokenForUserAsync(authority, clientId, redirectUri, scopes, userName, false));
+                () => msAuth.GetTokenForUserAsync(authority, clientId, redirectUri, scopes, account, false));
         }
 
         [Theory]

@@ -158,6 +158,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            var expectedAccount = new MicrosoftAccount(homeAccountId: null, userName: urlAccount);
             var authResult = CreateAuthResult(urlAccount, accessToken);
 
             var context = new TestCommandContext();
@@ -170,7 +171,7 @@ namespace Microsoft.AzureRepos.Tests
             azDevOpsMock.Setup(x => x.GetAuthorityAsync(expectedOrgUri)).ReturnsAsync(authorityUrl);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, urlAccount, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -208,6 +209,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            var expectedAccount = new MicrosoftAccount(homeAccountId: null, userName: urlAccount);
             var authResult = CreateAuthResult(urlAccount, accessToken);
 
             var context = new TestCommandContext();
@@ -220,7 +222,7 @@ namespace Microsoft.AzureRepos.Tests
             azDevOpsMock.Setup(x => x.GetAuthorityAsync(expectedOrgUri)).ReturnsAsync(authorityUrl);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, urlAccount, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -254,6 +256,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            IMicrosoftAccount expectedAccount = null;
             var account = "jane.doe";
             var authResult = CreateAuthResult(account, accessToken);
 
@@ -267,7 +270,7 @@ namespace Microsoft.AzureRepos.Tests
             azDevOpsMock.Setup(x => x.GetAuthorityAsync(expectedOrgUri)).ReturnsAsync(authorityUrl);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, null, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -303,6 +306,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            IMicrosoftAccount expectedAccount = null;
             var account = "john.doe";
             var authResult = CreateAuthResult(account, accessToken);
 
@@ -315,7 +319,7 @@ namespace Microsoft.AzureRepos.Tests
             var azDevOpsMock = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, null, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -353,6 +357,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
             var account = "john.doe";
+            var expectedAccount = new MicrosoftAccount(homeAccountId: null, userName: account);
             var authResult = CreateAuthResult(account, accessToken);
 
             var context = new TestCommandContext();
@@ -364,7 +369,7 @@ namespace Microsoft.AzureRepos.Tests
             var azDevOpsMock = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, account, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -401,6 +406,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            IMicrosoftAccount expectedAccount = null;
             var account = "john.doe";
             var authResult = CreateAuthResult(account, accessToken);
 
@@ -414,7 +420,7 @@ namespace Microsoft.AzureRepos.Tests
             azDevOpsMock.Setup(x => x.GetAuthorityAsync(expectedOrgUri)).ReturnsAsync(authorityUrl);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, null, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -450,6 +456,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            IMicrosoftAccount expectedAccount = null;
             var personalAccessToken = "PERSONAL-ACCESS-TOKEN";
             var account = "john.doe";
             var authResult = CreateAuthResult(account, accessToken);
@@ -462,7 +469,7 @@ namespace Microsoft.AzureRepos.Tests
                         .ReturnsAsync(personalAccessToken);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, null, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
@@ -496,6 +503,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedRedirectUri = AzureDevOpsConstants.AadRedirectUri;
             var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
             var accessToken = "ACCESS-TOKEN";
+            IMicrosoftAccount expectedAccount = null;
             var personalAccessToken = "PERSONAL-ACCESS-TOKEN";
             var account = "john.doe";
             var authResult = CreateAuthResult(account, accessToken);
@@ -508,7 +516,7 @@ namespace Microsoft.AzureRepos.Tests
                         .ReturnsAsync(personalAccessToken);
 
             var msAuthMock = new Mock<IMicrosoftAuthentication>(MockBehavior.Strict);
-            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, null, true))
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(authorityUrl, expectedClientId, expectedRedirectUri, expectedScopes, expectedAccount, true))
                       .ReturnsAsync(authResult);
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);

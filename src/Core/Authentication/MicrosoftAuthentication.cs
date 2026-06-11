@@ -52,11 +52,14 @@ namespace GitCredentialManager.Authentication
         /// <param name="clientId">Client ID.</param>
         /// <param name="redirectUri">Redirect URI for the client.</param>
         /// <param name="scopes">Set of scopes to request.</param>
-        /// <param name="userName">Optional user name for an existing account.</param>
+        /// <param name="account">Optional account to acquire a token for. <see langword="null"/>
+        /// lets MSAL pick interactively. When set, resolved against the MSAL cache by
+        /// <see cref="IMicrosoftAccount.HomeAccountId"/> when present, otherwise by
+        /// <see cref="IMicrosoftAccount.UserName"/>.</param>
         /// <param name="msaPt">Use MSA-Passthrough behavior when authenticating.</param>
         /// <returns>Authentication result.</returns>
         Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(string authority, string clientId, Uri redirectUri,
-            string[] scopes, string userName, bool msaPt = false);
+            string[] scopes, IMicrosoftAccount account, bool msaPt = false);
 
         /// <summary>
         /// Acquire an access token for the given service principal with the specified scopes.
@@ -148,6 +151,25 @@ namespace GitCredentialManager.Authentication
             int h1 = HomeAccountId is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(HomeAccountId);
             int h2 = UserName      is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(UserName);
             unchecked { return (h1 * 397) ^ h2; }
+        }
+    }
+
+    public static class MicrosoftAuthenticationExtensions
+    {
+        /// <summary>
+        /// Convenience overload of <see cref="IMicrosoftAuthentication.GetTokenForUserAsync"/>
+        /// that takes a bare UPN string.
+        /// </summary>
+        [Obsolete("Construct a MicrosoftAccount and call the IMicrosoftAccount overload directly.")]
+        public static Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(
+            this IMicrosoftAuthentication msAuth,
+            string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt = false)
+        {
+            EnsureArgument.NotNull(msAuth, nameof(msAuth));
+            IMicrosoftAccount account = string.IsNullOrWhiteSpace(userName)
+                ? null
+                : new MicrosoftAccount(homeAccountId: null, userName: userName);
+            return msAuth.GetTokenForUserAsync(authority, clientId, redirectUri, scopes, account, msaPt);
         }
     }
 
@@ -253,7 +275,7 @@ namespace GitCredentialManager.Authentication
             !string.IsNullOrWhiteSpace(account.HomeAccountId) ? account.HomeAccountId : account.UserName;
 
         public async Task<IMicrosoftAuthenticationResult> GetTokenForUserAsync(
-            string authority, string clientId, Uri redirectUri, string[] scopes, string userName, bool msaPt)
+            string authority, string clientId, Uri redirectUri, string[] scopes, IMicrosoftAccount account, bool msaPt)
         {
             var uiCts = new CancellationTokenSource();
 
@@ -275,11 +297,24 @@ namespace GitCredentialManager.Authentication
 
                 AuthenticationResult result = null;
 
-                // Try silent authentication first if we know about an existing user
-                bool hasExistingUser = !string.IsNullOrWhiteSpace(userName);
+                // Resolve the account against the MSAL cache once (HomeAccountId-first, UPN-fallback,
+                // with trace warnings on mismatch/ambiguity).
+                IAccount resolvedAccount = null;
+                if (account is not null)
+                {
+                    IReadOnlyList<IAccount> cached = (await app.GetAccountsAsync()).ToList();
+                    resolvedAccount = ResolveAccount(cached, account);
+                    if (resolvedAccount is null)
+                    {
+                        Context.Trace.WriteLine($"No cached account matches '{DescribeAccount(account)}'.");
+                    }
+                }
+
+                // Try silent authentication first if we resolved an account against the cache.
+                bool hasExistingUser = resolvedAccount is not null;
                 if (hasExistingUser)
                 {
-                    result = await GetAccessTokenSilentlyAsync(app, scopes, userName, msaPt);
+                    result = await GetAccessTokenSilentlyAsync(app, scopes, resolvedAccount, msaPt);
                 }
 
                 //
@@ -317,7 +352,7 @@ namespace GitCredentialManager.Authentication
                         // account then the user may become stuck in a loop of authentication failures.
                         if (!hasExistingUser && Context.Settings.UseMsAuthDefaultAccount)
                         {
-                            result = await GetAccessTokenSilentlyAsync(app, scopes, null, msaPt);
+                            result = await GetAccessTokenSilentlyAsync(app, scopes, PublicClientApplication.OperatingSystemAccount, msaPt);
 
                             if (result is null || !await UseDefaultAccountAsync(result.Account.Username))
                             {
@@ -595,48 +630,32 @@ namespace GitCredentialManager.Authentication
         }
 
         /// <summary>
-        /// Obtain an access token without showing UI or prompts.
+        /// Obtain an access token without showing UI or prompts for the given cached account.
+        /// Pass <see cref="PublicClientApplication.OperatingSystemAccount"/> to acquire silently
+        /// against the broker's default OS account (broker only).
         /// </summary>
         private async Task<AuthenticationResult> GetAccessTokenSilentlyAsync(
-            IPublicClientApplication app, string[] scopes, string userName, bool msaPt)
+            IPublicClientApplication app, string[] scopes, IAccount account, bool msaPt)
         {
             try
             {
-                if (userName is null)
+                string label = ReferenceEquals(account, PublicClientApplication.OperatingSystemAccount)
+                    ? "current operating system account"
+                    : $"account '{account.Username}'";
+                Context.Trace.WriteLine($"Attempting to acquire token silently for {label}...");
+
+                var atsBuilder = app.AcquireTokenSilent(scopes, account);
+
+                // If we are operating with an MSA passthrough app we need to ensure that we target the
+                // special MSA 'transfer' tenant explicitly. This is a workaround for MSAL issue:
+                // https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/issues/3077
+                if (msaPt && Guid.TryParse(account.HomeAccountId?.TenantId, out Guid homeTenantId) &&
+                    homeTenantId == Constants.MsaHomeTenantId)
                 {
-                    Context.Trace.WriteLine(
-                        "Attempting to acquire token silently for current operating system account...");
-
-                    return await app.AcquireTokenSilent(scopes, PublicClientApplication.OperatingSystemAccount)
-                        .ExecuteAsync();
+                    atsBuilder = atsBuilder.WithTenantId(Constants.MsaTransferTenantId.ToString("D"));
                 }
-                else
-                {
-                    Context.Trace.WriteLine($"Attempting to acquire token silently for user '{userName}'...");
 
-                    // Enumerate all accounts and find the one matching the user name
-                    IEnumerable<IAccount> accounts = await app.GetAccountsAsync();
-                    IAccount account = accounts.FirstOrDefault(x =>
-                        StringComparer.OrdinalIgnoreCase.Equals(x.Username, userName));
-                    if (account is null)
-                    {
-                        Context.Trace.WriteLine($"No cached account found for user '{userName}'...");
-                        return null;
-                    }
-
-                    var atsBuilder = app.AcquireTokenSilent(scopes, account);
-
-                    // Is we are operating with an MSA passthrough app we need to ensure that we target the
-                    // special MSA 'transfer' tenant explicitly. This is a workaround for MSAL issue:
-                    // https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/issues/3077
-                    if (msaPt && Guid.TryParse(account.HomeAccountId.TenantId, out Guid homeTenantId) &&
-                        homeTenantId == Constants.MsaHomeTenantId)
-                    {
-                        atsBuilder = atsBuilder.WithTenantId(Constants.MsaTransferTenantId.ToString("D"));
-                    }
-
-                    return await atsBuilder.ExecuteAsync();
-                }
+                return await atsBuilder.ExecuteAsync();
             }
             catch (MsalUiRequiredException)
             {
