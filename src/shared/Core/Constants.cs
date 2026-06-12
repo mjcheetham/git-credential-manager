@@ -17,6 +17,30 @@ namespace GitCredentialManager
         public const string GcmDataDirectoryName = ".gcm";
         public const string LinuxAppDefaultsDirectoryPath = "/etc/git-credential-manager/config.d";
 
+        public static class UsageSurvey
+        {
+            public const string DirectoryName = "usage-survey";
+            public const string EventsDirectoryName = "events";
+            public const string SentDirectoryName = "sent";
+            public const string InstallIdFileName = "install-id";
+            public const string DispatcherPidFileName = "dispatcher.pid";
+            public const string DispatcherLogFileName = "dispatcher.log";
+
+            /// <summary>
+            /// Schema version of the <c>"get"</c> usage survey event. Bumped when fields
+            /// are added, removed, or change semantics for this event type. Future
+            /// event types get their own version constant so they can evolve
+            /// independently.
+            /// </summary>
+            public const int GetEventVersion = 1;
+
+            /// <summary>
+            /// How long shipped events are retained in
+            /// <c>~/.gcm/usage-survey/sent/</c> before being auto-purged.
+            /// </summary>
+            public static readonly TimeSpan SentRetention = TimeSpan.FromHours(24);
+        }
+
         public const string MacOSBundleId = "git-credential-manager";
         public static readonly Guid DevBoxPartnerId = new("e3171dd9-9a5f-e5be-b36c-cc7c4f3f3bcf");
 
@@ -159,6 +183,7 @@ namespace GitCredentialManager
             public const string GcmDevUseLegacyUiHelpers = "GCM_DEV_USELEGACYUIHELPERS";
             public const string GcmGuiSoftwareRendering  = "GCM_GUI_SOFTWARE_RENDERING";
             public const string GcmAllowUnsafeRemotes    = "GCM_ALLOW_UNSAFE_REMOTES";
+            public const string GcmUsageSurvey             = "GCM_USAGE_SURVEY";
 
             public const string GitHubActionsTokenRequestUrl = "ACTIONS_ID_TOKEN_REQUEST_URL";
             public const string GitHubActionsTokenRequestToken = "ACTIONS_ID_TOKEN_REQUEST_TOKEN";
@@ -207,6 +232,7 @@ namespace GitCredentialManager
                 public const string GuiSoftwareRendering = "guiSoftwareRendering";
                 public const string GpgPassStorePath = "gpgPassStorePath";
                 public const string AllowUnsafeRemotes = "allowUnsafeRemotes";
+                public const string UsageSurvey = "usageSurvey";
 
                 public const string OAuthAuthenticationModes = "oauthAuthModes";
                 public const string OAuthClientId            = "oauthClientId";
@@ -273,6 +299,7 @@ namespace GitCredentialManager
             public const string GcmMultipleUsers       = "https://aka.ms/gcm/multipleusers";
             public const string GcmUnsafeRemotes       = "https://aka.ms/gcm/unsaferemotes";
             public const string GcmNtlm                = "https://aka.ms/gcm/ntlm";
+            public const string GcmUsageSurvey           = "https://aka.ms/gcm/usage-survey";
         }
 
         private static Version _gcmVersion;
