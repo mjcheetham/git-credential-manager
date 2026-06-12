@@ -101,6 +101,64 @@ namespace GitCredentialManager.Authentication
     {
         string AccessToken { get; }
         IMicrosoftAccount Account { get; }
+
+        /// <summary>
+        /// How this token was acquired. Use <see cref="MicrosoftAuthenticationFlowExtensions.IsInteractive"/>
+        /// to fold this down to "did MSAL show the user UI".
+        /// </summary>
+        MicrosoftAuthenticationFlow Flow { get; }
+    }
+
+    /// <summary>
+    /// Identifies how a Microsoft authentication result was produced.
+    /// </summary>
+    public enum MicrosoftAuthenticationFlow
+    {
+        /// <summary>The flow was not classified by the implementation.</summary>
+        Unknown = 0,
+
+        /// <summary>Service principal client credentials grant.</summary>
+        ServicePrincipal,
+
+        /// <summary>Azure managed identity (system or user-assigned).</summary>
+        ManagedIdentity,
+
+        /// <summary>Workload federation (federated identity credentials).</summary>
+        WorkloadFederation,
+
+        /// <summary>User-flow token returned silently from MSAL's own cache.</summary>
+        Silent,
+
+        /// <summary>User-flow token returned silently from the OS broker.</summary>
+        BrokerSilent,
+
+        /// <summary>User-flow token acquired via interactive UI in the OS broker.</summary>
+        BrokerInteractive,
+
+        /// <summary>User-flow token acquired via an interactive embedded WebView (.NET Framework only).</summary>
+        EmbeddedWebView,
+
+        /// <summary>User-flow token acquired via the system default browser.</summary>
+        SystemWebView,
+
+        /// <summary>User-flow token acquired via the device code flow.</summary>
+        DeviceCode,
+    }
+
+    public static class MicrosoftAuthenticationFlowExtensions
+    {
+        /// <summary>
+        /// True when the flow showed UI to the user during token acquisition. The OS-account-default
+        /// confirmation prompt is GCM chrome around silent acquisition and is not reflected here.
+        /// </summary>
+        public static bool IsInteractive(this MicrosoftAuthenticationFlow flow) => flow switch
+        {
+            MicrosoftAuthenticationFlow.BrokerInteractive => true,
+            MicrosoftAuthenticationFlow.EmbeddedWebView   => true,
+            MicrosoftAuthenticationFlow.SystemWebView     => true,
+            MicrosoftAuthenticationFlow.DeviceCode        => true,
+            _ => false,
+        };
     }
 
     public interface IMicrosoftAccount : IEquatable<IMicrosoftAccount>
@@ -296,6 +354,7 @@ namespace GitCredentialManager.Authentication
                 IPublicClientApplication app = await CreatePublicClientApplicationAsync(authority, clientId, redirectUri, useBroker, msaPt, uiCts);
 
                 AuthenticationResult result = null;
+                MicrosoftAuthenticationFlow flow = MicrosoftAuthenticationFlow.Unknown;
 
                 // Resolve the account against the MSAL cache once (HomeAccountId-first, UPN-fallback,
                 // with trace warnings on mismatch/ambiguity).
@@ -315,6 +374,14 @@ namespace GitCredentialManager.Authentication
                 if (hasExistingUser)
                 {
                     result = await GetAccessTokenSilentlyAsync(app, scopes, resolvedAccount, msaPt);
+                    if (result is not null)
+                    {
+                        // Tokens returned by the OS broker carry TokenSource.Broker; anything else
+                        // (MSAL's own cache, or a refresh against the identity provider) doesn't.
+                        flow = result.AuthenticationResultMetadata?.TokenSource == TokenSource.Broker
+                            ? MicrosoftAuthenticationFlow.BrokerSilent
+                            : MicrosoftAuthenticationFlow.Silent;
+                    }
                 }
 
                 //
@@ -358,6 +425,12 @@ namespace GitCredentialManager.Authentication
                             {
                                 result = null;
                             }
+                            else
+                            {
+                                // This branch is broker-only by construction; a non-null result here
+                                // can only have come from the broker's cache.
+                                flow = MicrosoftAuthenticationFlow.BrokerSilent;
+                            }
                         }
 
                         if (result is null)
@@ -368,6 +441,7 @@ namespace GitCredentialManager.Authentication
                                 // We must configure the system webview as a fallback
                                 .WithSystemWebViewOptions(GetSystemWebViewOptions())
                                 .ExecuteAsync();
+                            flow = MicrosoftAuthenticationFlow.BrokerInteractive;
                         }
                     }
                     else
@@ -394,6 +468,7 @@ namespace GitCredentialManager.Authentication
                                     .WithUseEmbeddedWebView(true)
                                     .WithEmbeddedWebViewOptions(GetEmbeddedWebViewOptions())
                                     .ExecuteAsync();
+                                flow = MicrosoftAuthenticationFlow.EmbeddedWebView;
                                 break;
 
                             case InteractiveFlowType.SystemWebView:
@@ -403,6 +478,7 @@ namespace GitCredentialManager.Authentication
                                     .WithPrompt(Prompt.SelectAccount)
                                     .WithSystemWebViewOptions(GetSystemWebViewOptions())
                                     .ExecuteAsync();
+                                flow = MicrosoftAuthenticationFlow.SystemWebView;
                                 break;
 
                             case InteractiveFlowType.DeviceCode:
@@ -411,6 +487,7 @@ namespace GitCredentialManager.Authentication
                                 // TODO: introduce a small GUI window to show a code if no TTY exists
                                 ThrowIfTerminalPromptsDisabled();
                                 result = await app.AcquireTokenWithDeviceCode(scopes, ShowDeviceCodeInTty).ExecuteAsync();
+                                flow = MicrosoftAuthenticationFlow.DeviceCode;
                                 break;
 
                             default:
@@ -419,7 +496,7 @@ namespace GitCredentialManager.Authentication
                     }
                 }
 
-                return new MsalResult(result);
+                return new MsalResult(result, flow);
             }
             finally
             {
@@ -437,7 +514,7 @@ namespace GitCredentialManager.Authentication
                 Context.Trace.WriteLine($"Sending with X5C: '{sp.SendX5C}'.");
                 AuthenticationResult result = await app.AcquireTokenForClient(scopes).WithSendX5C(sp.SendX5C).ExecuteAsync();;
 
-                return new MsalResult(result);
+                return new MsalResult(result, MicrosoftAuthenticationFlow.ServicePrincipal);
             }
             catch (Exception ex)
             {
@@ -461,7 +538,7 @@ namespace GitCredentialManager.Authentication
             try
             {
                 AuthenticationResult result = await app.AcquireTokenForManagedIdentity(resource).ExecuteAsync();
-                return new MsalResult(result);
+                return new MsalResult(result, MicrosoftAuthenticationFlow.ManagedIdentity);
             }
             catch (Exception ex)
             {
@@ -481,7 +558,7 @@ namespace GitCredentialManager.Authentication
               .ExecuteAsync()
               .ConfigureAwait(false);
 
-            return new MsalResult(result);
+            return new MsalResult(result, MicrosoftAuthenticationFlow.WorkloadFederation);
         }
 
         private async Task<string> GetClientAssertion(MicrosoftWorkloadFederationOptions fedOpts, AssertionRequestOptions _)
@@ -1153,14 +1230,16 @@ namespace GitCredentialManager.Authentication
 
         private class MsalResult : IMicrosoftAuthenticationResult
         {
-            public MsalResult(AuthenticationResult msalResult)
+            public MsalResult(AuthenticationResult msalResult, MicrosoftAuthenticationFlow flow = MicrosoftAuthenticationFlow.Unknown)
             {
                 AccessToken = msalResult.AccessToken;
                 Account = MicrosoftAccount.FromMsalAccount(msalResult.Account);
+                Flow = flow;
             }
 
             public string AccessToken { get; }
             public IMicrosoftAccount Account { get; }
+            public MicrosoftAuthenticationFlow Flow { get; }
         }
     }
 }
