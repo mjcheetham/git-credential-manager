@@ -256,7 +256,9 @@ public class UsageSurveyCommand : Command
     private async Task ShowAsync(InvocationContext invocationContext)
     {
         var paths = new UsageSurveyPaths(_context.FileSystem);
-        var uploader = new StubFileUploader(_context.FileSystem, paths, _context.Trace);
+        IUsageSurveyUploader uploader = AppInsightsUploader.TryCreate(_context, out AppInsightsUploader ai)
+            ? ai
+            : new StubFileUploader(_context.FileSystem, paths, _context.Trace);
         var dispatcher = new UsageSurveyDispatcher(
             _context.FileSystem,
             paths,
@@ -280,7 +282,9 @@ public class UsageSurveyCommand : Command
     private async Task DispatchAsync()
     {
         var paths = new UsageSurveyPaths(_context.FileSystem);
-        var uploader = new StubFileUploader(_context.FileSystem, paths, _context.Trace);
+        IUsageSurveyUploader uploader = AppInsightsUploader.TryCreate(_context, out AppInsightsUploader ai)
+            ? ai
+            : new StubFileUploader(_context.FileSystem, paths, _context.Trace);
         var dispatcher = new UsageSurveyDispatcher(
             _context.FileSystem,
             paths,

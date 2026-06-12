@@ -39,6 +39,15 @@ namespace GitCredentialManager
             /// <c>~/.gcm/usage-survey/sent/</c> before being auto-purged.
             /// </summary>
             public static readonly TimeSpan SentRetention = TimeSpan.FromHours(24);
+
+            /// <summary>
+            /// Default Application Insights connection string used by the
+            /// <c>AppInsightsUploader</c> when no <c>GCM_USAGE_SURVEY_ENDPOINT</c>
+            /// override is supplied. When empty, the dispatcher falls back to
+            /// <c>StubFileUploader</c>.
+            /// </summary>
+            // TODO: replace this with the real connection string once provisioned.
+            public const string DefaultEndpoint = "";
         }
 
         public const string MacOSBundleId = "git-credential-manager";
@@ -184,6 +193,7 @@ namespace GitCredentialManager
             public const string GcmGuiSoftwareRendering  = "GCM_GUI_SOFTWARE_RENDERING";
             public const string GcmAllowUnsafeRemotes    = "GCM_ALLOW_UNSAFE_REMOTES";
             public const string GcmUsageSurvey             = "GCM_USAGE_SURVEY";
+            public const string GcmUsageSurveyEndpoint     = "GCM_USAGE_SURVEY_ENDPOINT";
 
             public const string GitHubActionsTokenRequestUrl = "ACTIONS_ID_TOKEN_REQUEST_URL";
             public const string GitHubActionsTokenRequestToken = "ACTIONS_ID_TOKEN_REQUEST_TOKEN";
