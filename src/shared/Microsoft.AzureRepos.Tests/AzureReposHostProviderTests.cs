@@ -1088,6 +1088,7 @@ namespace Microsoft.AzureRepos.Tests
         {
             public string AccessToken { get; set; }
             public IMicrosoftAccount Account { get; set; }
+            public MicrosoftAuthenticationFlow Flow { get; set; }
         }
     }
 }
