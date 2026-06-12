@@ -41,6 +41,11 @@ namespace GitCredentialManager.Commands
                 return;
             }
 
+            // Record a usage survey event for this successful credential lookup.
+            // Best-effort and never throws; skipped for cancelled / yielded
+            // responses because no credential was actually produced.
+            Context.UsageSurvey.RecordGet(provider.Id, response.Metadata.FromCache, response.Metadata.AuthMethod);
+
             ICredential credential = response.Credential;
 
             // Negotiate capabilities by intersecting what Git advertised with what GCM supports.

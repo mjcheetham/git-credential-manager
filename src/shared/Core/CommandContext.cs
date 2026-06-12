@@ -6,6 +6,7 @@ using GitCredentialManager.Interop.Linux;
 using GitCredentialManager.Interop.MacOS;
 using GitCredentialManager.Interop.Posix;
 using GitCredentialManager.Interop.Windows;
+using GitCredentialManager.UsageSurvey;
 
 namespace GitCredentialManager
 {
@@ -83,6 +84,11 @@ namespace GitCredentialManager
         /// Process manager.
         /// </summary>
         IProcessManager ProcessManager { get; }
+
+        /// <summary>
+        /// Usage survey recording service. Always non-null; a no-op when usage survey is disabled.
+        /// </summary>
+        IUsageSurveyService UsageSurvey { get; }
     }
 
     /// <summary>
@@ -157,6 +163,7 @@ namespace GitCredentialManager
 
             HttpClientFactory = new HttpClientFactory(FileSystem, Trace, Trace2, Settings, Streams);
             CredentialStore   = new CredentialStore(this);
+            UsageSurvey         = new UsageSurveyService(this);
         }
 
         private static string GetGitPath(IEnvironment environment, IFileSystem fileSystem, ITrace trace)
@@ -221,12 +228,15 @@ namespace GitCredentialManager
 
         public IProcessManager ProcessManager { get; }
 
+        public IUsageSurveyService UsageSurvey { get; }
+
         #endregion
 
         #region IDisposable
 
         protected override void ReleaseManagedResources()
         {
+            (UsageSurvey as IDisposable)?.Dispose();
             Settings?.Dispose();
             Trace?.Dispose();
 

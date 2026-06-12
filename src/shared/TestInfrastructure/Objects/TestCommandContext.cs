@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using GitCredentialManager.UsageSurvey;
 
 namespace GitCredentialManager.Tests.Objects
 {
@@ -25,6 +26,7 @@ namespace GitCredentialManager.Tests.Objects
             Environment = new TestEnvironment(FileSystem);
 
             Settings = new TestSettings {Environment = Environment, GitConfiguration = Git.Configuration};
+            UsageSurvey = new TestUsageSurveyService();
         }
 
         public string AppPath { get; set; }
@@ -42,6 +44,8 @@ namespace GitCredentialManager.Tests.Objects
         public TestEnvironment Environment { get; set; }
 
         public IProcessManager ProcessManager { get; set; }
+
+        public IUsageSurveyService UsageSurvey { get; set; }
 
         #region ICommandContext
 
@@ -72,6 +76,8 @@ namespace GitCredentialManager.Tests.Objects
         IGit ICommandContext.Git => Git;
 
         IEnvironment ICommandContext.Environment => Environment;
+
+        IUsageSurveyService ICommandContext.UsageSurvey => UsageSurvey;
 
         #endregion
 
