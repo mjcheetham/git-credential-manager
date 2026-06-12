@@ -1075,6 +1075,199 @@ namespace Microsoft.AzureRepos.Tests
             Assert.Equal(expectedAuthority, actualAuthority);
         }
 
+        // ------------------------------------------------------------
+        // AuthMethod attribution — verifies the composite key emitted
+        // on GitResponse for each top-level branch.
+        //
+        // The reframed cache-hit chart in the public usage survey site
+        // depends on these strings; changing them is a wire-format
+        // change for the published aggregates.
+        // ------------------------------------------------------------
+
+        [Theory]
+        [InlineData(MicrosoftAuthenticationFlow.Silent,            "oauth-silent")]
+        [InlineData(MicrosoftAuthenticationFlow.BrokerSilent,      "oauth-broker-silent")]
+        [InlineData(MicrosoftAuthenticationFlow.BrokerInteractive, "oauth-broker-interactive")]
+        [InlineData(MicrosoftAuthenticationFlow.EmbeddedWebView,   "oauth-browser-embedded")]
+        [InlineData(MicrosoftAuthenticationFlow.SystemWebView,     "oauth-browser-system")]
+        [InlineData(MicrosoftAuthenticationFlow.DeviceCode,        "oauth-device")]
+        public async Task AzureReposProvider_GetCredentialAsync_OAuth_RecordsExpectedAuthMethod(
+            MicrosoftAuthenticationFlow flow, string expectedAuthMethod)
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"]     = "dev.azure.com",
+                ["path"]     = "org/proj/_git/repo",
+            });
+
+            var context = new TestCommandContext
+            {
+                Environment =
+                {
+                    Variables =
+                    {
+                        // Force the OAuth branch (default is PAT).
+                        [AzureDevOpsConstants.EnvironmentVariables.CredentialType]
+                            = AzureDevOpsConstants.OAuthCredentialType,
+                    },
+                },
+            };
+            // Bind so the OAuth (non-PAT) branch is taken.
+            var bindingManager = new Mock<IAzureReposBindingManager>();
+            bindingManager.Setup(x => x.GetBinding(It.IsAny<string>()))
+                .Returns(new AzureReposBinding("org", "user@contoso.com", null));
+
+            var authorityCache = new Mock<IAzureDevOpsAuthorityCache>();
+            authorityCache.Setup(x => x.GetAuthority(It.IsAny<string>()))
+                .Returns("https://login.microsoftonline.com/contoso");
+
+            var msAuthMock = new Mock<IMicrosoftAuthentication>();
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(
+                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Uri>(),
+                    It.IsAny<string[]>(), It.IsAny<IMicrosoftAccount>(), It.IsAny<bool>()))
+                .ReturnsAsync(new MockMsAuthResult
+                {
+                    Account = new MicrosoftAccount(homeAccountId: null, userName: "user@contoso.com"),
+                    AccessToken = "TOKEN",
+                    Flow = flow,
+                });
+
+            var provider = new AzureReposHostProvider(
+                context, Mock.Of<IAzureDevOpsRestApi>(),
+                msAuthMock.Object, authorityCache.Object, bindingManager.Object);
+
+            GitResponse result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(expectedAuthMethod, result.Metadata.AuthMethod);
+        }
+
+        [Theory]
+        [InlineData(MicrosoftAuthenticationFlow.Silent,            "pat-silent")]
+        [InlineData(MicrosoftAuthenticationFlow.BrokerSilent,      "pat-broker-silent")]
+        [InlineData(MicrosoftAuthenticationFlow.BrokerInteractive, "pat-broker-interactive")]
+        [InlineData(MicrosoftAuthenticationFlow.EmbeddedWebView,   "pat-browser-embedded")]
+        [InlineData(MicrosoftAuthenticationFlow.SystemWebView,     "pat-browser-system")]
+        [InlineData(MicrosoftAuthenticationFlow.DeviceCode,        "pat-device")]
+        public async Task AzureReposProvider_GetCredentialAsync_FreshPat_RecordsExpectedAuthMethod(
+            MicrosoftAuthenticationFlow flow, string expectedAuthMethod)
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"]     = "dev.azure.com",
+                ["path"]     = "org/proj/_git/repo",
+            });
+
+            var context = new TestCommandContext
+            {
+                Environment =
+                {
+                    Variables =
+                    {
+                        // Force the PAT branch.
+                        [AzureDevOpsConstants.EnvironmentVariables.CredentialType]
+                            = AzureDevOpsConstants.PatCredentialType,
+                    },
+                },
+            };
+
+            // No cached PAT → forces a fresh mint via MSAL.
+            var azDevOps = new Mock<IAzureDevOpsRestApi>();
+            azDevOps.Setup(x => x.GetAuthorityAsync(It.IsAny<Uri>()))
+                .ReturnsAsync("https://login.microsoftonline.com/contoso");
+            azDevOps.Setup(x => x.CreatePersonalAccessTokenAsync(
+                    It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<IEnumerable<string>>()))
+                .ReturnsAsync("PAT-VALUE");
+
+            var msAuthMock = new Mock<IMicrosoftAuthentication>();
+            msAuthMock.Setup(x => x.GetTokenForUserAsync(
+                    It.IsAny<string>(), It.IsAny<string>(), It.IsAny<Uri>(),
+                    It.IsAny<string[]>(), It.IsAny<IMicrosoftAccount>(), It.IsAny<bool>()))
+                .ReturnsAsync(new MockMsAuthResult
+                {
+                    Account = new MicrosoftAccount(homeAccountId: null, userName: "user@contoso.com"),
+                    AccessToken = "AAD-TOKEN",
+                    Flow = flow,
+                });
+
+            var provider = new AzureReposHostProvider(
+                context, azDevOps.Object, msAuthMock.Object,
+                Mock.Of<IAzureDevOpsAuthorityCache>(),
+                Mock.Of<IAzureReposBindingManager>());
+
+            GitResponse result = await provider.GetCredentialAsync(request);
+
+            Assert.False(result.Metadata.FromCache);
+            Assert.Equal(expectedAuthMethod, result.Metadata.AuthMethod);
+        }
+
+        [Theory]
+        [InlineData(MicrosoftWorkloadFederationScenario.Generic,         "wif-generic")]
+        [InlineData(MicrosoftWorkloadFederationScenario.ManagedIdentity, "wif-managed-identity")]
+        [InlineData(MicrosoftWorkloadFederationScenario.GitHubActions,   "wif-github-actions")]
+        public async Task AzureReposProvider_GetCredentialAsync_Wif_RecordsExpectedAuthMethod(
+            MicrosoftWorkloadFederationScenario scenario, string expectedAuthMethod)
+        {
+            string scenarioStr = scenario switch
+            {
+                MicrosoftWorkloadFederationScenario.Generic         => "generic",
+                MicrosoftWorkloadFederationScenario.ManagedIdentity => "mi",
+                MicrosoftWorkloadFederationScenario.GitHubActions   => "githubactions",
+                _ => throw new ArgumentOutOfRangeException(nameof(scenario)),
+            };
+
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"]     = "dev.azure.com",
+                ["path"]     = "org/proj/_git/repo",
+            });
+
+            var context = new TestCommandContext
+            {
+                Environment =
+                {
+                    Variables =
+                    {
+                        [AzureDevOpsConstants.EnvironmentVariables.WorkloadFederation]         = scenarioStr,
+                        [AzureDevOpsConstants.EnvironmentVariables.WorkloadFederationTenantId] = "tid",
+                        [AzureDevOpsConstants.EnvironmentVariables.WorkloadFederationClientId] = "cid",
+                        // Each scenario reads its own specifics, but provide all
+                        // so the test data isn't sensitive to which subset.
+                        [AzureDevOpsConstants.EnvironmentVariables.WorkloadFederationAssertion]
+                            = "ASSERTION",
+                        [AzureDevOpsConstants.EnvironmentVariables.WorkloadFederationManagedIdentity]
+                            = "MID",
+                    },
+                },
+            };
+
+            // GitHubActions reads two extra envvars from the runner.
+            if (scenario == MicrosoftWorkloadFederationScenario.GitHubActions)
+            {
+                context.Environment.Variables[Constants.EnvironmentVariables.GitHubActionsTokenRequestUrl]
+                    = "https://example/actions/token";
+                context.Environment.Variables[Constants.EnvironmentVariables.GitHubActionsTokenRequestToken]
+                    = "GH-TOKEN";
+            }
+
+            var msAuthMock = new Mock<IMicrosoftAuthentication>();
+            msAuthMock.Setup(x => x.GetTokenUsingWorkloadFederationAsync(
+                    It.IsAny<MicrosoftWorkloadFederationOptions>(), It.IsAny<string[]>()))
+                .ReturnsAsync(new MockMsAuthResult { AccessToken = "TOKEN" });
+
+            var provider = new AzureReposHostProvider(
+                context, Mock.Of<IAzureDevOpsRestApi>(),
+                msAuthMock.Object,
+                Mock.Of<IAzureDevOpsAuthorityCache>(),
+                Mock.Of<IAzureReposBindingManager>());
+
+            GitResponse result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(expectedAuthMethod, result.Metadata.AuthMethod);
+        }
+
         private static IMicrosoftAuthenticationResult CreateAuthResult(string upn, string token)
         {
             return new MockMsAuthResult

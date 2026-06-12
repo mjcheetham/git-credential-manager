@@ -82,7 +82,10 @@ namespace Microsoft.AzureRepos
                 var azureResult = await _msAuth.GetTokenForManagedIdentityAsync(mid, AzureDevOpsConstants.AzureDevOpsResourceId);
                 return new GitResponse(
                     new GitCredential(mid, azureResult.AccessToken)
-                );
+                )
+                {
+                    Metadata = { FromCache = false, AuthMethod = "managed-identity" },
+                };
             }
 
             if (UseWorkloadFederation(out MicrosoftWorkloadFederationOptions fedOpts))
@@ -91,7 +94,10 @@ namespace Microsoft.AzureRepos
                 var azureResult = await _msAuth.GetTokenUsingWorkloadFederationAsync(fedOpts, AzureDevOpsConstants.AzureDevOpsDefaultScopes);
                 return new GitResponse(
                     new GitCredential(fedOpts.ClientId, azureResult.AccessToken)
-                );
+                )
+                {
+                    Metadata = { FromCache = false, AuthMethod = GetWifScenarioTag(fedOpts.Scenario) },
+                };
             }
 
             if (UseServicePrincipal(out MicrosoftServicePrincipalIdentity sp))
@@ -100,7 +106,10 @@ namespace Microsoft.AzureRepos
                 var azureResult = await _msAuth.GetTokenForServicePrincipalAsync(sp, AzureDevOpsConstants.AzureDevOpsDefaultScopes);
                 return new GitResponse(
                     new GitCredential(sp.Id, azureResult.AccessToken)
-                );
+                )
+                {
+                    Metadata = { FromCache = false, AuthMethod = "service-principal" },
+                };
             }
 
             if (UsePersonalAccessTokens())
@@ -118,15 +127,19 @@ namespace Microsoft.AzureRepos
 
                     // No existing credential was found, create a new one
                     _context.Trace.WriteLine("Creating new credential...");
-                    credential = await GeneratePersonalAccessTokenAsync(request);
+                    (credential, var flow) = await GeneratePersonalAccessTokenAsync(request);
                     _context.Trace.WriteLine("Credential created.");
+                    return new GitResponse(credential)
+                    {
+                        Metadata = { FromCache = false, AuthMethod = GetAuthFlowTag("pat", flow) },
+                    };
                 }
                 else
                 {
                     _context.Trace.WriteLine("Existing credential found.");
                 }
 
-                return new GitResponse(credential);
+                return new GitResponse(credential) { Metadata = { FromCache = true } };
             }
             else
             {
@@ -134,7 +147,10 @@ namespace Microsoft.AzureRepos
                 // for user account lookups when getting Azure Access Tokens.
                 var azureResult = await GetAzureAccessTokenAsync(request);
                 var azureCredential = new GitCredential(azureResult.Account.UserName, azureResult.AccessToken);
-                return new GitResponse(azureCredential);
+                return new GitResponse(azureCredential)
+                {
+                    Metadata = { FromCache = false, AuthMethod = GetAuthFlowTag("oauth", azureResult.Flow) },
+                };
             }
         }
 
@@ -242,7 +258,7 @@ namespace Microsoft.AzureRepos
             }
         }
 
-        private async Task<ICredential> GeneratePersonalAccessTokenAsync(GitRequest request)
+        private async Task<(ICredential, MicrosoftAuthenticationFlow)> GeneratePersonalAccessTokenAsync(GitRequest request)
         {
             ThrowIfDisposed();
             ThrowIfUnsafeRemote(request);
@@ -280,7 +296,7 @@ namespace Microsoft.AzureRepos
                 patScopes);
             _context.Trace.WriteLineSecrets("PAT created. PAT='{0}'", new object[] {pat});
 
-            return new GitCredential(result.Account.UserName, pat);
+            return (new GitCredential(result.Account.UserName, pat), result.Flow);
         }
 
         private async Task<IMicrosoftAuthenticationResult> GetAzureAccessTokenAsync(GitRequest request)
@@ -757,6 +773,31 @@ namespace Microsoft.AzureRepos
             }
 
             return true;
+        }
+
+        internal static string GetAuthFlowTag(string type, MicrosoftAuthenticationFlow flow)
+        {
+            return flow switch
+            {
+                MicrosoftAuthenticationFlow.Silent            => $"{type}-silent",
+                MicrosoftAuthenticationFlow.BrokerSilent      => $"{type}-broker-silent",
+                MicrosoftAuthenticationFlow.BrokerInteractive => $"{type}-broker-interactive",
+                MicrosoftAuthenticationFlow.EmbeddedWebView   => $"{type}-browser-embedded",
+                MicrosoftAuthenticationFlow.SystemWebView     => $"{type}-browser-system",
+                MicrosoftAuthenticationFlow.DeviceCode        => $"{type}-device",
+                _                                             => $"{type}-unknown",
+            };
+        }
+
+        internal static string GetWifScenarioTag(MicrosoftWorkloadFederationScenario scenario)
+        {
+            return scenario switch
+            {
+                MicrosoftWorkloadFederationScenario.Generic         => "wif-generic",
+                MicrosoftWorkloadFederationScenario.ManagedIdentity => "wif-managed-identity",
+                MicrosoftWorkloadFederationScenario.GitHubActions   => "wif-github-actions",
+                _                                                   => "wif-unknown",
+            };
         }
 
         #endregion
