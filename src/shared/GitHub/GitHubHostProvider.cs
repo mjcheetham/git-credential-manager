@@ -29,6 +29,10 @@ namespace GitHub
         private readonly IGitHubAuthentication _gitHubAuth;
         private readonly ICommandContext _context;
 
+        // Usage survey: mechanism chosen during the most recent credential generation.
+        // Reset each GetCredentialAsync call. Null when not freshly generated (cache hit).
+        private string _lastAuthMethod;
+
         public GitHubHostProvider(ICommandContext context)
             : this(context, new GitHubRestApi(context), new GitHubAuthentication(context)) { }
 
@@ -182,15 +186,20 @@ namespace GitHub
 
                 // No existing credential was found, create a new one
                 _context.Trace.WriteLine("Creating new credential...");
+                _lastAuthMethod = null;
                 credential = await GenerateCredentialAsync(remoteUri, userName);
                 _context.Trace.WriteLine("Credential created.");
+                return new GitResponse(credential)
+                {
+                    Metadata = { FromCache = false, AuthMethod = _lastAuthMethod },
+                };
             }
             else
             {
                 _context.Trace.WriteLine("Existing credential found.");
             }
 
-            return new GitResponse(credential);
+            return new GitResponse(credential) { Metadata = { FromCache = true } };
         }
 
         private bool FilterAccounts(Uri remoteUri, IEnumerable<string> wwwAuth, ref IList<string> accounts)
@@ -304,6 +313,7 @@ namespace GitHub
             switch (promptResult.AuthenticationMode)
             {
                 case AuthenticationModes.Basic:
+                    _lastAuthMethod = "basic";
                     GitCredential patCredential = await GeneratePersonalAccessTokenAsync(remoteUri, promptResult.Credential);
 
                     // HACK: Store the PAT immediately in case this PAT is not valid for SSO.
@@ -317,12 +327,15 @@ namespace GitHub
                     return patCredential;
 
                 case AuthenticationModes.Browser:
+                    _lastAuthMethod = "browser";
                     return await GenerateOAuthCredentialAsync(remoteUri, loginHint: userName, useBrowser: true);
 
                 case AuthenticationModes.Device:
+                    _lastAuthMethod = "device";
                     return await GenerateOAuthCredentialAsync(remoteUri, loginHint: userName, useBrowser: false);
 
                 case AuthenticationModes.Pat:
+                    _lastAuthMethod = "pat";
                     // The token returned by the user should be good to use directly as the password for Git
                     string token = promptResult.Credential.Password;
 
