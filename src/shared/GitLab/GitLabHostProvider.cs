@@ -19,6 +19,10 @@ namespace GitLab
 
         private readonly IGitLabAuthentication _gitLabAuth;
 
+        // Usage survey: mechanism chosen during the most recent credential generation.
+        // Reset each GetCredentialAsync call. Null when not freshly generated (cache hit).
+        private string _lastAuthMethod;
+
         public GitLabHostProvider(ICommandContext context)
             : this(context, new GitLabAuthentication(context)) { }
 
@@ -113,10 +117,15 @@ namespace GitLab
             switch (promptResult.AuthenticationMode)
             {
                 case AuthenticationModes.Basic:
+                    _lastAuthMethod = "basic";
+                    return promptResult.Credential;
+
                 case AuthenticationModes.Pat:
+                    _lastAuthMethod = "pat";
                     return promptResult.Credential;
 
                 case AuthenticationModes.Browser:
+                    _lastAuthMethod = "browser";
                     return await GenerateOAuthCredentialAsync(request);
 
                 default:
@@ -181,6 +190,8 @@ namespace GitLab
         // <remarks>Stores OAuth tokens as a side effect</remarks>
         public override async Task<GitResponse> GetCredentialAsync(GitRequest request)
         {
+            _lastAuthMethod = null;
+
             string service = GetServiceName(request);
             ICredential credential = Context.CredentialStore.Get(service, request.UserName);
             if (credential?.Account == "oauth2" && await IsOAuthTokenExpired(request.GetRemoteUri(), credential.Password))
@@ -192,7 +203,7 @@ namespace GitLab
 
             if (credential != null)
             {
-                return new GitResponse(credential);
+                return new GitResponse(credential) { Metadata = { FromCache = true } };
             }
 
             string refreshService = GetRefreshTokenServiceName(request);
@@ -203,6 +214,7 @@ namespace GitLab
                 try
                 {
                     credential = await RefreshOAuthCredentialAsync(request, refreshToken);
+                    _lastAuthMethod = "oauth-refresh";
                 }
                 catch (Exception e)
                 {
@@ -221,7 +233,10 @@ namespace GitLab
                 // store refresh token under a separate service
                 Context.CredentialStore.AddOrUpdate(refreshService, oAuthCredential.Account, oAuthCredential.RefreshToken);
             }
-            return new GitResponse(credential);
+            return new GitResponse(credential)
+            {
+                Metadata = { FromCache = false, AuthMethod = _lastAuthMethod },
+            };
         }
 
         private async Task<bool> IsOAuthTokenExpired(Uri baseUri, string accessToken)
