@@ -15,6 +15,10 @@ namespace Atlassian.Bitbucket
         private readonly IBitbucketAuthentication _bitbucketAuth;
         private readonly IRegistry<IBitbucketRestApi> _restApiRegistry;
 
+        // Usage survey: mechanism chosen during the most recent credential generation.
+        // Reset each GetCredentialAsync call. Null when not freshly generated (cache hit).
+        private string _lastAuthMethod;
+
         public BitbucketHostProvider(ICommandContext context)
             : this(context, new BitbucketAuthentication(context), new BitbucketRestApiRegistry(context)) { }
 
@@ -80,6 +84,9 @@ namespace Atlassian.Bitbucket
 
         public async Task<GitResponse> GetCredentialAsync(GitRequest request)
         {
+            _lastAuthMethod = null;
+            bool fromCache = false;
+
             // We should not allow unencrypted communication and should inform the user
             if (!_context.Settings.AllowUnsafeRemotes &&
                 StringComparer.OrdinalIgnoreCase.Equals(request.Protocol, "http") &&
@@ -93,9 +100,26 @@ namespace Atlassian.Bitbucket
 
             var authModes = await GetSupportedAuthenticationModesAsync(request);
 
-            ICredential credential = await GetStoredCredentials(request, authModes) ??
-                                     await GetRefreshedCredentials(request, authModes);
-            return new GitResponse(credential);
+            ICredential stored = await GetStoredCredentials(request, authModes);
+            ICredential credential;
+            if (stored != null)
+            {
+                credential = stored;
+                fromCache = true;
+            }
+            else
+            {
+                credential = await GetRefreshedCredentials(request, authModes);
+            }
+
+            return new GitResponse(credential)
+            {
+                Metadata =
+                {
+                    FromCache  = fromCache,
+                    AuthMethod = fromCache ? null : _lastAuthMethod,
+                },
+            };
         }
 
         private async Task<ICredential> GetStoredCredentials(GitRequest request, AuthenticationModes authModes)
@@ -163,6 +187,7 @@ namespace Atlassian.Bitbucket
                 switch (result.AuthenticationMode)
                 {
                     case AuthenticationModes.Basic:
+                        _lastAuthMethod = "basic";
                         // Return the valid credential
                         return result.Credential;
 
@@ -183,7 +208,9 @@ namespace Atlassian.Bitbucket
 
                 try
                 {
-                    return await GetOAuthCredentialsViaRefreshFlow(request, refreshToken);
+                    ICredential refreshed = await GetOAuthCredentialsViaRefreshFlow(request, refreshToken);
+                    _lastAuthMethod = "oauth-refresh";
+                    return refreshed;
                 }
                 catch (OAuth2Exception ex)
                 {
@@ -197,6 +224,7 @@ namespace Atlassian.Bitbucket
                 }
             }
 
+            _lastAuthMethod = "browser";
             return await GetOAuthCredentialsViaInteractiveBrowserFlow(request);
         }
 
