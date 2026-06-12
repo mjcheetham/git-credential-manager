@@ -77,14 +77,16 @@ namespace GitCredentialManager
 
                 // No existing credential was found, create a new one
                 _context.Trace.WriteLine("Creating new credential...");
-                return await GenerateCredentialAsync(request);
+                GitResponse response = await GenerateCredentialAsync(request);
+                response.Metadata.FromCache = false;
+                return response;
             }
             else
             {
                 _context.Trace.WriteLine("Existing credential found.");
             }
 
-            return new GitResponse(credential);
+            return new GitResponse(credential) { Metadata = { FromCache = true } };
         }
 
         public Task StoreCredentialAsync(GitRequest request)
@@ -166,7 +168,7 @@ namespace GitCredentialManager
 
                 return new  GitResponse(
                     await GetOAuthAccessToken(uri, request.UserName, oauthConfig, _context.Trace2)
-                );
+                ) { Metadata = { AuthMethod = "oauth" } };
             }
             // Try detecting WIA for this remote, if permitted
             else if (IsWindowsAuthAllowed)
@@ -215,7 +217,7 @@ namespace GitCredentialManager
                                     _context.Trace.WriteLine("User declined to enable NTLM support. Showing basic auth prompt.");
                                     return new GitResponse(
                                         await _basicAuth.GetCredentialsAsync(uri.AbsoluteUri, null)
-                                    );
+                                    ) { Metadata = { AuthMethod = "basic" } };
                             }
                         }
 
@@ -224,7 +226,8 @@ namespace GitCredentialManager
                         ICredential creds = new GitCredential(string.Empty, string.Empty);
                         return new GitResponse(creds)
                         {
-                            AdditionalProperties = additionalProps
+                            AdditionalProperties = additionalProps,
+                            Metadata = { AuthMethod = "wia" },
                         };
                     }
                 }
@@ -243,7 +246,7 @@ namespace GitCredentialManager
             _context.Trace.WriteLine("Prompting for basic credentials...");
             return new GitResponse(
                 await _basicAuth.GetCredentialsAsync(uri.AbsoluteUri, request.UserName)
-            );
+            ) { Metadata = { AuthMethod = "basic" } };
         }
 
         private void EnableNtlmSupport(Uri uri)
