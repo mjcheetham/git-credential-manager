@@ -10,6 +10,7 @@ The following are links to GCM user support documentation:
 - [Network and HTTP configuration][gcm-net-config]
 - [Credential stores][gcm-credstores]
 - [Host provider specification][gcm-host-provider]
+- [Usage survey (opt-in, anonymous)][gcm-usage-survey]
 - [Azure Repos OAuth tokens][gcm-azure-tokens]
 - [Azure Managed Identities and Service Principals][gcm-misp]
 - [GitLab support][gcm-gitlab]
@@ -27,5 +28,6 @@ The following are links to GCM user support documentation:
 [gcm-misp]: azrepos-misp.md
 [gcm-net-config]: netconfig.md
 [gcm-oauth]: generic-oauth.md
+[gcm-usage-survey]: usage-survey.md
 [gcm-usage]: usage.md
 [gcm-ntlm-kerberos]: ntlm-kerberos.md

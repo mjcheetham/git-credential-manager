@@ -328,6 +328,34 @@ export GCM_ALLOW_UNSAFE_REMOTES=true
 
 ---
 
+### GCM_USAGE_SURVEY
+
+Per-process opt in or out of anonymous, aggregate GCM usage survey. Takes
+precedence over `credential.usageSurvey`. Set to `1` (or any truthy value) to
+opt in for this invocation, or `0` to opt out. See
+[usage survey][usage-survey-doc] for the full list of fields collected and the privacy
+model.
+
+Usage survey is **off by default**.
+
+#### Example
+
+##### Windows
+
+```batch
+SET GCM_USAGE_SURVEY=0
+```
+
+##### macOS/Linux
+
+```bash
+export GCM_USAGE_SURVEY=0
+```
+
+**Also see: [credential.usageSurvey][credential-usage-survey], [usage survey documentation][usage-survey-doc]**
+
+---
+
 ### GCM_AUTODETECT_TIMEOUT
 
 Set the maximum length of time, in milliseconds, that GCM should wait for a
@@ -1377,6 +1405,7 @@ Defaults to disabled.
 [credential-plain-text-store]: configuration.md#credentialplaintextstorepath
 [credential-provider]: configuration.md#credentialprovider
 [credential-stores]: credstores.md
+[credential-usage-survey]: configuration.md#credentialusagesurvey
 [credential-trace]: configuration.md#credentialtrace
 [credential-trace-secrets]: configuration.md#credentialtracesecrets
 [credential-trace-msauth]: configuration.md#credentialtracemsauth
@@ -1384,6 +1413,7 @@ Defaults to disabled.
 [devbox]: https://azure.microsoft.com/en-us/products/dev-box
 [freedesktop-ss]: https://specifications.freedesktop.org/secret-service-spec/
 [gcm]: usage.md
+[usage-survey-doc]: usage-survey.md
 [gcm-interactive]: #gcm_interactive
 [gcm-credential-store]: #gcm_credential_store
 [gcm-dpapi-store-path]: #gcm_dpapi_store_path

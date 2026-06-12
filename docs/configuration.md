@@ -273,6 +273,34 @@ git config --global credential.allowUnsafeRemotes true
 
 ---
 
+### credential.usageSurvey
+
+Opt in or out of anonymous, aggregate GCM usage survey. See
+[usage survey][usage-survey-doc] for the full list of fields collected and the privacy
+model.
+
+Usage survey is **off by default**. Setting this value to `true` opts you in;
+setting it to `false` (or leaving it unset) keeps it off.
+
+The preferred way to manage this is via the dedicated subcommand:
+
+```shell
+git credential-manager usage-survey on
+git credential-manager usage-survey off
+git credential-manager usage-survey status
+git credential-manager usage-survey show   # live-tail every event being shipped
+```
+
+#### Example
+
+```shell
+git config --global credential.usageSurvey true
+```
+
+**Also see: [GCM_USAGE_SURVEY][gcm-usage-survey], [usage survey documentation][usage-survey-doc]**
+
+---
+
 ### credential.autoDetectTimeout
 
 Set the maximum length of time, in milliseconds, that GCM should wait for a
@@ -1205,10 +1233,12 @@ Defaults to disabled.
 [gcm-namespace]: environment.md#GCM_NAMESPACE
 [gcm-plaintext-store-path]: environment.md#GCM_PLAINTEXT_STORE_PATH
 [gcm-provider]: environment.md#GCM_PROVIDER
+[gcm-usage-survey]: environment.md#gcm_usage_survey
 [gcm-trace]: environment.md#GCM_TRACE
 [gcm-trace-secrets]: environment.md#GCM_TRACE_SECRETS
 [gcm-trace-msauth]: environment.md#GCM_TRACE_MSAUTH
 [github-emu]: https://docs.github.com/en/enterprise-cloud@latest/admin/identity-and-access-management/using-enterprise-managed-users-for-iam/about-enterprise-managed-users
+[usage-survey-doc]: usage-survey.md
 [usage]: usage.md
 [git-config-http-proxy]: https://git-scm.com/docs/git-config#Documentation/git-config.txt-httpproxy
 [http-proxy]: netconfig.md#http-proxy

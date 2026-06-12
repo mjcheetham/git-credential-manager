@@ -35,6 +35,23 @@ Set your user-level Git configuration (`~/.gitconfig`) to use GCM. If you pass
 `--system` to these commands, they act on the system-level Git configuration
 (`/etc/gitconfig`) instead.
 
+### usage-survey
+
+Manage Git Credential Manager's optional, privacy-preserving usage survey.
+Usage survey is **off by default**. See the [usage survey documentation][gcm-usage-survey]
+for the full list of fields collected and the privacy model.
+
+The subcommands are:
+
+- `usage-survey on` / `usage-survey off` — opt in / out (persists to your global
+  git config).
+- `usage-survey status` — show enabled/disabled state, the install id, queue
+  depth, and dispatcher status.
+- `usage-survey show` — run the dispatcher in the foreground and print every
+  event being shipped to stdout. Useful for auditing what is being sent.
+- `usage-survey id [--reset]` — print or regenerate the persistent install id.
+- `usage-survey purge` — delete any queued events from disk.
+
 ### azure-repos
 
 Interact with the Azure Repos host provider to bind/unbind user accounts to
@@ -46,6 +63,7 @@ For more information about managing user account bindings see
 
 [azure-access-tokens-ua]: azrepos-users-and-tokens.md#useraccounts
 [git-credentials-custom-helpers]: https://git-scm.com/docs/gitcredentials#_custom_helpers
+[gcm-usage-survey]: usage-survey.md
 
 ### github
 
