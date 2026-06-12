@@ -126,6 +126,7 @@ namespace GitCredentialManager
             Context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={request.UserName}...");
 
             ICredential credential = Context.CredentialStore.Get(service, request.UserName);
+            bool fromCache = credential != null;
             if (credential == null)
             {
                 Context.Trace.WriteLine("No existing credentials found.");
@@ -140,7 +141,7 @@ namespace GitCredentialManager
                 Context.Trace.WriteLine("Existing credential found.");
             }
 
-            return new GitResponse(credential);
+            return new GitResponse(credential) { Metadata = { FromCache = fromCache } };
         }
 
         public virtual Task StoreCredentialAsync(GitRequest request)
