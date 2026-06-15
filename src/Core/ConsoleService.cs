@@ -50,7 +50,7 @@ public interface IConsoleService
 public class ConsoleService : IConsoleService
 {
     public ConsoleService(IStandardStreams streams)
-        : this(AnsiConsoleFactory.Create(), AnsiConsoleFactory.CreateForWriter(streams.Error, streams.IsErrorRedirected))
+        : this(AnsiConsoleFactory.CreateForTty(), AnsiConsoleFactory.CreateForWriter(streams.Error, streams.IsErrorRedirected))
     { }
 
     public ConsoleService(IAnsiConsole interactive, IAnsiConsole messages)
