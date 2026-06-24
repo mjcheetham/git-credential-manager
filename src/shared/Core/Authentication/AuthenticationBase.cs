@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using GitCredentialManager.Tty;
 using GitCredentialManager.UI.ViewModels;
 
 namespace GitCredentialManager.Authentication
@@ -122,7 +123,7 @@ namespace GitCredentialManager.Authentication
         {
             if (!viewModel.WindowResult)
             {
-                throw new Exception("User cancelled dialog.");
+                throw new OperationCanceledException("User cancelled dialog.");
             }
         }
         
@@ -204,7 +205,7 @@ namespace GitCredentialManager.Authentication
                 }
 
                 Context.Trace.WriteLine($"UI helper was not found at '{helperName}'.");
-                Context.Streams.Error.WriteLine($"warning: could not find configured UI helper '{helperName}'");
+                Context.Console.WriteWarning("could not find configured UI helper '{helperName}'");
                 return false;
             }
 
@@ -230,7 +231,7 @@ namespace GitCredentialManager.Authentication
                 if (!Context.Environment.TryLocateExecutable(dotnetName, out string dotnetPath))
                 {
                     Context.Trace.WriteLine($"Unable to run UI helper '{inBoxDllPath}' without the .NET CLI.");
-                    Context.Streams.Error.WriteLine($"warning: could not find .NET CLI to run UI helper '{inBoxDllPath}'");
+                    Context.Console.WriteWarning("could not find .NET CLI to run UI helper '{inBoxDllPath}'");
                     return false;
                 }
 
@@ -253,7 +254,7 @@ namespace GitCredentialManager.Authentication
             // No helper found!
             //
             Context.Trace.WriteLine($"UI helper '{helperName}' was not found.");
-            Context.Streams.Error.WriteLine($"warning: could not find UI helper '{helperName}'");
+            Context.Console.WriteWarning("could not find UI helper '{helperName}'");
             return false;
         }
 
