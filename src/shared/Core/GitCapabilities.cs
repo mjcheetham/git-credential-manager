@@ -114,11 +114,8 @@ public static class GitCapabilitiesUtils
         {
             yield break;
         }
-#if NETFRAMEWORK
-        foreach (GitCapabilities flag in (GitCapabilities[])Enum.GetValues(typeof(GitCapabilities)))
-#else
+
         foreach (GitCapabilities flag in Enum.GetValues<GitCapabilities>())
-#endif
         {
             if (flag == GitCapabilities.None)
             {
