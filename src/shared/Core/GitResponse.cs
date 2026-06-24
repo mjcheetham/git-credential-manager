@@ -180,7 +180,11 @@ public class GitResponse
     /// silently no-ops and this view stays empty.
     /// </para>
     /// </remarks>
+#if NETFRAMEWORK
+    public IReadOnlyDictionary<string, string> State => _stateView ??= new ReadOnlyDictionary<string, string>(_state);
+#else
     public IReadOnlyDictionary<string, string> State => _stateView ??= _state.AsReadOnly();
+#endif
 
     /// <summary>
     /// Set a single state entry.
