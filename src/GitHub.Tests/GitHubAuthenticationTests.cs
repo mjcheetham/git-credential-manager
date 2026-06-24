@@ -59,7 +59,7 @@ namespace GitHub.Tests
             context.FileSystem.Files["/usr/local/bin/GitHub.UI"] = new byte[0];
             context.FileSystem.Files[@"C:\Program Files\Git Credential Manager Core\GitHub.UI.exe"] = new byte[0];
             var auth = new GitHubAuthentication(context);
-            context.Terminal.Prompts["option (enter for default)"] = "";
+            context.Console.PushSelection(0);
             var result = await auth.GetAuthenticationAsync(null, null, AuthenticationModes.All);
             Assert.Equal(AuthenticationModes.Device, result.AuthenticationMode);
         }

@@ -28,7 +28,7 @@ namespace GitCredentialManager.Tests.Authentication
             const string testPassword = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
 
             var context = new TestCommandContext {SessionManager = {IsDesktopSession = false}};
-            context.Terminal.SecretPrompts["Password"] = testPassword; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            context.Console.SecretPrompts["Password"] = testPassword; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
 
             var basicAuth = new BasicAuthentication(context);
 
@@ -46,8 +46,8 @@ namespace GitCredentialManager.Tests.Authentication
             const string testPassword = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
 
             var context = new TestCommandContext {SessionManager = {IsDesktopSession = false}};
-            context.Terminal.Prompts["Username"] = testUserName;
-            context.Terminal.SecretPrompts["Password"] = testPassword; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            context.Console.Prompts["Username"] = testUserName;
+            context.Console.SecretPrompts["Password"] = testPassword; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
 
             var basicAuth = new BasicAuthentication(context);
 
