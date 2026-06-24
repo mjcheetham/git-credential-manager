@@ -493,6 +493,8 @@ public partial class EntraAuthentication
     private Task ShowDeviceCodeAsync(DeviceCodeResult dcr)
     {
         Context.Console.WriteLine(dcr.Message);
+        Context.Console.Write(new DeviceCodePanel(dcr.VerificationUrl, dcr.UserCode));
+
         return Task.CompletedTask;
     }
 

@@ -263,12 +263,9 @@ namespace GitCredentialManager.Authentication
         private async Task<OAuth2TokenResult> GetTokenByDeviceCodeViaTtyAsync(OAuth2Client client, OAuth2DeviceCodeResult dcr)
         {
             ThrowIfTerminalPromptsDisabled();
-
-            string deviceMessage =
-                $"To complete authentication please visit {dcr.VerificationUri} and enter the following code:" +
-                Environment.NewLine +
-                dcr.UserCode;
-            Context.Console.WriteLine(deviceMessage);
+            Context.Console.Write(
+                new DeviceCodePanel(dcr.VerificationUri.ToString(), dcr.UserCode)
+            );
 
             return await client.GetTokenByDeviceCodeAsync(dcr, CancellationToken.None);
         }

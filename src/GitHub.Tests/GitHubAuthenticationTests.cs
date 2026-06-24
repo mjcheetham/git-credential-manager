@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Net;
+using System.Net.Http;
 using System.Threading.Tasks;
 using Avalonia.Animation;
 using GitCredentialManager;
+using GitCredentialManager.Authentication.OAuth;
 using GitCredentialManager.Tests.Objects;
 using Moq;
 using Moq.Protected;
@@ -116,6 +119,57 @@ namespace GitHub.Tests
             Assert.Equal(AuthenticationModes.Basic, result.AuthenticationMode);
             Assert.Equal("tim", result.Credential.Account);
             Assert.Equal("hunter2", result.Credential.Password);
+        }
+
+        [Theory]
+        [InlineData(false, true)]
+        [InlineData(true, false)]
+        public async Task GitHubAuthentication_GetOAuthTokenViaDeviceCodeAsync_Terminal_WritesPanelBeforePolling(
+            bool guiPromptsEnabled, bool desktopSession)
+        {
+            const string verificationUrl = "https://github.com/login/device";
+            const string userCode = "TEST-CODE";
+            var context = new TestCommandContext
+            {
+                Settings = { IsGuiPromptsEnabled = guiPromptsEnabled },
+                SessionManager = { IsDesktopSession = desktopSession },
+            };
+            var targetUri = new Uri("https://github.com");
+            var deviceEndpoint = new Uri(targetUri, GitHubConstants.OAuthDeviceEndpointRelativeUri);
+            var tokenEndpoint = new Uri(targetUri, GitHubConstants.OAuthTokenEndpointRelativeUri);
+            using var handler = new TestHttpMessageHandler { ThrowOnUnexpectedRequest = true };
+            context.HttpClientFactory.MessageHandler = handler;
+            handler.Setup(HttpMethod.Post, deviceEndpoint, HttpStatusCode.OK,
+                $$"""
+                {
+                    "device_code": "test-device-code",
+                    "user_code": "{{userCode}}",
+                    "verification_uri": "{{verificationUrl}}",
+                    "expires_in": 900
+                }
+                """);
+            handler.Setup(HttpMethod.Post, tokenEndpoint, _ =>
+            {
+                string output = context.Console.StdErrConsole.Output;
+                Assert.Contains(verificationUrl, output);
+                Assert.Contains(userCode, output);
+                Assert.Contains('\u2588', output);
+                Assert.Contains("Press Ctrl+C to cancel.", output);
+
+                return new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StringContent("""{"access_token":"test-token","token_type":"Bearer"}"""),
+                };
+            });
+            using var auth = new GitHubAuthentication(context);
+
+            OAuth2TokenResult result = await auth.GetOAuthTokenViaDeviceCodeAsync(targetUri, ["repo"]);
+
+            Assert.Equal("test-token", result.AccessToken);
+            Assert.Empty(context.Console.TtyConsole.Output);
+            Assert.Empty(context.Console.WrittenMessages);
+            Assert.Empty(context.Streams.Out.ToString());
+            handler.AssertRequest(HttpMethod.Post, tokenEndpoint, 1);
         }
     }
 }

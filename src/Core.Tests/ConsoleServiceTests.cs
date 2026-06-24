@@ -48,4 +48,27 @@ public class ConsoleServiceTests
         string output = new UTF8Encoding(false).GetString(ms.ToArray());
         Assert.Contains("fatal-marker", output);
     }
+
+    [Fact]
+    public void ConsoleService_WriteDeviceCodePanel_Redirected_UsesUnstyledBlocksWithoutOpeningTty()
+    {
+        using var writer = new StringWriter();
+        var console = new ConsoleService(
+            () => throw new InvalidOperationException("Output-only rendering must not open the TTY."),
+            () => AnsiConsoleFactory.CreateForWriter(writer, isRedirected: true, ansiSupport: false));
+
+        console.Write(new DeviceCodePanel("https://github.com/login/device", "TEST-CODE"));
+
+        string output = writer.ToString();
+        Assert.Contains("https://github.com/login/device", output);
+        Assert.Contains("TEST-CODE", output);
+        Assert.Contains('\u2588', output);
+        Assert.Contains('\u2580', output);
+        Assert.Contains('\u2584', output);
+        Assert.DoesNotContain('\u001b', output);
+        Assert.StartsWith("+", output);
+        Assert.Equal(19, output.Split('\n', StringSplitOptions.RemoveEmptyEntries).Length);
+        Assert.All(output.Split('\n', StringSplitOptions.RemoveEmptyEntries),
+            line => Assert.Equal(80, line.TrimEnd('\r').Length));
+    }
 }

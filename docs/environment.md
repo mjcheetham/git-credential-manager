@@ -621,7 +621,7 @@ Value|Authentication Mode
 _(unset)_|Automatically detect modes
 `oauth`|Expands to: `browser, device`
 `browser`|OAuth authentication via a web browser _(requires a GUI)_
-`device`|OAuth authentication with a device code
+`device`|OAuth authentication with a device code (and a QR code in the terminal)
 `basic`|Basic authentication using username and password
 `pat`|Personal Access Token (pat)-based authentication
 
@@ -838,7 +838,7 @@ Value|Authentication Flow
 `auto` _(default)_|Select the best option depending on the current environment and platform.
 `embedded`|Show a window with embedded web view control.
 `system`|Open the user's default web browser.
-`devicecode`|Show a device code.
+`devicecode`|Show a device code (and a QR code in the terminal).
 
 #### Windows
 
