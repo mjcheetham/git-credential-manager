@@ -269,6 +269,7 @@ namespace GitCredentialManager.Authentication
                 Environment.NewLine +
                 dcr.UserCode;
             Context.Console.WriteLine(deviceMessage);
+            Context.Console.WriteQrCode(dcr.VerificationUri.ToString());
 
             return await client.GetTokenByDeviceCodeAsync(dcr, CancellationToken.None);
         }

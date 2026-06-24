@@ -1136,6 +1136,7 @@ namespace GitCredentialManager.Authentication
         private Task ShowDeviceCodeInTty(DeviceCodeResult dcr)
         {
             Context.Console.WriteLine(dcr.Message);
+            Context.Console.WriteQrCode(dcr.VerificationUrl);
 
             return Task.CompletedTask;
         }

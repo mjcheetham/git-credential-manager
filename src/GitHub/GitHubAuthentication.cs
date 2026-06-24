@@ -514,6 +514,7 @@ namespace GitHub
                 Environment.NewLine +
                 dcr.UserCode;
             Context.Console.WriteLine(deviceMessage);
+            Context.Console.WriteQrCode(dcr.VerificationUri.ToString());
 
             return await oauthClient.GetTokenByDeviceCodeAsync(dcr, CancellationToken.None);
         }
