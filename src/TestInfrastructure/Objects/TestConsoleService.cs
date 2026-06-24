@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 using Spectre.Console.Testing;
 
 namespace GitCredentialManager.Tests.Objects;
@@ -29,6 +30,8 @@ public class TestConsoleService : IConsoleService
     public void WriteFatal(string message) => WrittenMessages.Add(message);
 
     public void WriteLine(string message) => WrittenMessages.Add(message);
+
+    public void Write(IRenderable renderable) => StdErrConsole.Write(renderable);
 
     public T ShowPrompt<T>(IPrompt<T> prompt) => prompt.Show(TtyConsole);
 

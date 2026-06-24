@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text;
 using GitCredentialManager.Tty;
@@ -11,11 +12,12 @@ public class ConsoleServiceTests
     [Fact]
     public void ConsoleService_WriteMethods_RouteToErrorConsoleWriter()
     {
-        var err = new StringWriter();
+        using var err = new StringWriter();
         var console = new ConsoleService(
-            AnsiConsoleFactory.CreateHeadless,
+            () => throw new InvalidOperationException("Output-only rendering must not open the TTY."),
             () => AnsiConsoleFactory.CreateForWriter(err, isRedirected: true, ansiSupport: false));
 
+        console.Write(new Text("renderable-[marker]"));
         console.WriteInfo("info-[marker]");
         console.WriteWarning("warn-[marker]");
         console.WriteError("error-[marker]");
@@ -23,6 +25,7 @@ public class ConsoleServiceTests
         console.WriteLine("line-[marker]");
 
         string output = err.ToString();
+        Assert.Contains("renderable-[marker]", output);
         Assert.Contains("info-[marker]", output);
         Assert.Contains("warn-[marker]", output);
         Assert.Contains("error-[marker]", output);

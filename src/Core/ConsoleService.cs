@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager.Tty;
 using Spectre.Console;
+using Spectre.Console.Rendering;
 
 namespace GitCredentialManager;
 
@@ -18,6 +19,7 @@ namespace GitCredentialManager;
 /// </remarks>
 public interface IConsoleService
 {
+    void Write(IRenderable renderable);
     void WriteInfo(string message);
     void WriteWarning(string message);
     void WriteError(string message);
@@ -49,6 +51,8 @@ public class ConsoleService : IConsoleService
         _ttyConsole = new Lazy<IAnsiConsole>(ttyConsoleFunc);
         _stderrConsole = new Lazy<IAnsiConsole>(stderrConsoleFunc);
     }
+
+    public void Write(IRenderable renderable) => _stderrConsole.Value.Write(renderable);
 
     public void WriteInfo(string message) => _stderrConsole.Value.MarkupLine($"[blue]info:[/] {Markup.Escape(message)}");
 
