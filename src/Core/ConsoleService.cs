@@ -22,6 +22,7 @@ public interface IConsoleService
     void WriteError(string message);
     void WriteFatal(string message);
     void WriteLine(string message);
+    void WriteQrCode(string content);
 
     /// <summary>
     /// Prompt the user for a selection on the controlling terminal.
@@ -58,6 +59,8 @@ public class ConsoleService : IConsoleService
     public void WriteFatal(string message) => _stderrConsole.MarkupLine($"[red]fatal:[/] {message}");
 
     public void WriteLine(string message) => _stderrConsole.WriteLine(message);
+
+    public void WriteQrCode(string content) => _stderrConsole.WriteQrCode(content);
 
     public T ShowPrompt<T>(IPrompt<T> prompt) =>
         prompt.Show(_ttyConsole);

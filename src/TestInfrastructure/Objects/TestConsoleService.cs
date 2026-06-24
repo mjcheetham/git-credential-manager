@@ -30,6 +30,8 @@ public class TestConsoleService : IConsoleService
 
     public void WriteLine(string message) => WrittenMessages.Add(message);
 
+    public void WriteQrCode(string content) => WrittenMessages.Add(content);
+
     public T ShowPrompt<T>(IPrompt<T> prompt) => prompt.Show(TtyConsole);
 
     public Task<T> ShowPromptAsync<T>(IPrompt<T> prompt, CancellationToken ct = default) =>
