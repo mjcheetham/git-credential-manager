@@ -240,7 +240,7 @@ namespace GitCredentialManager.Authentication
                                 result = await app.AcquireTokenInteractive(scopes)
                                     .WithPrompt(Prompt.SelectAccount)
                                     .WithUseEmbeddedWebView(true)
-                                    .WithCustomWebUi(new MsalAvaloniaWebUi())
+                                    .WithCustomWebUi(new MsalAvaloniaWebUi(Context.Trace2))
                                     .WithEmbeddedWebViewOptions(GetEmbeddedWebViewOptions())
                                     .ExecuteAsync();
                                 break;
@@ -1020,7 +1020,7 @@ namespace GitCredentialManager.Authentication
         }
     }
 
-    public class MsalAvaloniaWebUi : ICustomWebUi
+    public class MsalAvaloniaWebUi(ITrace2 trace2) : ICustomWebUi
     {
         public async Task<Uri> AcquireAuthorizationCodeAsync(Uri authorizationUri, Uri redirectUri, CancellationToken ct)
         {
@@ -1029,7 +1029,18 @@ namespace GitCredentialManager.Authentication
 
             async Task<Uri> Authenticate(CancellationToken obj)
             {
-                var progressWindow = new ProgressWindow();
+                // We need a root window to pass to the Avalonia auth broker
+                var progressWindow = new ProgressWindow
+                {
+                    Topmost = false
+                };
+
+                // Set window height to 70% of screen height (mirrors WebView1 dialog size in MSAL)
+                double scaling = progressWindow.Screens.Primary?.Scaling ?? 1.0;
+                int height = (int)((progressWindow.Screens.Primary?.Bounds.Height ?? 850) * 0.7 / scaling);
+                int width = 566;
+                const string title = "Git Credential Manager";
+
                 try
                 {
                     progressWindow.Show();
@@ -1037,11 +1048,15 @@ namespace GitCredentialManager.Authentication
                         progressWindow,
                         new WebAuthenticatorOptions(authorizationUri, redirectUri)
                         {
+                            PreferWebView1 = true,
                             PreferNativeWebDialog = true,
                             NativeWebDialogFactory = () =>
                             {
                                 var d = new NativeWebDialog();
-                                d.Resize(500, 750);
+                                d.Resize(width, height);
+                                d.Title = title;
+                                d.CanUserResize = false;
+                                d.UserAgent = Constants.GetHttpUserAgent(trace2);
                                 return d;
                             }
                         }

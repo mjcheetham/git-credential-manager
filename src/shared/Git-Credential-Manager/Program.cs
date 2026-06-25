@@ -5,7 +5,6 @@ using Avalonia;
 using GitHub;
 using GitLab;
 using Microsoft.AzureRepos;
-using GitCredentialManager.Authentication;
 using GitCredentialManager.UI;
 
 namespace GitCredentialManager
@@ -14,6 +13,7 @@ namespace GitCredentialManager
     {
         private static int _exitCode;
 
+        [STAThread]
         public static void Main(string[] args)
         {
             // Create the dispatcher on the main thread. This is required
