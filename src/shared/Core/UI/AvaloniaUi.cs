@@ -60,6 +60,22 @@ namespace GitCredentialManager.UI
 
         public static Task InitAndRunAsync(Func<Task> work, CancellationToken ct)
         {
+            EnsureStarted();
+
+            // Start the work on the UI thread (which should be running now)
+            return AvnDispatcher.UIThread.InvokeAsync(work, DispatcherPriority.Send);
+        }
+
+        public static Task<T> InitAndRunAsync<T>(Func<CancellationToken, Task<T>> work, CancellationToken ct)
+        {
+            EnsureStarted();
+
+            // Start the work on the UI thread (which should be running now)
+            return AvnDispatcher.UIThread.InvokeAsync(() => work(ct), DispatcherPriority.Send);
+        }
+
+        private static void EnsureStarted()
+        {
             if (!_isAppStarted)
             {
                 _isAppStarted = true;
@@ -94,9 +110,6 @@ namespace GitCredentialManager.UI
                 // and for the Avalonia framework (and their dispatcher) to be initialized.
                 appInitialized.Wait();
             }
-
-            // Start the work on the UI thread (which should be running now)
-            return AvnDispatcher.UIThread.InvokeAsync(work, DispatcherPriority.Send);
         }
 
         private static Task ShowWindowInternal(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)

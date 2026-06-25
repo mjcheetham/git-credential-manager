@@ -11,12 +11,14 @@ using Microsoft.Identity.Client.Extensions.Msal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using Avalonia.Controls;
 using GitCredentialManager.UI;
 using GitCredentialManager.UI.Controls;
 using GitCredentialManager.UI.ViewModels;
 using GitCredentialManager.UI.Views;
 using Microsoft.Identity.Client.AppConfig;
 using Microsoft.Identity.Client.Broker;
+using Microsoft.Identity.Client.Extensibility;
 
 namespace GitCredentialManager.Authentication
 {
@@ -238,6 +240,7 @@ namespace GitCredentialManager.Authentication
                                 result = await app.AcquireTokenInteractive(scopes)
                                     .WithPrompt(Prompt.SelectAccount)
                                     .WithUseEmbeddedWebView(true)
+                                    .WithCustomWebUi(new MsalAvaloniaWebUi())
                                     .WithEmbeddedWebViewOptions(GetEmbeddedWebViewOptions())
                                     .ExecuteAsync();
                                 break;
@@ -956,22 +959,22 @@ namespace GitCredentialManager.Authentication
 
         private bool CanUseEmbeddedWebView()
         {
-            // TODO: check for desktop session once embedded web view is added back
-            // return Context.SessionManager.IsDesktopSession;
-            return false;
+            return PlatformUtils.IsWindows() && Context.SessionManager.IsDesktopSession;
         }
 
         private void EnsureCanUseEmbeddedWebView()
         {
-            // TODO: check for desktop session once embedded web view is added back
-            // if (!Context.SessionManager.IsDesktopSession)
-            // {
-            //     throw new Trace2InvalidOperationException(Context.Trace2,
-            //         "Embedded web view is not available without a desktop session.");
-            // }
+            if (!PlatformUtils.IsWindows())
+            {
+                throw new Trace2InvalidOperationException(Context.Trace2,
+                    "Embedded web view only available on Windows.");
+            }
 
-            throw new Trace2InvalidOperationException(Context.Trace2,
-                "Embedded web view is not available on .NET Core.");
+            if (!Context.SessionManager.IsDesktopSession)
+            {
+                throw new Trace2InvalidOperationException(Context.Trace2,
+                    "Embedded web view is not available without a desktop session.");
+            }
         }
 
         private bool CanUseSystemWebView(IPublicClientApplication app, Uri redirectUri)
@@ -1014,6 +1017,42 @@ namespace GitCredentialManager.Authentication
 
             public string AccessToken => _msalResult.AccessToken;
             public string AccountUpn => _msalResult.Account?.Username;
+        }
+    }
+
+    public class MsalAvaloniaWebUi : ICustomWebUi
+    {
+        public async Task<Uri> AcquireAuthorizationCodeAsync(Uri authorizationUri, Uri redirectUri, CancellationToken ct)
+        {
+            // Queue the authentication work on the main thread
+            return await AvaloniaUi.InitAndRunAsync(Authenticate, ct);
+
+            async Task<Uri> Authenticate(CancellationToken obj)
+            {
+                var progressWindow = new ProgressWindow();
+                try
+                {
+                    progressWindow.Show();
+                    var result = await WebAuthenticationBroker.AuthenticateAsync(
+                        progressWindow,
+                        new WebAuthenticatorOptions(authorizationUri, redirectUri)
+                        {
+                            PreferNativeWebDialog = true,
+                            NativeWebDialogFactory = () =>
+                            {
+                                var d = new NativeWebDialog();
+                                d.Resize(500, 750);
+                                return d;
+                            }
+                        }
+                    );
+                    return result.CallbackUri;
+                }
+                finally
+                {
+                    progressWindow.Close();
+                }
+            }
         }
     }
 }

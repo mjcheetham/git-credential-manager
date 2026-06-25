@@ -75,7 +75,7 @@ public class OAuth2WebDialog(int width = 500, int height = 750) : OAuth2WebBrows
         switch (e)
         {
             case AppleWKWebViewEnvironmentRequestedEventArgs appleArgs:
-                //appleArgs.NonPersistentDataStore = true;
+                appleArgs.NonPersistentDataStore = true;
                 break;
             case WindowsWebView2EnvironmentRequestedEventArgs windowsArgs:
                 windowsArgs.UserDataFolder = null; // Use ephemeral data store
