@@ -960,15 +960,15 @@ namespace GitCredentialManager.Authentication
 
         private bool CanUseEmbeddedWebView()
         {
-            return (PlatformUtils.IsWindows() || OperatingSystem.IsMacOSVersionAtLeast(10, 15)) && Context.SessionManager.IsDesktopSession;
+            return PlatformUtils.IsWindows() && Context.SessionManager.IsDesktopSession;
         }
 
         private void EnsureCanUseEmbeddedWebView()
         {
-            if (!PlatformUtils.IsWindows() && !OperatingSystem.IsMacOSVersionAtLeast(10, 15))
+            if (!PlatformUtils.IsWindows())
             {
                 throw new Trace2InvalidOperationException(Context.Trace2,
-                    "Embedded web view only available on Windows, or macOS 10.15 or later.");
+                    "Embedded web view only available on Windows.");
             }
 
             if (!Context.SessionManager.IsDesktopSession)
