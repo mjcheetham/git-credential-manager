@@ -15,7 +15,9 @@
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal" />
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Avalonia" />
-    <PackageReference Include="Avalonia.Controls.WebView" />
+<!--    <PackageReference Include="Avalonia.Controls.WebView" />-->
+    <ProjectReference Include="/Users/mattche/src/Avalonia.Controls.WebView/src/Avalonia.Controls.WebView/Avalonia.Controls.WebView.csproj" />
+    <ProjectReference Include="/Users/mattche/src/Avalonia.Controls.WebView/src/Avalonia.Controls.WebView.Core/Avalonia.Controls.WebView.Core.csproj" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
   </ItemGroup>

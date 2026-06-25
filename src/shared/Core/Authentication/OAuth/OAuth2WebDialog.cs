@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Avalonia.Platform;
-using GitCredentialManager.UI;
 
 namespace GitCredentialManager.Authentication.OAuth;
 
@@ -28,7 +27,7 @@ public class OAuth2WebDialog(int width = 500, int height = 750) : OAuth2WebBrows
             RedirectUri = redirectUri
         };
 
-        await AvaloniaUi.ShowWebDialogAsync(d => OnDialogCreate(d, state), OnDialogDestroy, authorizationUri, IntPtr.Zero, ct);
+        // TODO: implement
 
         return state.FinalUri;
     }
@@ -54,22 +53,6 @@ public class OAuth2WebDialog(int width = 500, int height = 750) : OAuth2WebBrows
         // Enable developer tools only in debug builds
         e.EnableDevTools = true;
 #endif
-
-        if (sender is NativeWebDialog dialog)
-        {
-            IPlatformHandle handle = dialog.TryGetWebViewPlatformHandle();
-            switch (handle)
-            {
-                case IAppleWKWebViewPlatformHandle appleHandle:
-                    break;
-                case IWindowsWebView1PlatformHandle win1Handle:
-                    break;
-                case IWindowsWebView2PlatformHandle win2Handle:
-                    break;
-                case IGtkWebViewPlatformHandle gtkHandle:
-                    break;
-            }
-        }
 
         // Use ephemeral or non-persistent data stores to avoid caching credentials or other sensitive data
         switch (e)

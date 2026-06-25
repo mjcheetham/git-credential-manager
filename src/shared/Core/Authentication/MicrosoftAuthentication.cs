@@ -12,6 +12,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Avalonia.Controls;
+using Avalonia.Platform;
 using GitCredentialManager.UI;
 using GitCredentialManager.UI.Controls;
 using GitCredentialManager.UI.ViewModels;
@@ -959,15 +960,15 @@ namespace GitCredentialManager.Authentication
 
         private bool CanUseEmbeddedWebView()
         {
-            return PlatformUtils.IsWindows() && Context.SessionManager.IsDesktopSession;
+            return (PlatformUtils.IsWindows() || OperatingSystem.IsMacOSVersionAtLeast(10, 15)) && Context.SessionManager.IsDesktopSession;
         }
 
         private void EnsureCanUseEmbeddedWebView()
         {
-            if (!PlatformUtils.IsWindows())
+            if (!PlatformUtils.IsWindows() && !OperatingSystem.IsMacOSVersionAtLeast(10, 15))
             {
                 throw new Trace2InvalidOperationException(Context.Trace2,
-                    "Embedded web view only available on Windows.");
+                    "Embedded web view only available on Windows, or macOS 10.15 or later.");
             }
 
             if (!Context.SessionManager.IsDesktopSession)
@@ -1024,49 +1025,61 @@ namespace GitCredentialManager.Authentication
     {
         public async Task<Uri> AcquireAuthorizationCodeAsync(Uri authorizationUri, Uri redirectUri, CancellationToken ct)
         {
+            const string title = "Git Credential Manager";
+            const int width = 600;
+            const int height = 700;
+
             // Queue the authentication work on the main thread
             return await AvaloniaUi.InitAndRunAsync(Authenticate, ct);
 
-            async Task<Uri> Authenticate(CancellationToken obj)
+            async Task<Uri> Authenticate(CancellationToken innerCt)
             {
-                // We need a root window to pass to the Avalonia auth broker
-                var progressWindow = new ProgressWindow
+                var tcs = new TaskCompletionSource<Uri>();
+                innerCt.Register(() => tcs.TrySetCanceled());
+                var d = new NativeWebDialog
                 {
-                    Topmost = false
+                    CanUserResize = false,
+                    UserAgent = Constants.GetHttpUserAgent(trace2),
+                    Title = title
+                };
+                d.EnvironmentRequested += (_, e) =>
+                {
+#if DEBUG
+                    e.EnableDevTools = true;
+#endif
+                    if (e is WindowsWebView2EnvironmentRequestedEventArgs wv2Args)
+                    {
+                        // Prefer WebView1 even if WebView2 is available as SSO/device management
+                        // attestation is not possible in WebView2!
+                        wv2Args.PreferWebView1Instead = true;
+                        wv2Args.UserDataFolder = null; // Use ephemeral data store
+                    }
                 };
 
-                // Set window height to 70% of screen height (mirrors WebView1 dialog size in MSAL)
-                double scaling = progressWindow.Screens.Primary?.Scaling ?? 1.0;
-                int height = (int)((progressWindow.Screens.Primary?.Bounds.Height ?? 850) * 0.7 / scaling);
-                int width = 566;
-                const string title = "Git Credential Manager";
+                d.NavigationStarted += (_, e) =>
+                {
+                    if (e.Request is null)
+                        return;
 
-                try
+                    if (redirectUri.IsBaseOf(e.Request))
+                    {
+                        tcs.TrySetResult(e.Request);
+                        d.Close();
+                    }
+                };
+
+                d.Closing += (_, _) =>
                 {
-                    progressWindow.Show();
-                    var result = await WebAuthenticationBroker.AuthenticateAsync(
-                        progressWindow,
-                        new WebAuthenticatorOptions(authorizationUri, redirectUri)
-                        {
-                            PreferWebView1 = true,
-                            PreferNativeWebDialog = true,
-                            NativeWebDialogFactory = () =>
-                            {
-                                var d = new NativeWebDialog();
-                                d.Resize(width, height);
-                                d.Title = title;
-                                d.CanUserResize = false;
-                                d.UserAgent = Constants.GetHttpUserAgent(trace2);
-                                return d;
-                            }
-                        }
-                    );
-                    return result.CallbackUri;
-                }
-                finally
-                {
-                    progressWindow.Close();
-                }
+                    // Are we closing because we are complete, or because the user closed the window?
+                    if (!tcs.Task.IsCompleted)
+                        tcs.TrySetCanceled();
+                };
+
+                d.Resize(width, height);
+                d.Navigate(authorizationUri);
+                d.Show();
+
+                return await tcs.Task;
             }
         }
     }
