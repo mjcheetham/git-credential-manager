@@ -52,6 +52,13 @@ namespace GitCredentialManager.UI
             ShowWindowAsync(() => new TWindow(), dataContext, parentHandle, ct);
 
         public static Task ShowWindowAsync(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
+            => InitAndRunAsync(() => ShowWindowInternal(windowFunc, dataContext, parentHandle, ct), ct);
+
+        public static Task ShowWebDialogAsync(Action<NativeWebDialog> onCreate, Action<NativeWebDialog> onDestroy,
+            Uri initialUri, IntPtr parentHandle, CancellationToken ct) =>
+            InitAndRunAsync(() => ShowWebDialogInternal(onCreate, onDestroy, initialUri, parentHandle, ct), ct);
+
+        public static Task InitAndRunAsync(Func<Task> work, CancellationToken ct)
         {
             if (!_isAppStarted)
             {
@@ -88,11 +95,8 @@ namespace GitCredentialManager.UI
                 appInitialized.Wait();
             }
 
-            // Post the window action to the Avalonia dispatcher (which should be running)
-            return AvnDispatcher.UIThread.InvokeAsync(
-                () => ShowWindowInternal(windowFunc, dataContext, parentHandle, ct),
-                DispatcherPriority.Send
-            );
+            // Start the work on the UI thread (which should be running now)
+            return AvnDispatcher.UIThread.InvokeAsync(work, DispatcherPriority.Send);
         }
 
         private static Task ShowWindowInternal(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
@@ -128,6 +132,50 @@ namespace GitCredentialManager.UI
             }
 
             return tcs.Task;
+        }
+
+        private static async Task ShowWebDialogInternal(Action<NativeWebDialog> onCreate, Action<NativeWebDialog> onDestroy,
+            Uri initialUri, IntPtr parentHandle, CancellationToken ct)
+        {
+            NativeWebDialog dialog = null;
+            try
+            {
+                var tcs = new TaskCompletionSource();
+                dialog = new NativeWebDialog();
+                onCreate(dialog);
+                dialog.Closing += (_, e) =>
+                {
+                    if (e is WindowClosingEventArgs { IsProgrammatic: true })
+                        tcs.TrySetResult();
+                    else
+                        tcs.SetCanceled();
+                };
+                ct.Register(() =>
+                    {
+                        tcs.SetCanceled();
+                        AvnDispatcher.UIThread.InvokeAsync(() => dialog.Close());
+                    }
+                );
+
+                dialog.Show();
+
+                // TODO: parent window
+                // if (parentHandle != IntPtr.Zero)
+                // {
+                //     SetParentExternal(window, parentHandle);
+                // }
+
+                dialog.Navigate(initialUri);
+                await tcs.Task; // wait for the dialog to close
+            }
+            finally
+            {
+                if (dialog is not null)
+                {
+                    onDestroy(dialog);
+                    dialog.Dispose();
+                }
+            }
         }
 
         private static void SetParentExternal(Window window, IntPtr parentHandle)

@@ -273,7 +273,7 @@ namespace GitLab
                     "Browser authentication requires a desktop session");
             }
 
-            var browserOptions = new OAuth2WebBrowserOptions { };
+            var browserOptions = new OAuth2SystemWebBrowserOptions { };
             var browser = new OAuth2SystemWebBrowser(Context.SessionManager, browserOptions);
 
             // Write message to the terminal (if any is attached) for some feedback that we're waiting for a web response

@@ -418,12 +418,12 @@ namespace GitHub
                     "Browser authentication requires a desktop session");
             }
 
-            var browserOptions = new OAuth2WebBrowserOptions
+            var browserOptions = new OAuth2SystemWebBrowserOptions
             {
                 SuccessResponseHtml = GitHubResources.AuthenticationResponseSuccessHtml,
                 FailureResponseHtmlFormat = GitHubResources.AuthenticationResponseFailureHtmlFormat
             };
-            var browser = new OAuth2SystemWebBrowser(Context.SessionManager, browserOptions);
+            var browser = new OAuth2WebDialog(); //new OAuth2SystemWebBrowser(Context.SessionManager, browserOptions);
 
             // If we have a login hint we should pass this to GitHub as an extra query parameter
             IDictionary<string, string> queryParams = null;

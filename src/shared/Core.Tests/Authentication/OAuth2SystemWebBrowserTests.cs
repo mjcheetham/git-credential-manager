@@ -11,7 +11,7 @@ public class OAuth2SystemWebBrowserTests
     public void OAuth2SystemWebBrowser_UpdateRedirectUri_NonLoopback_ThrowsError()
     {
         var sm = new TestSessionManager();
-        var options = new OAuth2WebBrowserOptions();
+        var options = new OAuth2SystemWebBrowserOptions();
         var browser = new OAuth2SystemWebBrowser(sm, options);
 
         Assert.Throws<ArgumentException>(() => browser.UpdateRedirectUri(new Uri("http://example.com")));
@@ -29,7 +29,7 @@ public class OAuth2SystemWebBrowserTests
     public void OAuth2SystemWebBrowser_UpdateRedirectUri_SpecificPort(string input, string expected)
     {
         var sm = new TestSessionManager();
-        var options = new OAuth2WebBrowserOptions();
+        var options = new OAuth2SystemWebBrowserOptions();
         var browser = new OAuth2SystemWebBrowser(sm, options);
 
         Uri actualUri = browser.UpdateRedirectUri(new Uri(input));
@@ -49,7 +49,7 @@ public class OAuth2SystemWebBrowserTests
     public void OAuth2SystemWebBrowser_UpdateRedirectUri_AnyPort(string input)
     {
         var sm = new TestSessionManager();
-        var options = new OAuth2WebBrowserOptions();
+        var options = new OAuth2SystemWebBrowserOptions();
         var browser = new OAuth2SystemWebBrowser(sm, options);
 
         var inputUri = new Uri(input);

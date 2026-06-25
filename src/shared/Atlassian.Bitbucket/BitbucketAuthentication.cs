@@ -253,7 +253,7 @@ namespace Atlassian.Bitbucket
         {
             ThrowIfUserInteractionDisabled();
 
-            var browserOptions = new OAuth2WebBrowserOptions
+            var browserOptions = new OAuth2SystemWebBrowserOptions
             {
                 SuccessResponseHtml = BitbucketResources.AuthenticationResponseSuccessHtml,
                 FailureResponseHtmlFormat = BitbucketResources.AuthenticationResponseFailureHtmlFormat

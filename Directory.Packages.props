@@ -10,6 +10,9 @@
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5" />
 
+    <!-- Avalonia WebView -->
+    <PackageVersion Include="Avalonia.Controls.WebView" Version="12.0.1" />
+
     <!-- Microsoft Identity -->
     <PackageVersion Include="Microsoft.Identity.Client" Version="4.65.0" />
     <PackageVersion Include="Microsoft.Identity.Client.Broker" Version="4.65.0" />

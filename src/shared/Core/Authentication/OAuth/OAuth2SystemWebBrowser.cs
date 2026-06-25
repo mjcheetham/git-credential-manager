@@ -1,13 +1,12 @@
 using System;
 using System.Collections.Generic;
 using System.Net;
-using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace GitCredentialManager.Authentication.OAuth
 {
-    public class OAuth2WebBrowserOptions
+    public class OAuth2SystemWebBrowserOptions
     {
         internal const string DefaultSuccessHtml = @"<!DOCTYPE html><html><head>
 <meta name=""color-scheme"" content=""light dark"">
@@ -34,12 +33,12 @@ namespace GitCredentialManager.Authentication.OAuth
         public Uri FailureRedirectFormat { get; set; }
     }
 
-    public class OAuth2SystemWebBrowser : IOAuth2WebBrowser
+    public class OAuth2SystemWebBrowser : OAuth2WebBrowser
     {
         private readonly ISessionManager _sessionManager;
-        private readonly OAuth2WebBrowserOptions _options;
+        private readonly OAuth2SystemWebBrowserOptions _options;
 
-        public OAuth2SystemWebBrowser(ISessionManager sessionManager, OAuth2WebBrowserOptions options)
+        public OAuth2SystemWebBrowser(ISessionManager sessionManager, OAuth2SystemWebBrowserOptions options)
         {
             EnsureArgument.NotNull(sessionManager, nameof(sessionManager));
             EnsureArgument.NotNull(options, nameof(options));
@@ -48,24 +47,7 @@ namespace GitCredentialManager.Authentication.OAuth
             _options = options;
         }
 
-        public Uri UpdateRedirectUri(Uri uri)
-        {
-            if (!uri.IsLoopback)
-            {
-                throw new ArgumentException("Only localhost is supported as a redirect URI.", nameof(uri));
-            }
-
-            // If a port has been specified use it, otherwise find a free one
-            if (uri.IsDefaultPort)
-            {
-                int port = GetFreeTcpPort();
-                return new UriBuilder(uri) {Port = port}.Uri;
-            }
-
-            return uri;
-        }
-
-        public async Task<Uri> GetAuthenticationCodeAsync(Uri authorizationUri, Uri redirectUri, CancellationToken ct)
+        public override async Task<Uri> GetAuthenticationCodeAsync(Uri authorizationUri, Uri redirectUri, CancellationToken ct)
         {
             if (!redirectUri.IsLoopback)
             {
@@ -82,7 +64,7 @@ namespace GitCredentialManager.Authentication.OAuth
         private async Task<Uri> InterceptRequestsAsync(Uri listenUri, CancellationToken ct)
         {
             // Create a TaskCompletionSource which completes when we're asked to cancel.
-            // We can then await the this task together with other tasks that don't take a
+            // We can then await this task together with other tasks that don't take a
             // CancellationToken and exit the method quickly when cancelled.
             var tcs = new TaskCompletionSource<Uri>();
             ct.Register(() => tcs.SetCanceled());
@@ -153,7 +135,7 @@ namespace GitCredentialManager.Authentication.OAuth
                 }
                 else
                 {
-                    string failureHtml = FormatError(_options.FailureResponseHtmlFormat ?? OAuth2WebBrowserOptions.DefaultFailureHtmlFormat);
+                    string failureHtml = FormatError(_options.FailureResponseHtmlFormat ?? OAuth2SystemWebBrowserOptions.DefaultFailureHtmlFormat);
                     await response.WriteResponseAsync(failureHtml);
                     response.Close();
                 }
@@ -169,27 +151,11 @@ namespace GitCredentialManager.Authentication.OAuth
                 }
                 else
                 {
-                    string successHtml = _options.SuccessResponseHtml ?? OAuth2WebBrowserOptions.DefaultSuccessHtml;
+                    string successHtml = _options.SuccessResponseHtml ?? OAuth2SystemWebBrowserOptions.DefaultSuccessHtml;
                     await response.WriteResponseAsync(successHtml);
                     response.Close();
                 }
             }
         }
-
-        private static int GetFreeTcpPort()
-        {
-            var listener = new TcpListener(IPAddress.Loopback, 0);
-
-            try
-            {
-                listener.Start();
-                return ((IPEndPoint) listener.LocalEndpoint).Port;
-            }
-            finally
-            {
-                listener.Stop();
-            }
-        }
-
     }
 }
