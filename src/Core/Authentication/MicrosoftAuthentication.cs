@@ -139,10 +139,14 @@ namespace GitCredentialManager.Authentication
             var uiCts = new CancellationTokenSource();
 
             // Check if we can and should use OS broker authentication
-            bool useBroker = CanUseBroker();
+            bool useBroker = CanUseBroker(out bool needMainThread);
             Context.Trace.WriteLine(useBroker
                 ? "OS broker is available and enabled."
                 : "OS broker is not available or enabled.");
+            if (useBroker && needMainThread)
+            {
+                Context.Trace.WriteLine("Broker main thread affinity is required.");
+            }
 
             if (msaPt)
             {
@@ -152,7 +156,8 @@ namespace GitCredentialManager.Authentication
             try
             {
                 // Create the public client application for authentication
-                IPublicClientApplication app = await CreatePublicClientApplicationAsync(authority, clientId, redirectUri, useBroker, msaPt, uiCts);
+                IPublicClientApplication app = await CreatePublicClientApplicationAsync(authority, clientId, redirectUri, useBroker, msaPt, uiCts)
+                    .ConfigureAwait(false);
 
                 AuthenticationResult result = null;
 
@@ -160,7 +165,7 @@ namespace GitCredentialManager.Authentication
                 bool hasExistingUser = !string.IsNullOrWhiteSpace(userName);
                 if (hasExistingUser)
                 {
-                    result = await GetAccessTokenSilentlyAsync(app, scopes, userName, msaPt);
+                    result = await GetAccessTokenSilentlyAsync(needMainThread, app, scopes, userName, msaPt);
                 }
 
                 //
@@ -198,7 +203,7 @@ namespace GitCredentialManager.Authentication
                         // account then the user may become stuck in a loop of authentication failures.
                         if (!hasExistingUser && Context.Settings.UseMsAuthDefaultAccount)
                         {
-                            result = await GetAccessTokenSilentlyAsync(app, scopes, null, msaPt);
+                            result = await GetAccessTokenSilentlyAsync(needMainThread, app, scopes, userName, msaPt);
 
                             if (result is null || !await UseDefaultAccountAsync(result.Account.Username))
                             {
@@ -209,11 +214,13 @@ namespace GitCredentialManager.Authentication
                         if (result is null)
                         {
                             Context.Trace.WriteLine("Performing interactive auth with broker...");
-                            result = await app.AcquireTokenInteractive(scopes)
+                            result = await MainThreadIfNeeded(needMainThread, async () => await app
+                                .AcquireTokenInteractive(scopes)
                                 .WithPrompt(Prompt.SelectAccount)
                                 // We must configure the system webview as a fallback
                                 .WithSystemWebViewOptions(GetSystemWebViewOptions())
-                                .ExecuteAsync();
+                                .ExecuteAsync()
+                            );
                         }
                     }
                     else
@@ -486,7 +493,7 @@ namespace GitCredentialManager.Authentication
         /// <summary>
         /// Obtain an access token without showing UI or prompts.
         /// </summary>
-        private async Task<AuthenticationResult> GetAccessTokenSilentlyAsync(
+        private async Task<AuthenticationResult> GetAccessTokenSilentlyAsync(bool needMainThread,
             IPublicClientApplication app, string[] scopes, string userName, bool msaPt)
         {
             try
@@ -496,35 +503,41 @@ namespace GitCredentialManager.Authentication
                     Context.Trace.WriteLine(
                         "Attempting to acquire token silently for current operating system account...");
 
-                    return await app.AcquireTokenSilent(scopes, PublicClientApplication.OperatingSystemAccount)
-                        .ExecuteAsync();
+                    return await MainThreadIfNeeded(needMainThread, async () => await app
+                        .AcquireTokenSilent(scopes, PublicClientApplication.OperatingSystemAccount)
+                        .ExecuteAsync()
+                    );
                 }
                 else
                 {
                     Context.Trace.WriteLine($"Attempting to acquire token silently for user '{userName}'...");
 
-                    // Enumerate all accounts and find the one matching the user name
-                    IEnumerable<IAccount> accounts = await app.GetAccountsAsync();
-                    IAccount account = accounts.FirstOrDefault(x =>
-                        StringComparer.OrdinalIgnoreCase.Equals(x.Username, userName));
-                    if (account is null)
-                    {
-                        Context.Trace.WriteLine($"No cached account found for user '{userName}'...");
-                        return null;
-                    }
+                    return await MainThreadIfNeeded(needMainThread, async () =>
+                        {
+                            // Enumerate all accounts and find the one matching the user name
+                            IEnumerable<IAccount> accounts = await app.GetAccountsAsync();
+                            IAccount account = accounts.FirstOrDefault(x =>
+                                StringComparer.OrdinalIgnoreCase.Equals(x.Username, userName));
+                            if (account is null)
+                            {
+                                Context.Trace.WriteLine($"No cached account found for user '{userName}'...");
+                                return null;
+                            }
 
-                    var atsBuilder = app.AcquireTokenSilent(scopes, account);
+                            var atsBuilder = app.AcquireTokenSilent(scopes, account);
 
-                    // Is we are operating with an MSA passthrough app we need to ensure that we target the
-                    // special MSA 'transfer' tenant explicitly. This is a workaround for MSAL issue:
-                    // https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/issues/3077
-                    if (msaPt && Guid.TryParse(account.HomeAccountId.TenantId, out Guid homeTenantId) &&
-                        homeTenantId == Constants.MsaHomeTenantId)
-                    {
-                        atsBuilder = atsBuilder.WithTenantId(Constants.MsaTransferTenantId.ToString("D"));
-                    }
+                            // Is we are operating with an MSA passthrough app we need to ensure that we target the
+                            // special MSA 'transfer' tenant explicitly. This is a workaround for MSAL issue:
+                            // https://github.com/AzureAD/microsoft-authentication-library-for-dotnet/issues/3077
+                            if (msaPt && Guid.TryParse(account.HomeAccountId.TenantId, out Guid homeTenantId) &&
+                                homeTenantId == Constants.MsaHomeTenantId)
+                            {
+                                atsBuilder = atsBuilder.WithTenantId(Constants.MsaTransferTenantId.ToString("D"));
+                            }
 
-                    return await atsBuilder.ExecuteAsync();
+                            return await atsBuilder.ExecuteAsync();
+                        }
+                    );
                 }
             }
             catch (MsalUiRequiredException)
@@ -547,8 +560,19 @@ namespace GitCredentialManager.Authentication
 
             var appBuilder = PublicClientApplicationBuilder.Create(clientId)
                 .WithAuthority(authority)
-                .WithRedirectUri(redirectUri.ToString())
                 .WithHttpClientFactory(httpFactoryAdaptor);
+
+            if (PlatformUtils.IsMacOS() && enableBroker)
+            {
+                // Mac Broker requires this special redirect URI. Technically we should use the redirect URI
+                // that includes our bundle ID for when we are a signed application, but since this doesn't
+                // really matter (and would only frustrate local development) just use the 'unsigned' variant.
+                appBuilder.WithRedirectUri("msauth.com.msauth.unsignedapp://auth");
+            }
+            else
+            {
+                appBuilder.WithRedirectUri(redirectUri.ToString());
+            }
 
             // Listen to MSAL logs if GCM_TRACE_MSAUTH is set
             if (Context.Settings.IsMsalTracingEnabled)
@@ -591,12 +615,10 @@ namespace GitCredentialManager.Authentication
             }
 
             // Configure the broker if enabled
-            // Currently only supported on Windows so only included in the .NET Framework builds
-            // to save on the distribution size of the .NET builds (no need for MSALRuntime bits).
             if (enableBroker)
             {
                 appBuilder.WithBroker(
-                    new BrokerOptions(BrokerOptions.OperatingSystems.Windows)
+                    new BrokerOptions(BrokerOptions.OperatingSystems.Windows | BrokerOptions.OperatingSystems.OSX)
                     {
                         Title = "Git Credential Manager",
                         MsaPassthrough = msaPt,
@@ -664,6 +686,16 @@ namespace GitCredentialManager.Authentication
         #endregion
 
         #region Helpers
+
+        private static async Task<T> MainThreadIfNeeded<T>(bool needsMainThread, Func<Task<T>> func)
+        {
+            if (needsMainThread && !Dispatcher.MainThread.CheckAccess())
+            {
+                return await await Dispatcher.MainThread.InvokeAsync(async _ => await func());
+            }
+
+            return await func();
+        }
 
         private delegate StorageCreationProperties StoragePropertiesBuilder(bool useLinuxFallback);
 
@@ -932,10 +964,13 @@ namespace GitCredentialManager.Authentication
 
         #region Auth flow capability detection
 
-        public bool CanUseBroker()
+        public bool CanUseBroker(out bool requiresMainThread)
         {
-            // We only support the broker on Windows 10+ and in an interactive session
-            if (!PlatformUtils.IsWindowsBrokerSupported() || !Context.SessionManager.IsDesktopSession)
+            requiresMainThread = PlatformUtils.IsMacOS();
+
+            // We only support the broker on Windows 10+ or macOS and in an interactive session
+            if (!(PlatformUtils.IsWindowsBrokerSupported() || PlatformUtils.IsMacOS()) ||
+                !Context.SessionManager.IsDesktopSession)
             {
                 return false;
             }
