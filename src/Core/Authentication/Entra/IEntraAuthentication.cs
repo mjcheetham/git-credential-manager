@@ -6,6 +6,15 @@ namespace GitCredentialManager.Authentication.Entra;
 public interface IEntraAuthentication
 {
     /// <summary>
+    /// Acquire an access token for a service principal.
+    /// </summary>
+    Task<IEntraAuthenticationResult> GetTokenForServicePrincipalAsync(
+        string[] scopes,
+        ServicePrincipalIdentity sp,
+        CancellationToken ct = default
+    );
+
+    /// <summary>
     /// Acquire an access token for a managed identity.
     /// </summary>
     Task<IEntraAuthenticationResult> GetTokenForManagedIdentityAsync(
