@@ -1,9 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using GitCredentialManager.Tty;
 using Microsoft.Identity.Client;
+using Spectre.Console;
 
 namespace GitCredentialManager.Authentication.Entra;
 
@@ -13,6 +17,11 @@ public record PublicClientConfig
     /// Application (client) ID of the Entra application registration.
     /// </summary>
     public string ClientId { get; init; }
+
+    /// <summary>
+    /// Use legacy Microsoft Account (MSA) passthrough. Microsoft first-party applications only.
+    /// </summary>
+    public bool IsMsaPassthroughEnabled { get; init; }
 
     /// <summary>
     /// Use the shared Microsoft Developer Tools identity cache.
@@ -28,7 +37,48 @@ public record PublicClientConfig
 public partial class EntraAuthentication
 {
     private readonly PublicClientConfig _publicClientConfig;
-    private PublicClientApplicationBuilder _publicBuilder;
+
+    public async Task<InteractionMode> GetInteractionModeAsync(CancellationToken ct = default)
+    {
+        // Check for a stored user preference
+        if (TryGetModePreference(out InteractionMode mode))
+        {
+            return mode;
+        }
+
+        // Determine the set of available modes
+        IList<InteractionMode> available = GetAvailableModes();
+
+        // Show auth mode prompt
+        if (Context.Settings.IsGuiPromptsEnabled && Context.SessionManager.IsDesktopSession)
+        {
+            if (TryFindHelperCommand(out string command, out string args))
+            {
+                var availableNames = available.Select(m => m.ToString().ToLowerInvariant());
+
+                var sb = new StringBuilder(args);
+                sb.Append("select-interaction-mode");
+                sb.AppendFormat(" --available {0}", QuoteCmdArg(string.Join(',', availableNames)));
+
+                IDictionary<string, string> result = await InvokeHelperAsync(command, sb.ToString());
+                if (result.TryGetValue("interaction_mode", out string str) &&
+                    Enum.TryParse(str, ignoreCase: true, out InteractionMode choice))
+                {
+                    return choice;
+                }
+
+                throw new Trace2Exception(Context.Trace2, "Missing or invalid interaction_mode in response");
+            }
+
+            // TODO: show prompt in-proc
+        }
+
+        // Show prompt in tty
+        var prompt = TerminalPrompts.CreateSelection<InteractionMode>()
+            .Title("Select an authentication flow")
+            .AddChoices(available, m => m.GetDisplayName());
+        return await prompt.ShowAsync(Context.Console, ct);
+    }
 
     public async Task<IReadOnlyList<IEntraAccount>> GetUserAccountsAsync(CancellationToken ct = default)
     {
@@ -54,6 +104,119 @@ public partial class EntraAuthentication
             $"Removing account '{msalAccount.HomeAccountId.Identifier}' ({msalAccount.Username}) from the cache...");
         await app.RemoveAsync(msalAccount);
         return true;
+    }
+
+    public async Task<IEntraAuthenticationResult> GetTokenForUserAsync(string[] scopes, string authority = null,
+        IEntraAccount account = null, InteractionMode interactionMode = InteractionMode.Auto,
+        CancellationToken ct = default)
+    {
+        PublicClientApplicationBuilder builder = GetPublicAppBuilder();
+        if (!string.IsNullOrWhiteSpace(authority))
+        {
+            builder.WithAuthority(authority);
+        }
+
+        // Set up the parent window adapter to use for any interactive auth flows
+        MsalParentWindowAdapter parentWindow = MsalParentWindowAdapter.Create(GetParentWindowHandle());
+        builder.WithParentActivityOrWindow(parentWindow.GetWindow);
+
+        IPublicClientApplication app = builder.Build();
+        await RegisterCacheAsync(app);
+
+        // If we've been given an account, try to resolve it to one in the cache
+        IAccount msalAccount = null;
+        if (account is not null)
+        {
+            msalAccount = await ResolveAccountAsync(app, account);
+        }
+
+        // Try silent authentication first if we have a cached account
+        AuthenticationResult result = await GetTokenForUserSilentAsync(app, scopes, msalAccount, ct);
+        if (result is not null)
+        {
+            return AuthResult.FromMsalResult(result);
+        }
+
+        ThrowIfUserInteractionDisabled();
+
+        result = await GetTokenForUserInteractiveAsync(app, scopes, interactionMode, ct);
+
+        return AuthResult.FromMsalResult(result);
+    }
+
+    private async Task<AuthenticationResult> GetTokenForUserSilentAsync(
+        IPublicClientApplication app, string[] scopes, IAccount msalAccount, CancellationToken ct)
+    {
+        // Silent authentication requires an account
+        if (msalAccount is null)
+        {
+            return null;
+        }
+
+        Context.Trace.WriteLine(
+            $"Attempting silent authentication using account '{msalAccount.HomeAccountId.Identifier}'");
+        try
+        {
+            return await app.AcquireTokenSilent(scopes, msalAccount)
+                .WithMsaPassthroughTransfer(_publicClientConfig.IsMsaPassthroughEnabled, msalAccount)
+                .ExecuteAsync(ct);
+        }
+        catch (MsalUiRequiredException)
+        {
+            Context.Trace.WriteLine("Silent authentication failed; interaction required!");
+            return null;
+        }
+    }
+
+    private async Task<AuthenticationResult> GetTokenForUserInteractiveAsync(
+        IPublicClientApplication app, string[] scopes, InteractionMode interactionMode, CancellationToken ct)
+    {
+        // Check for a stored preference if we've not been given a specific mode from the caller
+        if (interactionMode == InteractionMode.Auto && TryGetModePreference(out InteractionMode mode))
+        {
+            Context.Trace.WriteLine($"Interaction mode overriden to '{mode}'.");
+            interactionMode = mode;
+        }
+
+        switch (interactionMode)
+        {
+            // Try to use the most appropriate interaction mode available
+            case InteractionMode.Auto:
+                Context.Trace.WriteLine("Resolving interactive mode auto...");
+                if (IsEmbeddedWebViewAvailable())
+                    goto case InteractionMode.EmbeddedWebView;
+
+                if (IsSystemWebViewAvailable())
+                    goto case InteractionMode.SystemWebView;
+
+                if (IsDeviceCodeAvailable())
+                    goto case InteractionMode.DeviceCode;
+
+                throw new InvalidOperationException("No available interaction modes.");
+
+            case InteractionMode.EmbeddedWebView:
+                Context.Trace.WriteLine("Performing interactive authentication via embedded webview...");
+                return await app.AcquireTokenInteractive(scopes)
+                    .WithUseEmbeddedWebView(true)
+                    .WithEmbeddedWebViewOptions(GetEmbeddedWebViewOptions())
+                    .ExecuteAsync(ct);
+
+            case InteractionMode.SystemWebView:
+                Context.Trace.WriteLine("Performing interactive authentication via system webview...");
+                Context.Console.WriteInfo("opening browser to complete authentication...");
+                return await app.AcquireTokenInteractive(scopes)
+                    .WithUseEmbeddedWebView(false)
+                    .WithSystemWebViewOptions(GetSystemWebViewOptions())
+                    .ExecuteAsync(ct);
+
+            case InteractionMode.DeviceCode:
+                Context.Trace.WriteLine("Performing interactive authentication via device code...");
+                return await app.AcquireTokenWithDeviceCode(scopes, ShowDeviceCodeAsync)
+                    .ExecuteAsync(ct);
+
+            default:
+                throw new ArgumentOutOfRangeException(nameof(interactionMode), interactionMode, "Unexpected interaction mode.");
+        }
     }
 
     private async Task<IAccount> ResolveAccountAsync(IPublicClientApplication app, IEntraAccount account)
@@ -118,6 +281,14 @@ public partial class EntraAuthentication
         return null;
     }
 
+    private Task ShowDeviceCodeAsync(DeviceCodeResult dcr)
+    {
+        Context.Console.WriteLine(dcr.Message);
+        return Task.CompletedTask;
+    }
+
+    private PublicClientApplicationBuilder _publicBuilder;
+
     private PublicClientApplicationBuilder GetPublicAppBuilder()
     {
         if (_publicClientConfig is null)
@@ -138,4 +309,97 @@ public partial class EntraAuthentication
 
         return _publicBuilder;
     }
+
+    private EmbeddedWebViewOptions GetEmbeddedWebViewOptions()
+    {
+        return new EmbeddedWebViewOptions
+        {
+            Title = "Git Credential Manager"
+        };
+    }
+
+    private SystemWebViewOptions GetSystemWebViewOptions()
+    {
+        return new SystemWebViewOptions
+        {
+            OpenBrowserAsync = uri =>
+            {
+                Context.SessionManager.OpenBrowser(uri);
+                return Task.CompletedTask;
+            }
+        };
+    }
+
+    private IList<InteractionMode> GetAvailableModes()
+    {
+        var list = new List<InteractionMode> { InteractionMode.Auto };
+        if (IsEmbeddedWebViewAvailable())
+        {
+            list.Add(InteractionMode.EmbeddedWebView);
+        }
+        if (IsSystemWebViewAvailable())
+        {
+            list.Add(InteractionMode.SystemWebView);
+        }
+        if (IsDeviceCodeAvailable())
+        {
+            list.Add(InteractionMode.DeviceCode);
+        }
+        return list;
+    }
+
+    private bool TryGetModePreference(out InteractionMode mode)
+    {
+        if (Context.Settings.TryGetSetting(
+                Constants.EnvironmentVariables.MsAuthFlow,
+                Constants.GitConfiguration.Credential.SectionName,
+                Constants.GitConfiguration.Credential.MsAuthFlow,
+                out string valueStr))
+        {
+            Context.Trace.WriteLine($"Interaction mode overriden to '{valueStr}'.");
+            switch (valueStr.ToLowerInvariant())
+            {
+                case "auto":
+                    mode = InteractionMode.Auto;
+                    break;
+                case "embedded":
+                    mode = InteractionMode.EmbeddedWebView;
+                    break;
+                case "system":
+                    mode = InteractionMode.SystemWebView;
+                    break;
+                case "device":
+                    mode = InteractionMode.DeviceCode;
+                    break;
+                default:
+                    if (!Enum.TryParse(valueStr, ignoreCase: true, out mode))
+                    {
+                        Context.Console.WriteWarning($"unknown interaction mode '{valueStr}'; using 'auto'");
+                        mode = InteractionMode.Auto;
+                    }
+                    break;
+            }
+            return true;
+        }
+
+        mode = InteractionMode.Auto;
+        return false;
+    }
+
+    private bool IsEmbeddedWebViewAvailable() =>
+        // TODO: check for desktop session once embedded web view is added back
+        // return Context.SessionManager.IsDesktopSession;
+        false;
+
+    private bool IsSystemWebViewAvailable() => Context.SessionManager.IsWebBrowserAvailable;
+
+    private bool IsDeviceCodeAvailable() => Context.Settings.IsTerminalPromptsEnabled;
+
+    private bool TryFindHelperCommand(out string command, out string args) =>
+        TryFindHelperCommand(
+            Constants.EnvironmentVariables.GcmUiHelper,
+            Constants.GitConfiguration.Credential.UiHelper,
+            Constants.DefaultUiHelper,
+            out command,
+            out args);
 }
