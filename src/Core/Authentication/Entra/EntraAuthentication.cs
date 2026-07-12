@@ -6,6 +6,13 @@ public partial class EntraAuthentication : AuthenticationBase, IEntraAuthenticat
 {
     private readonly IMsalHttpClientFactory _httpFactory;
 
+    public static readonly string[] AuthorityIds =
+    {
+        "msa",  "microsoft",   "microsoftaccount",
+        "aad",  "azure",       "azuredirectory",
+        "live", "liveconnect", "liveid",
+    };
+
     /// <summary>
     /// Create a new Entra authentication component.
     /// </summary>
