@@ -10,6 +10,12 @@ namespace GitCredentialManager.Authentication.Entra;
 public partial class EntraAuthentication
 {
     /// <summary>
+    /// Register the user token cache for public clients.
+    /// </summary>
+    private Task RegisterCacheAsync(IPublicClientApplication app) =>
+        RegisterCacheAsync(app.UserTokenCache, CreateUserTokenCacheProps);
+
+    /// <summary>
     /// Register the app token cache for confidential clients.
     /// </summary>
     private Task RegisterCacheAsync(IConfidentialClientApplication app) =>
@@ -76,6 +82,65 @@ public partial class EntraAuthentication
             helper.RegisterCache(cache);
             Context.Trace.WriteLine("Token cache configured.");
         }
+    }
+
+    /// <summary>
+    /// Create the properties for the user token cache. This is used by public client applications only.
+    /// This cache is shared between GCM processes, and also other Microsoft developer tools such as the Azure
+    /// PowerShell CLI if the shared cache is enabled.
+    /// </summary>
+    internal StorageCreationProperties CreateUserTokenCacheProps(bool useLinuxFallback)
+    {
+        const string cacheFileName = "msal.cache";
+        string cacheDirectory = Context.FileSystem.UserDataDirectoryPath;
+        string macService = "GitCredentialManager.MSAL";
+        string macAccount = "MSALCache";
+        string linuxCollection = "default";
+        string linuxLabel = "MSALCache";
+        KeyValuePair<string, string> linuxAttr1 = new("MsalClientID", "GitCredentialManager.MSAL");
+        KeyValuePair<string, string> linuxAttr2 = new("GitCredentialManager.MSAL", "1.0.0.0");
+
+        // If we are using the shared Microsoft Developer cache there are a different set of
+        // file paths, names, and keychain/keyring attributes to use.
+        // The shared cache is used by other Microsoft developer tools such as the Azure PowerShell CLI.
+        if (_publicClientConfig.UseSharedCache)
+        {
+            Context.Trace.WriteLine("Using shared Microsoft Developer MSAL cache");
+
+            if (PlatformUtils.IsWindows())
+            {
+                // The shared MSAL cache is located at "%LocalAppData%\.IdentityService\msal.cache" on Windows.
+                cacheDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                    ".IdentityService"
+                );
+            }
+            else
+            {
+                // The shared MSAL cache metadata is located at "~/.local/.IdentityService/msal.cache" on UNIX.
+                cacheDirectory = Path.Combine(Context.FileSystem.UserHomePath, ".local", ".IdentityService");
+            }
+
+            macService = "Microsoft.Developer.IdentityService";
+            macAccount = "MSALCache";
+
+            linuxAttr1 = new("MsalClientID", "Microsoft.Developer.IdentityService");
+            linuxAttr2 = new("Microsoft.Developer.IdentityService", "1.0.0.0");
+        }
+
+        var builder = new StorageCreationPropertiesBuilder(cacheFileName, cacheDirectory)
+            .WithMacKeyChain(macService, macAccount);
+
+        if (useLinuxFallback)
+        {
+            builder.WithLinuxUnprotectedFile();
+        }
+        else
+        {
+            builder.WithLinuxKeyring(cacheFileName, linuxCollection, linuxLabel, linuxAttr1, linuxAttr2);
+        }
+
+        return builder.Build();
     }
 
     /// <summary>
