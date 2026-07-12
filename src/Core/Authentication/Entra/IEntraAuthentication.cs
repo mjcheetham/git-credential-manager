@@ -22,6 +22,15 @@ public interface IEntraAuthentication
         ManagedIdentity mi,
         CancellationToken ct = default
     );
+
+    /// <summary>
+    /// Acquire an access token using workload federation.
+    /// </summary>
+    Task<IEntraAuthenticationResult> GetTokenUsingWorkloadFederationAsync(
+        string[] scopes,
+        WorkloadFederationOptions fedOpts,
+        CancellationToken ct = default
+    );
 }
 
 public interface IEntraAuthenticationResult
