@@ -100,7 +100,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine($"Getting Entra access token using WIF (scenario: {fedOpts.Scenario})...");
                 var entraResult = await _entraAuth.Value.GetTokenUsingWorkloadFederationAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes, fedOpts);
+                    GetScopes(), fedOpts);
                 return new GitResponse(
                     new GitCredential(fedOpts.ClientId, entraResult.AccessToken)
                 );
@@ -110,7 +110,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine($"Getting Entra access token for service principal {sp.TenantId}/{sp.Id}...");
                 var entraResult = await _entraAuth.Value.GetTokenForServicePrincipalAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes, sp);
+                    GetScopes(), sp);
                 return new GitResponse(
                     new GitCredential(sp.Id, entraResult.AccessToken)
                 );
@@ -271,7 +271,7 @@ namespace Microsoft.AzureRepos
             // Get an Entra access token for the Azure DevOps SPS
             _context.Trace.WriteLine("Getting Entra access token...");
             IEntraAuthenticationResult result = await _entraAuth.Value.GetTokenForUserAsync(
-                AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                GetScopes(),
                 authAuthority);
             _context.Trace.WriteLineSecrets(
                 $"Acquired Entra access token. Account='{result.Account.UserName}' Token='{{0}}'", new object[] {result.AccessToken});
@@ -367,7 +367,7 @@ namespace Microsoft.AzureRepos
             // Get an AAD access token for the Azure DevOps SPS
             _context.Trace.WriteLine("Getting Entra access token...");
             IEntraAuthenticationResult result = await _entraAuth.Value.GetTokenForUserAsync(
-                AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                GetScopes(),
                 authAuthority,
                 account);
             _context.Trace.WriteLineSecrets(
@@ -408,9 +408,8 @@ namespace Microsoft.AzureRepos
                 IsMsaPassthroughEnabled = true,
                 UseSharedCache = true,
                 SupportsWindowsBroker = true,
-                // TODO: enable once our app registration has the appropriate redirect URLs
-                //SupportsMacBroker = true,
-                //SupportsLinuxBroker = true,
+                SupportsMacBroker = true,
+                SupportsLinuxBroker = true,
             };
         }
 
@@ -426,7 +425,33 @@ namespace Microsoft.AzureRepos
                 return clientId;
             }
 
-            return AzureDevOpsConstants.AadClientId;
+            // Check if we should use the legacy client/app ID as the default
+            if (_context.Settings.TryGetSetting(
+                    AzureDevOpsConstants.EnvironmentVariables.DevAadUseLegacyApp,
+                    Constants.GitConfiguration.Credential.SectionName,
+                    AzureDevOpsConstants.GitConfiguration.Credential.DevAadUseLegacyApp,
+                    out string useLegacyStr) && useLegacyStr.IsTruthy())
+            {
+                return AzureDevOpsConstants.LegacyClientId;
+            }
+
+            return AzureDevOpsConstants.ClientId;
+        }
+
+        private string[] GetScopes()
+        {
+            // Check if we should use the legacy 'default' scopes that used to include
+            // the vso.packaging scope.
+            if (_context.Settings.TryGetSetting(
+                    AzureDevOpsConstants.EnvironmentVariables.DevAadUseLegacyScopes,
+                    Constants.GitConfiguration.Credential.SectionName,
+                    AzureDevOpsConstants.GitConfiguration.Credential.DevAadUseLegacyScopes,
+                    out string useLegacyStr) && useLegacyStr.IsTruthy())
+            {
+                return [AzureDevOpsConstants.Scopes.Default];
+            }
+
+            return [AzureDevOpsConstants.Scopes.CodeWrite];
         }
 
         /// <remarks>

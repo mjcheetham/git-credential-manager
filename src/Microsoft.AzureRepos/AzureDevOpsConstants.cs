@@ -9,11 +9,18 @@ namespace Microsoft.AzureRepos
 
         // Azure DevOps's app ID + default scopes
         public const string AzureDevOpsResourceId = "499b84ac-1321-427f-aa17-267ca6975798";
-        public static readonly string[] AzureDevOpsDefaultScopes = {$"{AzureDevOpsResourceId}/.default"};
 
-        // Visual Studio's client ID
-        // We share this to be able to consume existing access tokens from the VS caches
-        public const string AadClientId = "872cd9fa-d31f-45e0-9eab-6e460a02d1f1";
+        public static class Scopes
+        {
+            public static readonly string Default = $"{AzureDevOpsResourceId}/.default";
+            public static readonly string CodeWrite = $"{AzureDevOpsResourceId}/vso.code_write";
+        }
+
+        // Our first-party client ID
+        public const string ClientId = "d735b71b-9eee-4a4f-ad23-421660877ba6";
+
+        // Visual Studio's client ID - we used to use this in the past
+        public const string LegacyClientId = "872cd9fa-d31f-45e0-9eab-6e460a02d1f1";
 
         public const string VstsHostSuffix = ".visualstudio.com";
         public const string AzureDevOpsHost = "dev.azure.com";
@@ -34,6 +41,8 @@ namespace Microsoft.AzureRepos
 
         public static class EnvironmentVariables
         {
+            public const string DevAadUseLegacyApp = "GCM_DEV_AZREPOS_USELEGACYAPP";
+            public const string DevAadUseLegacyScopes = "GCM_DEV_AZREPOS_USELEGACYSCOPES";
             public const string DevAadClientId = "GCM_DEV_AZREPOS_CLIENTID";
             public const string DevAadAuthorityBaseUri = "GCM_DEV_AZREPOS_AUTHORITYBASEURI";
             public const string CredentialType = "GCM_AZREPOS_CREDENTIALTYPE";
@@ -54,6 +63,8 @@ namespace Microsoft.AzureRepos
         {
             public static class Credential
             {
+                public const string DevAadUseLegacyApp = "azreposDevUseLegacyApp";
+                public const string DevAadUseLegacyScopes = "azreposDevUseLegacyScopes";
                 public const string DevAadClientId = "azreposDevClientId";
                 public const string DevAadAuthorityBaseUri = "azreposDevAuthorityBaseUri";
                 public const string CredentialType = "azreposCredentialType";

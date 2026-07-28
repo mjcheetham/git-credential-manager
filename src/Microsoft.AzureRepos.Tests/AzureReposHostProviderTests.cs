@@ -155,7 +155,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedOrgUri = new Uri("https://org.visualstudio.com");
             var remoteUri = new Uri("https://org.visualstudio.com/");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var expectedAccount = new EntraAccount("account-id", urlAccount);
             var authResult = CreateAuthResult(urlAccount, accessToken);
@@ -208,7 +208,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var remoteUri = new Uri("https://dev.azure.com/org/project/_git/repo");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var expectedAccount = new EntraAccount("account-id", urlAccount);
             var authResult = CreateAuthResult(urlAccount, accessToken);
@@ -257,7 +257,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var account = "jane.doe";
             var authResult = CreateAuthResult(account, accessToken);
@@ -306,7 +306,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var remoteUri = new Uri("https://dev.azure.com/org/proj/_git/repo");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var account = "john.doe";
             var authResult = CreateAuthResult(account, accessToken);
@@ -355,7 +355,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var remoteUri = new Uri("https://dev.azure.com/org/proj/_git/repo");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var account = "john.doe";
             var expectedAccount = new EntraAccount("account-id", account);
@@ -407,7 +407,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var remoteUri = new Uri("https://dev.azure.com/org/proj/_git/repo");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var account = "john.doe";
             var authResult = CreateAuthResult(account, accessToken);
@@ -456,7 +456,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var personalAccessToken = "PERSONAL-ACCESS-TOKEN";
             var account = "john.doe";
@@ -502,7 +502,7 @@ namespace Microsoft.AzureRepos.Tests
             var expectedOrgUri = new Uri("https://dev.azure.com/org");
             var remoteUri = new Uri("https://dev.azure.com/org/proj/_git/repo");
             var authorityUrl = "https://login.microsoftonline.com/common";
-            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            string[] expectedScopes = [AzureDevOpsConstants.Scopes.CodeWrite];
             var accessToken = "ACCESS-TOKEN";
             var personalAccessToken = "PERSONAL-ACCESS-TOKEN";
             var account = "john.doe";
@@ -701,7 +701,7 @@ namespace Microsoft.AzureRepos.Tests
 
             entraAuthMock.Verify(
                 x => x.GetTokenUsingWorkloadFederationAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+            new[]{AzureDevOpsConstants.Scopes.CodeWrite},
                     It.Is<WorkloadFederationOptions>(
                         fed => fed.Scenario == WorkloadFederationScenario.Generic &&
                               fed.TenantId == tenantId &&
@@ -766,7 +766,7 @@ namespace Microsoft.AzureRepos.Tests
 
             entraAuthMock.Verify(
                 x => x.GetTokenUsingWorkloadFederationAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    new[]{AzureDevOpsConstants.Scopes.CodeWrite},
                     It.Is<WorkloadFederationOptions>(
                         fed => fed.Scenario == WorkloadFederationScenario.Generic &&
                               fed.TenantId == tenantId &&
@@ -828,7 +828,7 @@ namespace Microsoft.AzureRepos.Tests
 
             entraAuthMock.Verify(
                 x => x.GetTokenUsingWorkloadFederationAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    new[]{AzureDevOpsConstants.Scopes.CodeWrite},
                     It.Is<WorkloadFederationOptions>(
                         fed => fed.Scenario == WorkloadFederationScenario.ManagedIdentity &&
                               fed.TenantId == tenantId &&
@@ -892,7 +892,7 @@ namespace Microsoft.AzureRepos.Tests
 
             entraAuthMock.Verify(
                 x => x.GetTokenUsingWorkloadFederationAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    new[]{AzureDevOpsConstants.Scopes.CodeWrite},
                     It.Is<WorkloadFederationOptions>(
                         fed => fed.Scenario == WorkloadFederationScenario.GitHubActions &&
                               fed.TenantId == tenantId &&
@@ -953,7 +953,7 @@ namespace Microsoft.AzureRepos.Tests
 
             entraAuthMock.Verify(x => x.GetTokenForServicePrincipalAsync(
                 It.Is<string[]>(scopes =>
-                    scopes.Length == 1 && scopes[0] == AzureDevOpsConstants.AzureDevOpsDefaultScopes[0]),
+                    scopes.Length == 1 && scopes[0] == AzureDevOpsConstants.Scopes.CodeWrite),
                 It.Is<ServicePrincipalIdentity>(sp => sp.TenantId == tenantId && sp.Id == clientId),
                 CancellationToken.None),
                 Times.Once);
