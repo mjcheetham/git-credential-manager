@@ -11,6 +11,8 @@ namespace GitCredentialManager;
 [JsonSerializable(typeof(ExitMessage))]
 [JsonSerializable(typeof(ChildStartMessage))]
 [JsonSerializable(typeof(ChildExitMessage))]
+[JsonSerializable(typeof(ThreadStartMessage))]
+[JsonSerializable(typeof(ThreadExitMessage))]
 [JsonSerializable(typeof(ErrorMessage))]
 [JsonSerializable(typeof(RegionEnterMessage))]
 [JsonSerializable(typeof(RegionLeaveMessage))]
@@ -413,6 +415,66 @@ public class ChildExitMessage : Trace2Message
     }
 }
 
+public class ThreadStartMessage : Trace2Message
+{
+    public override string ToJson()
+    {
+        return JsonSerializer.Serialize(this, Trace2JsonContext.Default.ThreadStartMessage);
+    }
+
+    public override string ToNormalString()
+    {
+        return BuildNormalString();
+    }
+
+    public override string ToPerformanceString()
+    {
+        return BuildPerformanceString();
+    }
+
+    protected override string BuildPerformanceSpan()
+    {
+        return EmptyPerformanceSpan;
+    }
+
+    protected override string GetEventMessage(Trace2FormatTarget formatTarget)
+    {
+        return Thread;
+    }
+}
+
+public class ThreadExitMessage : Trace2Message
+{
+    [JsonPropertyName("t_rel")]
+    [JsonPropertyOrder(8)]
+    public double RelativeTime { get; set; }
+
+    public override string ToJson()
+    {
+        return JsonSerializer.Serialize(this, Trace2JsonContext.Default.ThreadExitMessage);
+    }
+
+    public override string ToNormalString()
+    {
+        return BuildNormalString();
+    }
+
+    public override string ToPerformanceString()
+    {
+        return BuildPerformanceString();
+    }
+
+    protected override string BuildPerformanceSpan()
+    {
+        return $"|     |           |{BuildTimeSpan(RelativeTime)}|             ";
+    }
+
+    protected override string GetEventMessage(Trace2FormatTarget formatTarget)
+    {
+        return $"elapsed:{RelativeTime}";
+    }
+}
+
 public class ErrorMessage : Trace2Message
 {
     [JsonPropertyName("msg")]
@@ -509,6 +571,7 @@ public class RegionEnterMessage : RegionMessage
 
 public class RegionLeaveMessage : RegionMessage
 {
+    [JsonPropertyName("t_rel")]
     [JsonPropertyOrder(14)]
     public double RelativeTime { get; set; }
 

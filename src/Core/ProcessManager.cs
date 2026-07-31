@@ -14,35 +14,31 @@ public interface IProcessManager
     ///     True to resolve <paramref name="path"/> using the OS shell, false to use as an absolute file path.
     /// </param>
     /// <param name="workingDirectory">Working directory for the new process.</param>
+    /// <param name="class">TRACE2 process class.</param>
     /// <returns><see cref="Process"/> object ready to start.</returns>
-    ChildProcess CreateProcess(string path, string args, bool useShellExecute, string workingDirectory);
+    ChildProcess CreateProcess(string path, string args, bool useShellExecute, string workingDirectory,
+        Trace2ProcessClass @class = Trace2ProcessClass.None);
 
     /// <summary>
     /// Create a process ready to start.
     /// </summary>
     /// <param name="psi">Process start info.</param>
+    /// <param name="class">TRACE2 process class.</param>
     /// <returns><see cref="Process"/> object ready to start.</returns>
-    ChildProcess CreateProcess(ProcessStartInfo psi);
+    ChildProcess CreateProcess(ProcessStartInfo psi, Trace2ProcessClass @class = Trace2ProcessClass.None);
 }
 
 public class ProcessManager : IProcessManager
 {
     private const string SidEnvar = "GIT_TRACE2_PARENT_SID";
 
-    protected readonly ITrace2 Trace2;
-
     public static string Sid { get; internal set; }
 
     public static int Depth { get; internal set; }
 
-    public ProcessManager(ITrace2 trace2)
-    {
-        EnsureArgument.NotNull(trace2, nameof(trace2));
-
-        Trace2 = trace2;
-    }
-
-    public virtual ChildProcess CreateProcess(string path, string args, bool useShellExecute, string workingDirectory)
+    public virtual ChildProcess CreateProcess(
+        string path, string args, bool useShellExecute, string workingDirectory,
+        Trace2ProcessClass @class = Trace2ProcessClass.None)
     {
         var psi = new ProcessStartInfo(path, args)
         {
@@ -53,12 +49,13 @@ public class ProcessManager : IProcessManager
             WorkingDirectory = workingDirectory ?? string.Empty
         };
 
-        return CreateProcess(psi);
+        return CreateProcess(psi, @class);
     }
 
-    public virtual ChildProcess CreateProcess(ProcessStartInfo psi)
+    public virtual ChildProcess CreateProcess(
+        ProcessStartInfo psi, Trace2ProcessClass @class = Trace2ProcessClass.None)
     {
-        return new ChildProcess(Trace2, psi);
+        return new ChildProcess(psi, @class);
     }
 
     /// <summary>
