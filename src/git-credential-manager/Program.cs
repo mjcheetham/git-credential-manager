@@ -43,7 +43,12 @@ namespace GitCredentialManager
         {
             string[] args = (string[])o;
 
-            using (Trace2.CreateThread(nameof(AppMain)))
+            // Do NOT start a new Trace2 thread scope for the AppMain thread.
+            // This is, for all intents of purposes, the logical 'main' thread of the application.
+            // Physically it's a separate thread from the true 'main' thread, but only the
+            // Avalonia initialisation and dispatcher run on the true main thread, which means
+            // all other Trace2 events and regions would be nested under an 'AppMain' thread
+            // for little value.
             using (var context = new CommandContext())
             using (var app = new Application(context))
             {
@@ -58,13 +63,10 @@ namespace GitCredentialManager
                     app.RegisterProvider(new GenericHostProvider(context), HostProviderPriority.Low);
                 }
 
-                using (Trace2.CreateRegion("main", "run"))
-                {
-                    _exitCode = app.RunAsync(args)
-                        .ConfigureAwait(false)
-                        .GetAwaiter()
-                        .GetResult();
-                }
+                _exitCode = app.RunAsync(args)
+                    .ConfigureAwait(false)
+                    .GetAwaiter()
+                    .GetResult();
             }
 
             Dispatcher.MainThread.Shutdown();

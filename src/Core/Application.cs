@@ -124,7 +124,6 @@ namespace GitCredentialManager
                     .Build();
             }
 
-            using IDisposable region = Trace2.CreateRegion("main", "cmd_dispatch");
             return await parser.InvokeAsync(args);
         }
 

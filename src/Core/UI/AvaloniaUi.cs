@@ -63,6 +63,7 @@ namespace GitCredentialManager.UI
                 // This action only returns on our dispatcher shutdown.
                 Dispatcher.MainThread.Post(appCancelToken =>
                 {
+                    var scope = Trace2.CreateRegion("ui", "avn_init");
                     var appBuilder = AppBuilder.Configure<AvaloniaApp>();
 
                     // Set custom rendering options and modes if required
@@ -78,6 +79,7 @@ namespace GitCredentialManager.UI
                         .SetupWithoutStarting();
 
                     appInitialized.Set();
+                    scope.Dispose();
 
                     // Run the application loop (only exit when the dispatcher is shutting down)
                     AvnDispatcher.UIThread.MainLoop(appCancelToken);
@@ -97,6 +99,7 @@ namespace GitCredentialManager.UI
 
         private static Task ShowWindowInternal(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
         {
+            using var _ = Trace2.CreateRegion("ui", "show_window");
             var tcs = new TaskCompletionSource<object>();
             Window window = windowFunc();
             window.DataContext = dataContext;

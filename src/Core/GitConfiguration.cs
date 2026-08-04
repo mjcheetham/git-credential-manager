@@ -535,8 +535,6 @@ namespace GitCredentialManager
 
         public bool TryGet(GitConfigurationLevel level, GitConfigurationType type, string name, out string value)
         {
-            using IDisposable region = Trace2.CreateRegion("git_config", "get");
-
             if (_useCache)
             {
                 EnsureCacheLoaded(type);
@@ -550,6 +548,7 @@ namespace GitCredentialManager
             }
 
             // Fall back to individual git config command if cache not available
+            using var _ = Trace2.CreateRegion("git_config", "get");
             string levelArg = GetLevelFilterArg(level);
             string typeArg = GetCanonicalizeTypeArg(type);
             using (ChildProcess git = _git.CreateProcess($"config --null {levelArg} {typeArg} {QuoteCmdArg(name)}"))
