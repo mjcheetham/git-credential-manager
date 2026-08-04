@@ -41,10 +41,9 @@ namespace GitCredentialManager
 
         private static void AppMain(object o)
         {
-            var start = Trace2.WriteThreadStart();
-
             string[] args = (string[])o;
 
+            using (Trace2.CreateThread(nameof(AppMain)))
             using (var context = new CommandContext())
             using (var app = new Application(context))
             {
@@ -66,10 +65,9 @@ namespace GitCredentialManager
                         .GetAwaiter()
                         .GetResult();
                 }
-
-                Trace2.WriteThreadExit(start);
-                Dispatcher.MainThread.Shutdown();
             }
+
+            Dispatcher.MainThread.Shutdown();
         }
 
         // Required for Avalonia designer

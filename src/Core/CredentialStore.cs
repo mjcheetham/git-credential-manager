@@ -27,24 +27,28 @@ namespace GitCredentialManager
 
         public IList<string> GetAccounts(string service)
         {
+            using var _  = Trace2.CreateRegion("cred_store", "get_accounts");
             EnsureBackingStore();
             return _backingStore.GetAccounts(service);
         }
 
         public ICredential Get(string service, string account)
         {
+            using var _  = Trace2.CreateRegion("cred_store", "get");
             EnsureBackingStore();
             return _backingStore.Get(service, account);
         }
 
         public void AddOrUpdate(string service, string account, string secret)
         {
+            using var _  = Trace2.CreateRegion("cred_store", "add");
             EnsureBackingStore();
             _backingStore.AddOrUpdate(service, account, secret);
         }
 
         public bool Remove(string service, string account)
         {
+            using var _  = Trace2.CreateRegion("cred_store", "remove");
             EnsureBackingStore();
             return _backingStore.Remove(service, account);
         }
@@ -62,6 +66,7 @@ namespace GitCredentialManager
             string credStoreName = _context.Settings.CredentialBackingStore?.ToLowerInvariant()
                                 ?? GetDefaultStore();
 
+            using var _ = Trace2.CreateRegion("cred_store", "init");
             switch (credStoreName)
             {
                 case StoreNames.WindowsCredentialManager:
