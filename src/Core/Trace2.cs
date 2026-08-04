@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Pipes;
-using System.Text;
 using System.Text.Json.Serialization;
 using System.Threading;
 
@@ -121,17 +120,17 @@ internal class RegionScope : DisposableObject
 /// </summary>
 public static class Trace2
 {
-    private static readonly object WritersLock = new object();
-    private static readonly List<ITrace2Writer> Writers = new List<ITrace2Writer>();
-    private static readonly AsyncLocal<int> RegionNesting = new AsyncLocal<int>();
+    internal const string SidEnvar = "GIT_TRACE2_PARENT_SID";
 
+    private static readonly Lock WritersLock = new();
+    private static readonly List<ITrace2Writer> Writers = new();
+    private static readonly AsyncLocal<int> RegionNesting = new();
+
+    private static bool _initialized;
     private static DateTimeOffset _applicationStartTime;
     private static Trace2Settings _settings;
     private static string _sid;
-
-    private static bool _initialized;
-    // Increment with each new child process that is tracked
-    private static int _childProcCounter;
+    private static int _depth;
 
     public static void Initialize(
         string[] args,
@@ -144,15 +143,52 @@ public static class Trace2
         }
 
         _applicationStartTime = DateTimeOffset.UtcNow;
-        ProcessManager.CreateSid();
+        _sid = CreateSid();
+        Environment.SetEnvironmentVariable(SidEnvar, _sid);
+
+        _depth = GetProcessDepth(_sid);
         _settings = ReadSettings();
-        _sid = ProcessManager.Sid;
 
         InitializeWriters();
         _initialized = true;
 
         string appPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
         Start(appPath, args, filePath, lineNumber);
+    }
+
+    /// <summary>
+    /// Create the TRACE2 "session id" (sid) for this process.
+    /// </summary>
+    internal static string CreateSid()
+    {
+        // Use trim to ensure no accidental leading or trailing slashes
+        var sid = Environment.GetEnvironmentVariable(SidEnvar)?.Trim('/');
+
+        // If we are the root process we must create our own 'root' SID,
+        // otherwise append a new UUID to the existing root.
+        sid = string.IsNullOrEmpty(sid)
+            ? Guid.NewGuid().ToString("D")
+            : $"{sid}/{Guid.NewGuid():D}";
+
+        return sid;
+    }
+
+    /// <summary>
+    /// Get "depth" of current process relative to top-level GCM process.
+    /// </summary>
+    /// <returns>Depth of current process.</returns>
+    internal static int GetProcessDepth(string sid)
+    {
+        const char processSeparator = '/';
+
+        int count = 0;
+        for (var i = 0; i < sid.Length; i++) // use for-loop to avoid IEnumerable overhead from a foreach-loop
+        {
+            if (sid[i] == processSeparator)
+                count++;
+        }
+
+        return count;
     }
 
     private static void Start(string appPath,
@@ -180,6 +216,7 @@ public static class Trace2
     }
 
     public static DateTimeOffset WriteChildStart(
+        int childId,
         Trace2ProcessClass processClass,
         bool useShell,
         string appName,
@@ -189,17 +226,8 @@ public static class Trace2
     {
         var startTime = DateTimeOffset.UtcNow;
 
-        // Some child processes are started before TRACE2 can be initialized.
-        // Since certain dependencies are not available until initialization,
-        // we must immediately return if this method is invoked prior to
-        // initialization.
-        if (!_initialized)
-        {
-            return startTime;
-        }
-
         // Always add name of the application the process is executing
-        var procArgs = new List<string>()
+        var procArgs = new List<string>
         {
             Path.GetFileName(appName)
         };
@@ -210,7 +238,7 @@ public static class Trace2
             procArgs.AddRange(argv.Split(' '));
         }
 
-        WriteMessage(new ChildStartMessage()
+        WriteMessage(new ChildStartMessage
         {
             Event = Trace2Event.ChildStart,
             Sid = _sid,
@@ -218,49 +246,43 @@ public static class Trace2
             Thread = BuildThreadName(),
             File = Path.GetFileName(filePath),
             Line = lineNumber,
-            Id = ++_childProcCounter,
+            Id = childId,
             Classification = processClass,
             UseShell = useShell,
             Argv = procArgs,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
-            Depth = ProcessManager.Depth,
+            Depth = _depth,
         });
         return startTime;
     }
 
     public static void WriteChildExit(
+        int childId,
         DateTimeOffset startTime,
         int pid,
         int code,
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
         [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0) =>
-        WriteChildExit(DateTimeOffset.UtcNow - startTime, pid, code, filePath, lineNumber);
+        WriteChildExit(childId, DateTimeOffset.UtcNow - startTime, pid, code, filePath, lineNumber);
 
     public static void WriteChildExit(
+        int childId,
         TimeSpan relativeTime,
         int pid,
         int code,
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
         [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0) =>
-        WriteChildExit(relativeTime.TotalSeconds, pid, code, filePath, lineNumber);
+        WriteChildExit(childId, relativeTime.TotalSeconds, pid, code, filePath, lineNumber);
 
     public static void WriteChildExit(
+        int childId,
         double relativeTime,
         int pid,
         int code,
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
         [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
-        // Some child processes are started before TRACE2 can be initialized.
-        // Since certain dependencies are not available until initialization,
-        // we must immediately return if this method is invoked prior to
-        // initialization.
-        if (!_initialized)
-        {
-            return;
-        }
-
-        WriteMessage(new ChildExitMessage()
+        WriteMessage(new ChildExitMessage
         {
             Event = Trace2Event.ChildExit,
             Sid = _sid,
@@ -268,12 +290,12 @@ public static class Trace2
             Thread = BuildThreadName(),
             File = Path.GetFileName(filePath),
             Line = lineNumber,
-            Id = _childProcCounter,
+            Id = childId,
             Pid = pid,
             Code = code,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
             RelativeTime = relativeTime,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
@@ -283,16 +305,7 @@ public static class Trace2
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
         [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
-        // It is possible for an error to be thrown before TRACE2 can be initialized.
-        // Since certain dependencies are not available until initialization,
-        // we must immediately return if this method is invoked prior to
-        // initialization.
-        if (!_initialized)
-        {
-            return;
-        }
-
-        WriteMessage(new ErrorMessage()
+        WriteMessage(new ErrorMessage
         {
             Event = Trace2Event.Error,
             Sid = _sid,
@@ -302,7 +315,7 @@ public static class Trace2
             Line = lineNumber,
             Message = errorMessage,
             ParameterizedMessage = parameterizedMessage ?? errorMessage,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
@@ -311,7 +324,7 @@ public static class Trace2
         [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
         var startTime = DateTimeOffset.UtcNow;
-        WriteMessage(new ThreadStartMessage()
+        WriteMessage(new ThreadStartMessage
         {
             Event = Trace2Event.ThreadStart,
             Sid = _sid,
@@ -319,7 +332,7 @@ public static class Trace2
             Thread = BuildThreadName(),
             File = Path.GetFileName(filePath),
             Line = lineNumber,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
         return startTime;
     }
@@ -341,7 +354,7 @@ public static class Trace2
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
         [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
-        WriteMessage(new ThreadExitMessage()
+        WriteMessage(new ThreadExitMessage
         {
             Event = Trace2Event.ThreadExit,
             Sid = _sid,
@@ -350,7 +363,7 @@ public static class Trace2
             File = Path.GetFileName(filePath),
             Line = lineNumber,
             RelativeTime = relativeTime,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
@@ -375,7 +388,7 @@ public static class Trace2
         string filePath,
         int lineNumber)
     {
-        WriteMessage(new RegionEnterMessage()
+        WriteMessage(new RegionEnterMessage
         {
             Event = Trace2Event.RegionEnter,
             Sid = _sid,
@@ -388,7 +401,7 @@ public static class Trace2
             Line = lineNumber,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
             Nesting = nesting,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
@@ -402,7 +415,7 @@ public static class Trace2
         string filePath,
         int lineNumber)
     {
-        WriteMessage(new RegionLeaveMessage()
+        WriteMessage(new RegionLeaveMessage
         {
             Event = Trace2Event.RegionLeave,
             Sid = _sid,
@@ -416,7 +429,7 @@ public static class Trace2
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
             RelativeTime = relativeTime,
             Nesting = nesting,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
@@ -574,7 +587,7 @@ public static class Trace2
     {
         EnsureArgument.NotNull(gcmVersion, nameof(gcmVersion));
 
-        WriteMessage(new VersionMessage()
+        WriteMessage(new VersionMessage
         {
             Event = Trace2Event.Version,
             Sid = _sid,
@@ -594,7 +607,7 @@ public static class Trace2
         int lineNumber)
     {
         // Prepend GCM exe to arguments
-        var argv = new List<string>()
+        var argv = new List<string>
         {
             Path.GetFileName(appPath),
         };
@@ -604,7 +617,7 @@ public static class Trace2
             argv.AddRange(args);
         }
 
-        WriteMessage(new StartMessage()
+        WriteMessage(new StartMessage
         {
             Event = Trace2Event.Start,
             Sid = _sid,
@@ -621,7 +634,7 @@ public static class Trace2
     {
         EnsureArgument.NotNull(code, nameof(code));
 
-        WriteMessage(new ExitMessage()
+        WriteMessage(new ExitMessage
         {
             Event = Trace2Event.Exit,
             Sid = _sid,
@@ -672,26 +685,30 @@ public static class Trace2
 
     private static string BuildThreadName()
     {
+        int id = Environment.CurrentManagedThreadId;
+        string name = Thread.CurrentThread.Name;
+
         // If this is the entry thread, call it "main", per Trace2 convention
-        if (Thread.CurrentThread.ManagedThreadId == 1)
+        if (id == 1)
         {
             return "main";
         }
 
-        // If this is a thread pool thread, name it as such
+        // If this is a thread pool thread then name it as such
         if (Thread.CurrentThread.IsThreadPoolThread)
         {
-            return $"thread_pool_{Environment.CurrentManagedThreadId}";
+            name = "thread_pool";
         }
 
-        // Otherwise, if the thread is named, use it!
-        if (!string.IsNullOrEmpty(Thread.CurrentThread.Name))
+        // If we don't have a name for this thread then give it a generic name
+        if (string.IsNullOrEmpty(name))
         {
-            return Thread.CurrentThread.Name;
+            name = "unknown";
         }
 
-        // We don't know what this thread is!
-        return string.Empty;
+        // Threads should be named "th%d:%s" per Trace2 convention,
+        // where %d is the ID and %s is the thread name.
+        return $"th{id}:{name}";
     }
 }
 

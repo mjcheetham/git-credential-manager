@@ -1,11 +1,17 @@
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 
 namespace GitCredentialManager;
 
 public class ChildProcess : DisposableObject
 {
+    // Increment with each new child process that is tracked
+    private static int _nextTrace2Id;
+
+    // The child process ID for Trace2 for this instance
+    private readonly int _trace2Id;
     private readonly Trace2ProcessClass _processClass;
     private DateTimeOffset _startTime;
 
@@ -26,8 +32,9 @@ public class ChildProcess : DisposableObject
 
     public ChildProcess(ProcessStartInfo startInfo, Trace2ProcessClass @class = Trace2ProcessClass.None)
     {
+        _trace2Id = Interlocked.Increment(ref _nextTrace2Id);
         _processClass = @class;
-        Process = new Process()
+        Process = new Process
         {
             StartInfo = startInfo,
             EnableRaisingEvents = true
@@ -39,6 +46,7 @@ public class ChildProcess : DisposableObject
     {
         ThrowIfDisposed();
         _startTime = Trace2.WriteChildStart(
+            _trace2Id,
             _processClass,
             Process.StartInfo.UseShellExecute,
             Process.StartInfo.FileName,
@@ -71,10 +79,7 @@ public class ChildProcess : DisposableObject
             // we get an error!
             var exitTime = p.ExitTime.ToUniversalTime();
             var relativeTime = exitTime - _startTime;
-            Trace2.WriteChildExit(
-                relativeTime,
-                p.Id,
-                p.ExitCode);
+            Trace2.WriteChildExit(_trace2Id, relativeTime, p.Id, p.ExitCode);
         }
     }
 }

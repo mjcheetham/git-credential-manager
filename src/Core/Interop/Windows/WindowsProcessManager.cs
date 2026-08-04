@@ -11,7 +11,7 @@ public class WindowsProcessManager : ProcessManager
     }
 
     public override ChildProcess CreateProcess(string path, string args, bool useShellExecute, string workingDirectory,
-        Trace2ProcessClass @class)
+        Trace2ProcessClass @class = Trace2ProcessClass.None)
     {
         // If we're asked to start a WSL executable we must launch via the wsl.exe command tool
         if (!useShellExecute && WslUtils.IsWslPath(path))
