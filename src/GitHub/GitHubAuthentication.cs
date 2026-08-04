@@ -73,6 +73,7 @@ namespace GitHub
         public async Task<string> SelectAccountAsync(Uri targetUri, IEnumerable<string> accounts)
         {
             using var _ = Trace2.CreateRegion("github", "select_account");
+            Trace2.WriteData("github", "thread/id", Thread.CurrentThread.ManagedThreadId);
             ThrowIfUserInteractionDisabled();
 
             if (Context.Settings.IsGuiPromptsEnabled && Context.SessionManager.IsDesktopSession)
@@ -110,7 +111,10 @@ namespace GitHub
                     viewModel.EnterpriseUrl = targetUri.ToString();
                 }
 
-                await AvaloniaUi.ShowViewAsync<SelectAccountView>(viewModel, GetParentWindowHandle(), CancellationToken.None);
+                using (Trace2.CreateRegion("FOO", "BAR"))
+                {
+                    await AvaloniaUi.ShowViewAsync<SelectAccountView>(viewModel, GetParentWindowHandle(), CancellationToken.None);
+                }
 
                 ThrowIfWindowCancelled(viewModel);
 

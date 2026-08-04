@@ -63,23 +63,26 @@ namespace GitCredentialManager.UI
                 // This action only returns on our dispatcher shutdown.
                 Dispatcher.MainThread.Post(appCancelToken =>
                 {
-                    var scope = Trace2.CreateRegion("ui", "avn_init");
-                    var appBuilder = AppBuilder.Configure<AvaloniaApp>();
-
-                    // Set custom rendering options and modes if required
-                    if (PlatformUtils.IsWindows() && _win32SoftwareRendering)
+                    using (Trace2.CreateRegion("ui", "avn_init"))
                     {
-                        appBuilder.With(new Win32PlatformOptions
-                            { RenderingMode = new[] { Win32RenderingMode.Software } });
+                        Trace2.WriteData("ui", "thread/id", Thread.CurrentThread.ManagedThreadId);
+
+                        var appBuilder = AppBuilder.Configure<AvaloniaApp>();
+
+                        // Set custom rendering options and modes if required
+                        if (PlatformUtils.IsWindows() && _win32SoftwareRendering)
+                        {
+                            appBuilder.With(new Win32PlatformOptions
+                                { RenderingMode = new[] { Win32RenderingMode.Software } });
+                        }
+
+                        appBuilder
+                            .UsePlatformDetect()
+                            .LogToTrace()
+                            .SetupWithoutStarting();
+
+                        appInitialized.Set();
                     }
-
-                    appBuilder
-                        .UsePlatformDetect()
-                        .LogToTrace()
-                        .SetupWithoutStarting();
-
-                    appInitialized.Set();
-                    scope.Dispose();
 
                     // Run the application loop (only exit when the dispatcher is shutting down)
                     AvnDispatcher.UIThread.MainLoop(appCancelToken);
@@ -100,6 +103,8 @@ namespace GitCredentialManager.UI
         private static Task ShowWindowInternal(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
         {
             using var _ = Trace2.CreateRegion("ui", "show_window");
+            Trace2.WriteData("ui", "thread/id", Thread.CurrentThread.ManagedThreadId);
+
             var tcs = new TaskCompletionSource<object>();
             Window window = windowFunc();
             window.DataContext = dataContext;
