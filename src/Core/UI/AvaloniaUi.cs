@@ -95,7 +95,16 @@ namespace GitCredentialManager.UI
 
             // Post the window action to the Avalonia dispatcher (which should be running)
             return AvnDispatcher.UIThread.InvokeAsync(
-                () => ShowWindowInternal(windowFunc, dataContext, parentHandle, ct),
+                () =>
+                {
+                    // Avalonia flows the caller's ExecutionContext onto the UI
+                    // thread, so restore the main thread's Trace2 context here
+                    // so that regions are attributed to the correct thread.
+                    using (Trace2.UseMainContext())
+                    {
+                        return ShowWindowInternal(windowFunc, dataContext, parentHandle, ct);
+                    }
+                },
                 DispatcherPriority.Send
             );
         }

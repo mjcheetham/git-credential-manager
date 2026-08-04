@@ -124,6 +124,28 @@ internal class ThreadScope : DisposableObject
     }
 }
 
+internal class ContextScope : DisposableObject
+{
+    private readonly Trace2ExecutionContext _context;
+    private readonly Trace2ExecutionContext _previousContext;
+
+    public ContextScope(Trace2ExecutionContext context)
+    {
+        _context = context;
+        _previousContext = Trace2.GetCurrentContext();
+        Trace2.SetContext(_context);
+    }
+
+    protected override void ReleaseManagedResources()
+    {
+        Debug.Assert(
+            ReferenceEquals(Trace2.GetCurrentContext(), _context),
+            "Trace2 contexts must be disposed in LIFO order.");
+
+        Trace2.SetContext(_previousContext);
+    }
+}
+
 internal class RegionScope : DisposableObject
 {
     private readonly Trace2ExecutionContext _context;
@@ -295,6 +317,14 @@ public static class Trace2
         // ThreadPool API is used, or work runs on a manually created thread without
         // creating a new Trace2 thread scope.
         return context ?? _mainContext;
+    }
+
+    internal static IDisposable UseMainContext()
+    {
+        if (!_initialized)
+            return NoOpDisposable.Instance;
+
+        return new ContextScope(_mainContext);
     }
 
     private static void Start(string appPath,
