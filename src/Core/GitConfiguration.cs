@@ -390,7 +390,8 @@ namespace GitCredentialManager
                 return;
             }
 
-            using IDisposable region = Trace2.CreateRegion("git_config", "load");
+            using IDisposable region = Trace2.CreateRegion("git_config", "load_cache");
+            Trace2.WriteData("git_config", "type", type.ToString().ToLowerInvariant());
 
             if (cache == null)
             {
@@ -452,6 +453,7 @@ namespace GitCredentialManager
         public void Enumerate(GitConfigurationLevel level, GitConfigurationEnumerationCallback cb)
         {
             using IDisposable region = Trace2.CreateRegion("git_config", "enumerate");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
 
             if (_useCache)
             {
@@ -549,6 +551,8 @@ namespace GitCredentialManager
 
             // Fall back to individual git config command if cache not available
             using var _ = Trace2.CreateRegion("git_config", "get");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
+            Trace2.WriteData("git_config", "type", type.ToString().ToLowerInvariant());
             string levelArg = GetLevelFilterArg(level);
             string typeArg = GetCanonicalizeTypeArg(type);
             using (ChildProcess git = _git.CreateProcess($"config --null {levelArg} {typeArg} {QuoteCmdArg(name)}"))
@@ -587,6 +591,7 @@ namespace GitCredentialManager
         public void Set(GitConfigurationLevel level, string name, string value)
         {
             using IDisposable region = Trace2.CreateRegion("git_config", "set");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
 
             EnsureSpecificLevel(level);
 
@@ -611,6 +616,7 @@ namespace GitCredentialManager
         public void Add(GitConfigurationLevel level, string name, string value)
         {
             using IDisposable region = Trace2.CreateRegion("git_config", "add");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
 
             EnsureSpecificLevel(level);
 
@@ -635,6 +641,7 @@ namespace GitCredentialManager
         public void Unset(GitConfigurationLevel level, string name)
         {
             using IDisposable region = Trace2.CreateRegion("git_config", "unset");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
 
             EnsureSpecificLevel(level);
 
@@ -660,6 +667,8 @@ namespace GitCredentialManager
         public IEnumerable<string> GetAll(GitConfigurationLevel level, GitConfigurationType type, string name)
         {
             using IDisposable region = Trace2.CreateRegion("git_config", "get_all");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
+            Trace2.WriteData("git_config", "type", type.ToString().ToLowerInvariant());
 
             if (_useCache)
             {
@@ -717,6 +726,8 @@ namespace GitCredentialManager
         public IEnumerable<string> GetRegex(GitConfigurationLevel level, GitConfigurationType type, string nameRegex, string valueRegex)
         {
             using IDisposable region = Trace2.CreateRegion("git_config", "get_regex");
+            Trace2.WriteData("git_config", "scope", level.ToString().ToLowerInvariant());
+            Trace2.WriteData("git_config", "type", type.ToString().ToLowerInvariant());
 
             string levelArg = GetLevelFilterArg(level);
             string typeArg = GetCanonicalizeTypeArg(type);

@@ -16,6 +16,7 @@ namespace GitCredentialManager;
 [JsonSerializable(typeof(ErrorMessage))]
 [JsonSerializable(typeof(RegionEnterMessage))]
 [JsonSerializable(typeof(RegionLeaveMessage))]
+[JsonSerializable(typeof(DataMessage))]
 [JsonSourceGenerationOptions(
     UseStringEnumConverter = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
@@ -523,7 +524,6 @@ public abstract class RegionMessage : Trace2Message
     // See https://git-scm.com/docs/api-trace2#Documentation/technical/api-trace2.txt-codeltrepo-idgtcode for details.
     public int Repo { get; set; } = 1;
 
-    // TODO: Remove default value if support for nested regions is implemented.
     [JsonPropertyName("nesting")]
     [JsonPropertyOrder(10)]
     public int Nesting { get; set; } = 1;
@@ -598,5 +598,61 @@ public class RegionLeaveMessage : RegionMessage
     protected override string GetEventMessage(Trace2FormatTarget formatTarget)
     {
         return Message;
+    }
+}
+
+public class DataMessage : Trace2Message
+{
+    [JsonPropertyName("t_abs")]
+    [JsonPropertyOrder(8)]
+    public double ElapsedTime { get; set; }
+
+    [JsonPropertyName("t_rel")]
+    [JsonPropertyOrder(9)]
+    public double RelativeTime { get; set; }
+
+    [JsonPropertyName("repo")]
+    [JsonPropertyOrder(10)]
+    public int Repo { get; set; } = 1;
+
+    [JsonPropertyName("nesting")]
+    [JsonPropertyOrder(11)]
+    public int Nesting { get; set; }
+
+    [JsonPropertyName("category")]
+    [JsonPropertyOrder(12)]
+    public string Category { get; set; }
+
+    [JsonPropertyName("key")]
+    [JsonPropertyOrder(13)]
+    public string Key { get; set; }
+
+    [JsonPropertyName("value")]
+    [JsonPropertyOrder(14)]
+    public string Value { get; set; }
+
+    public override string ToJson()
+    {
+        return JsonSerializer.Serialize(this, Trace2JsonContext.Default.DataMessage);
+    }
+
+    public override string ToNormalString()
+    {
+        return BuildNormalString();
+    }
+
+    public override string ToPerformanceString()
+    {
+        return BuildPerformanceString();
+    }
+
+    protected override string BuildPerformanceSpan()
+    {
+        return $"|{BuildRepoSpan(Repo)}|{BuildTimeSpan(ElapsedTime)}|{BuildTimeSpan(RelativeTime)}|{BuildCategorySpan(Category)}";
+    }
+
+    protected override string GetEventMessage(Trace2FormatTarget formatTarget)
+    {
+        return $"{Key}:{Value}";
     }
 }

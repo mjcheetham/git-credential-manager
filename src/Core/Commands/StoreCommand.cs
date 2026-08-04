@@ -16,6 +16,7 @@ namespace GitCredentialManager.Commands
 
         protected override Task ExecuteInternalAsync(GitRequest request, IHostProvider provider)
         {
+            using var _ = Trace2.CreateRegion("git_cmd_store", "provider_store");
             return provider.StoreCredentialAsync(request);
         }
 

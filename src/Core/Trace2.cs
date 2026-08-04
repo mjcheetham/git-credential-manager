@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
@@ -35,6 +36,8 @@ public enum Trace2Event
     ThreadStart = 8,
     [JsonStringEnumMemberName("thread_exit")]
     ThreadExit = 9,
+    [JsonStringEnumMemberName("data")]
+    Data = 10,
 }
 
 /// <summary>
@@ -74,9 +77,13 @@ internal class PerformanceFormatSpan
     public int EndPadding { get; set; }
 }
 
-internal class Trace2ExecutionContext(string threadName)
+internal class Trace2ExecutionContext(
+    string threadName,
+    DateTimeOffset? startTime = null)
 {
     public AsyncLocal<int> RegionNesting { get; } = new();
+    public AsyncLocal<DateTimeOffset?> RegionStartTime { get; } = new();
+    public DateTimeOffset StartTime { get; } = startTime ?? DateTimeOffset.UtcNow;
     public string ThreadName { get; } = threadName;
 }
 
@@ -126,6 +133,7 @@ internal class RegionScope : DisposableObject
     private readonly int _lineNumber;
     private readonly string _message;
     private readonly int _nesting;
+    private readonly DateTimeOffset? _previousRegionStartTime;
     private readonly DateTimeOffset _startTime;
 
     internal RegionScope(
@@ -146,6 +154,7 @@ internal class RegionScope : DisposableObject
         // Increment nesting level as we enter the region
         _nesting = _context.RegionNesting.Value + 1;
         _context.RegionNesting.Value = _nesting;
+        _previousRegionStartTime = _context.RegionStartTime.Value;
 
         _startTime = Trace2.WriteRegionEnter(
             _category,
@@ -155,6 +164,7 @@ internal class RegionScope : DisposableObject
             _nesting,
             _filePath,
             _lineNumber);
+        _context.RegionStartTime.Value = _startTime;
     }
 
     protected override void ReleaseManagedResources()
@@ -179,6 +189,7 @@ internal class RegionScope : DisposableObject
 
             // Decrement the nesting level
             _context.RegionNesting.Value = Math.Max(0, _nesting - 1);
+            _context.RegionStartTime.Value = _previousRegionStartTime;
         }
     }
 }
@@ -226,7 +237,7 @@ public static class Trace2
         InitializeWriters();
 
         // The main thread context is ambiently created with the process and Trace2 init
-        _mainContext = new Trace2ExecutionContext(MainThreadName);
+        _mainContext = new Trace2ExecutionContext(MainThreadName, _applicationStartTime);
         ThreadContext.Value = _mainContext;
 
         _initialized = true;
@@ -546,6 +557,73 @@ public static class Trace2
 
         Trace2ExecutionContext context = GetCurrentContext();
         return new RegionScope(context, category, label, filePath, lineNumber, message);
+    }
+
+    /// <summary>
+    /// Writes a thread- and region-local TRACE2 data event.
+    /// </summary>
+    /// <param name="category">The broad category of the data.</param>
+    /// <param name="key">The name of the data value.</param>
+    /// <param name="value">The data value.</param>
+    /// <param name="filePath">The source file writing the event.</param>
+    /// <param name="lineNumber">The source line writing the event.</param>
+    public static void WriteData(
+        string category,
+        string key,
+        string value,
+        [CallerFilePath] string filePath = "",
+        [CallerLineNumber] int lineNumber = 0)
+    {
+        if (!_initialized) return;
+
+        EnsureArgument.NotNullOrWhiteSpace(category, nameof(category));
+        EnsureArgument.NotNullOrWhiteSpace(key, nameof(key));
+
+        value ??= string.Empty;
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Trace2ExecutionContext context = GetCurrentContext();
+        DateTimeOffset relativeStart = context.RegionStartTime.Value ?? context.StartTime;
+
+        WriteMessage(new DataMessage
+        {
+            Event = Trace2Event.Data,
+            Sid = _sid,
+            Time = now,
+            Thread = context.ThreadName,
+            File = Path.GetFileName(filePath),
+            Line = lineNumber,
+            ElapsedTime = (now - _applicationStartTime).TotalSeconds,
+            RelativeTime = (now - relativeStart).TotalSeconds,
+            Nesting = context.RegionNesting.Value + 1,
+            Category = category,
+            Key = key,
+            Value = value,
+            Depth = _depth
+        });
+    }
+
+    /// <summary>
+    /// Writes a thread- and region-local integer TRACE2 data event.
+    /// </summary>
+    /// <param name="category">The broad category of the data.</param>
+    /// <param name="key">The name of the data value.</param>
+    /// <param name="value">The data value.</param>
+    /// <param name="filePath">The source file writing the event.</param>
+    /// <param name="lineNumber">The source line writing the event.</param>
+    public static void WriteData(
+        string category,
+        string key,
+        long value,
+        [CallerFilePath] string filePath = "",
+        [CallerLineNumber] int lineNumber = 0)
+    {
+        WriteData(
+            category,
+            key,
+            value.ToString(CultureInfo.InvariantCulture),
+            filePath,
+            lineNumber);
     }
 
     internal static DateTimeOffset WriteRegionEnter(

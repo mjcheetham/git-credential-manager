@@ -62,12 +62,17 @@ namespace GitCredentialManager
                 return;
             }
 
-            string ns = _context.Settings.CredentialNamespace;
-            string credStoreName = _context.Settings.CredentialBackingStore?.ToLowerInvariant()
-                                ?? GetDefaultStore();
-
             using var _ = Trace2.CreateRegion("cred_store", "init");
-            switch (credStoreName)
+
+            string ns = _context.Settings.CredentialNamespace;
+            string credStoreName = _context.Settings.CredentialBackingStore?.ToLowerInvariant();
+            string defaultStore = GetDefaultStore();
+
+            Trace2.WriteData("cred_store", "store/configured", credStoreName);
+            Trace2.WriteData("cred_store", "store/default", defaultStore);
+            Trace2.WriteData("cred_store", "store/namespace", ns);
+
+            switch (credStoreName ?? defaultStore)
             {
                 case StoreNames.WindowsCredentialManager:
                     ValidateWindowsCredentialManager();
