@@ -138,12 +138,15 @@ namespace GitHub
         public async Task<AuthenticationPromptResult> GetAuthenticationAsync(Uri targetUri, string userName, AuthenticationModes modes)
         {
             using var _ = Trace2.CreateRegion("github", "get_auth");
+            Trace2.WriteData("github", "modes/initial", modes.ToString());
 
             // If we cannot start a browser then don't offer the option
             if (!Context.SessionManager.IsWebBrowserAvailable)
             {
                 modes = modes & ~AuthenticationModes.Browser;
             }
+
+            Trace2.WriteData("github", "modes/available", modes.ToString());
 
             // We need at least one mode!
             if (modes == AuthenticationModes.None)

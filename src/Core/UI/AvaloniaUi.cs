@@ -59,11 +59,13 @@ namespace GitCredentialManager.UI
 
                 var appInitialized = new ManualResetEventSlim();
 
-                // Fire and forget the Avalonia app main loop over to our dispatcher (running on the main/entry thread).
-                // This action only returns on our dispatcher shutdown.
-                Dispatcher.MainThread.Post(appCancelToken =>
+                // Keep the trace region to outside the dispatcher's lambda so we can attribute the
+                // UI init cost to the caller's thread, rather than the main thread.
+                using (Trace2.CreateRegion("ui", "avn_init"))
                 {
-                    using (Trace2.CreateRegion("ui", "avn_init"))
+                    // Fire and forget the Avalonia app main loop over to our dispatcher (running on the main/entry thread).
+                    // This action only returns on our dispatcher shutdown.
+                    Dispatcher.MainThread.Post(appCancelToken =>
                     {
                         var appBuilder = AppBuilder.Configure<AvaloniaApp>();
 
@@ -81,29 +83,20 @@ namespace GitCredentialManager.UI
                             .SetupWithoutStarting();
 
                         appInitialized.Set();
-                    }
 
-                    // Run the application loop (only exit when the dispatcher is shutting down)
-                    AvnDispatcher.UIThread.MainLoop(appCancelToken);
-                });
+                        // Run the application loop (only exit when the dispatcher is shutting down)
+                        AvnDispatcher.UIThread.MainLoop(appCancelToken);
+                    });
 
-                // Wait for the action posted above to be dequeued from the dispatcher's job queue
-                // and for the Avalonia framework (and their dispatcher) to be initialized.
-                appInitialized.Wait();
+                    // Wait for the action posted above to be dequeued from the dispatcher's job queue
+                    // and for the Avalonia framework (and their dispatcher) to be initialized.
+                    appInitialized.Wait();
+                }
             }
 
             // Post the window action to the Avalonia dispatcher (which should be running)
             return AvnDispatcher.UIThread.InvokeAsync(
-                () =>
-                {
-                    // Avalonia flows the caller's ExecutionContext onto the UI
-                    // thread, so restore the main thread's Trace2 context here
-                    // so that regions are attributed to the correct thread.
-                    using (Trace2.UseMainContext())
-                    {
-                        return ShowWindowInternal(windowFunc, dataContext, parentHandle, ct);
-                    }
-                },
+                () => ShowWindowInternal(windowFunc, dataContext, parentHandle, ct),
                 DispatcherPriority.Send
             );
         }
