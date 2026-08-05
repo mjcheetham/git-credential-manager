@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading;
 
@@ -38,6 +39,12 @@ public enum Trace2Event
     ThreadExit = 9,
     [JsonStringEnumMemberName("data")]
     Data = 10,
+    [JsonStringEnumMemberName("cmd_name")]
+    CommandName = 11,
+    [JsonStringEnumMemberName("cmd_mode")]
+    CommandMode = 12,
+    [JsonStringEnumMemberName("data_json")]
+    DataJson = 13,
 }
 
 /// <summary>
@@ -222,6 +229,7 @@ internal class RegionScope : DisposableObject
 public static class Trace2
 {
     internal const string SidEnvar = "GIT_TRACE2_PARENT_SID";
+    internal const string ParentNameEnvar = "GIT_TRACE2_PARENT_NAME";
     private const string MainThreadName = "main";
 
     private static readonly Lock WritersLock = new();
@@ -351,6 +359,74 @@ public static class Trace2
 
         WriteExit(exitCode, filePath, lineNumber);
         DisposeWriters();
+    }
+
+    /// <summary>
+    /// Writes the canonical name of the command being run.
+    /// </summary>
+    /// <param name="name">The canonical command name.</param>
+    /// <param name="filePath">The source file writing the event.</param>
+    /// <param name="lineNumber">The source line writing the event.</param>
+    /// <remarks>
+    /// The command hierarchy is inherited from the parent process and extended
+    /// for child processes through <c>GIT_TRACE2_PARENT_NAME</c>.
+    /// </remarks>
+    public static void WriteCommandName(
+        string name,
+        [CallerFilePath] string filePath = "",
+        [CallerLineNumber] int lineNumber = 0)
+    {
+        if (!_initialized) return;
+
+        EnsureArgument.NotNullOrWhiteSpace(name, nameof(name));
+
+        string parentName = Environment.GetEnvironmentVariable(ParentNameEnvar);
+        string hierarchy = string.IsNullOrEmpty(parentName)
+            ? name
+            : $"{parentName}/{name}";
+
+        Environment.SetEnvironmentVariable(ParentNameEnvar, hierarchy);
+
+        WriteMessage(new CommandNameMessage
+        {
+            Event = Trace2Event.CommandName,
+            Sid = _sid,
+            Time = DateTimeOffset.UtcNow,
+            Thread = GetCurrentContext().ThreadName,
+            File = Path.GetFileName(filePath),
+            Line = lineNumber,
+            Name = name,
+            Hierarchy = hierarchy,
+            Depth = _depth
+        });
+    }
+
+    /// <summary>
+    /// Writes the variant or mode of the command being run.
+    /// </summary>
+    /// <param name="mode">The command mode.</param>
+    /// <param name="filePath">The source file writing the event.</param>
+    /// <param name="lineNumber">The source line writing the event.</param>
+    public static void WriteCommandMode(
+        string mode,
+        [CallerFilePath] string filePath = "",
+        [CallerLineNumber] int lineNumber = 0)
+    {
+        if (!_initialized) return;
+
+        EnsureArgument.NotNullOrWhiteSpace(mode, nameof(mode));
+
+        WriteMessage(new CommandModeMessage
+        {
+            Event = Trace2Event.CommandMode,
+            Sid = _sid,
+            Time = DateTimeOffset.UtcNow,
+            Thread = GetCurrentContext().ThreadName,
+            File = Path.GetFileName(filePath),
+            Line = lineNumber,
+            Name = mode,
+            Depth = _depth
+        });
     }
 
     public static DateTimeOffset WriteChildStart(
@@ -654,6 +730,53 @@ public static class Trace2
             value.ToString(CultureInfo.InvariantCulture),
             filePath,
             lineNumber);
+    }
+
+    /// <summary>
+    /// Writes a thread- and region-local TRACE2 structured data event.
+    /// </summary>
+    /// <param name="category">The broad category of the data.</param>
+    /// <param name="key">The name of the data value.</param>
+    /// <param name="value">The structured JSON value.</param>
+    /// <param name="filePath">The source file writing the event.</param>
+    /// <param name="lineNumber">The source line writing the event.</param>
+    public static void WriteDataJson(
+        string category,
+        string key,
+        JsonElement value,
+        [CallerFilePath] string filePath = "",
+        [CallerLineNumber] int lineNumber = 0)
+    {
+        if (!_initialized) return;
+
+        EnsureArgument.NotNullOrWhiteSpace(category, nameof(category));
+        EnsureArgument.NotNullOrWhiteSpace(key, nameof(key));
+
+        if (value.ValueKind == JsonValueKind.Undefined)
+        {
+            throw new ArgumentException("JSON value must be defined.", nameof(value));
+        }
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        Trace2ExecutionContext context = GetCurrentContext();
+        DateTimeOffset relativeStart = context.RegionStartTime.Value ?? context.StartTime;
+
+        WriteMessage(new DataJsonMessage
+        {
+            Event = Trace2Event.DataJson,
+            Sid = _sid,
+            Time = now,
+            Thread = context.ThreadName,
+            File = Path.GetFileName(filePath),
+            Line = lineNumber,
+            ElapsedTime = (now - _applicationStartTime).TotalSeconds,
+            RelativeTime = (now - relativeStart).TotalSeconds,
+            Nesting = context.RegionNesting.Value + 1,
+            Category = category,
+            Key = key,
+            Value = value,
+            Depth = _depth
+        });
     }
 
     internal static DateTimeOffset WriteRegionEnter(

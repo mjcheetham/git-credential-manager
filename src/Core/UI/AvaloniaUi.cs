@@ -65,13 +65,12 @@ namespace GitCredentialManager.UI
                 {
                     using (Trace2.CreateRegion("ui", "avn_init"))
                     {
-                        Trace2.WriteData("ui", "thread/id", Thread.CurrentThread.ManagedThreadId);
-
                         var appBuilder = AppBuilder.Configure<AvaloniaApp>();
 
                         // Set custom rendering options and modes if required
                         if (PlatformUtils.IsWindows() && _win32SoftwareRendering)
                         {
+                            Trace2.WriteData("ui", "win32/software_rendering", "true");
                             appBuilder.With(new Win32PlatformOptions
                                 { RenderingMode = new[] { Win32RenderingMode.Software } });
                         }
@@ -111,8 +110,7 @@ namespace GitCredentialManager.UI
 
         private static Task ShowWindowInternal(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
         {
-            using var _ = Trace2.CreateRegion("ui", "show_window");
-            Trace2.WriteData("ui", "thread/id", Thread.CurrentThread.ManagedThreadId);
+            var region = Trace2.CreateRegion("ui", "show_window");
 
             var tcs = new TaskCompletionSource<object>();
             Window window = windowFunc();
@@ -128,6 +126,7 @@ namespace GitCredentialManager.UI
             // have a window handle/ID we must manually parent the window.
             if (parentHandle != IntPtr.Zero)
             {
+                Trace2.WriteData("ui", "parent", $"0x{parentHandle:x}");
                 SetParentExternal(window, parentHandle);
             }
 
@@ -144,7 +143,7 @@ namespace GitCredentialManager.UI
                 window.Topmost = false;
             }
 
-            return tcs.Task;
+            return tcs.Task.ContinueWith(_ => region.Dispose());
         }
 
         private static void SetParentExternal(Window window, IntPtr parentHandle)

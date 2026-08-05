@@ -111,10 +111,7 @@ namespace GitHub
                     viewModel.EnterpriseUrl = targetUri.ToString();
                 }
 
-                using (Trace2.CreateRegion("FOO", "BAR"))
-                {
-                    await AvaloniaUi.ShowViewAsync<SelectAccountView>(viewModel, GetParentWindowHandle(), CancellationToken.None);
-                }
+                await AvaloniaUi.ShowViewAsync<SelectAccountView>(viewModel, GetParentWindowHandle(), CancellationToken.None);
 
                 ThrowIfWindowCancelled(viewModel);
 

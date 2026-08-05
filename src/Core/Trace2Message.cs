@@ -17,6 +17,9 @@ namespace GitCredentialManager;
 [JsonSerializable(typeof(RegionEnterMessage))]
 [JsonSerializable(typeof(RegionLeaveMessage))]
 [JsonSerializable(typeof(DataMessage))]
+[JsonSerializable(typeof(CommandNameMessage))]
+[JsonSerializable(typeof(CommandModeMessage))]
+[JsonSerializable(typeof(DataJsonMessage))]
 [JsonSourceGenerationOptions(
     UseStringEnumConverter = true,
     PropertyNamingPolicy = JsonKnownNamingPolicy.SnakeCaseLower,
@@ -416,6 +419,77 @@ public class ChildExitMessage : Trace2Message
     }
 }
 
+public class CommandNameMessage : Trace2Message
+{
+    [JsonPropertyName("name")]
+    [JsonPropertyOrder(8)]
+    public string Name { get; set; }
+
+    [JsonPropertyName("hierarchy")]
+    [JsonPropertyOrder(9)]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string Hierarchy { get; set; }
+
+    public override string ToJson()
+    {
+        return JsonSerializer.Serialize(this, Trace2JsonContext.Default.CommandNameMessage);
+    }
+
+    public override string ToNormalString()
+    {
+        return BuildNormalString();
+    }
+
+    public override string ToPerformanceString()
+    {
+        return BuildPerformanceString();
+    }
+
+    protected override string BuildPerformanceSpan()
+    {
+        return EmptyPerformanceSpan;
+    }
+
+    protected override string GetEventMessage(Trace2FormatTarget formatTarget)
+    {
+        return string.IsNullOrEmpty(Hierarchy)
+            ? Name
+            : $"{Name} ({Hierarchy})";
+    }
+}
+
+public class CommandModeMessage : Trace2Message
+{
+    [JsonPropertyName("name")]
+    [JsonPropertyOrder(8)]
+    public string Name { get; set; }
+
+    public override string ToJson()
+    {
+        return JsonSerializer.Serialize(this, Trace2JsonContext.Default.CommandModeMessage);
+    }
+
+    public override string ToNormalString()
+    {
+        return BuildNormalString();
+    }
+
+    public override string ToPerformanceString()
+    {
+        return BuildPerformanceString();
+    }
+
+    protected override string BuildPerformanceSpan()
+    {
+        return EmptyPerformanceSpan;
+    }
+
+    protected override string GetEventMessage(Trace2FormatTarget formatTarget)
+    {
+        return Name;
+    }
+}
+
 public class ThreadStartMessage : Trace2Message
 {
     public override string ToJson()
@@ -654,5 +728,61 @@ public class DataMessage : Trace2Message
     protected override string GetEventMessage(Trace2FormatTarget formatTarget)
     {
         return $"{Key}:{Value}";
+    }
+}
+
+public class DataJsonMessage : Trace2Message
+{
+    [JsonPropertyName("t_abs")]
+    [JsonPropertyOrder(8)]
+    public double ElapsedTime { get; set; }
+
+    [JsonPropertyName("t_rel")]
+    [JsonPropertyOrder(9)]
+    public double RelativeTime { get; set; }
+
+    [JsonPropertyName("repo")]
+    [JsonPropertyOrder(10)]
+    public int Repo { get; set; } = 1;
+
+    [JsonPropertyName("nesting")]
+    [JsonPropertyOrder(11)]
+    public int Nesting { get; set; }
+
+    [JsonPropertyName("category")]
+    [JsonPropertyOrder(12)]
+    public string Category { get; set; }
+
+    [JsonPropertyName("key")]
+    [JsonPropertyOrder(13)]
+    public string Key { get; set; }
+
+    [JsonPropertyName("value")]
+    [JsonPropertyOrder(14)]
+    public JsonElement Value { get; set; }
+
+    public override string ToJson()
+    {
+        return JsonSerializer.Serialize(this, Trace2JsonContext.Default.DataJsonMessage);
+    }
+
+    public override string ToNormalString()
+    {
+        return BuildNormalString();
+    }
+
+    public override string ToPerformanceString()
+    {
+        return BuildPerformanceString();
+    }
+
+    protected override string BuildPerformanceSpan()
+    {
+        return $"|{BuildRepoSpan(Repo)}|{BuildTimeSpan(ElapsedTime)}|{BuildTimeSpan(RelativeTime)}|{BuildCategorySpan(Category)}";
+    }
+
+    protected override string GetEventMessage(Trace2FormatTarget formatTarget)
+    {
+        return $"{Key}:{Value.GetRawText()}";
     }
 }
