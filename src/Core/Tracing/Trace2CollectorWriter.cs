@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO.Pipes;
 using System.Text;
 using System.Threading;
-using KnownGitCfg = GitCredentialManager.Constants.GitConfiguration;
 
 namespace GitCredentialManager
 {

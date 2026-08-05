@@ -76,7 +76,7 @@ public class Trace2MessageTests
             Line = 1,
             Depth = 1,
             Id = 1,
-            Classification = Trace2ProcessClass.UIHelper,
+            Classification = Trace2ProcessClass.UiHelper,
             UseShell = false,
             Argv = new List<string>() { "bar", "baz" },
             ElapsedTime = 0.05

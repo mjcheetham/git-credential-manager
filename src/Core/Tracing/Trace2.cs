@@ -18,33 +18,33 @@ namespace GitCredentialManager;
 public enum Trace2Event
 {
     [JsonStringEnumMemberName("version")]
-    Version = 0,
+    Version,
     [JsonStringEnumMemberName("start")]
-    Start = 1,
+    Start,
     [JsonStringEnumMemberName("exit")]
-    Exit = 2,
+    Exit,
     [JsonStringEnumMemberName("child_start")]
-    ChildStart = 3,
+    ChildStart,
     [JsonStringEnumMemberName("child_exit")]
-    ChildExit = 4,
+    ChildExit,
     [JsonStringEnumMemberName("error")]
-    Error = 5,
+    Error,
     [JsonStringEnumMemberName("region_enter")]
-    RegionEnter = 6,
+    RegionEnter,
     [JsonStringEnumMemberName("region_leave")]
-    RegionLeave = 7,
+    RegionLeave,
     [JsonStringEnumMemberName("thread_start")]
-    ThreadStart = 8,
+    ThreadStart,
     [JsonStringEnumMemberName("thread_exit")]
-    ThreadExit = 9,
+    ThreadExit,
     [JsonStringEnumMemberName("data")]
-    Data = 10,
-    [JsonStringEnumMemberName("cmd_name")]
-    CommandName = 11,
-    [JsonStringEnumMemberName("cmd_mode")]
-    CommandMode = 12,
+    Data,
     [JsonStringEnumMemberName("data_json")]
-    DataJson = 13,
+    DataJson,
+    [JsonStringEnumMemberName("cmd_name")]
+    CommandName,
+    [JsonStringEnumMemberName("cmd_mode")]
+    CommandMode,
 }
 
 /// <summary>
@@ -53,13 +53,13 @@ public enum Trace2Event
 public enum Trace2ProcessClass
 {
     [JsonStringEnumMemberName("none")]
-    None = 0,
+    None,
     [JsonStringEnumMemberName("ui_helper")]
-    UIHelper = 1,
+    UiHelper,
     [JsonStringEnumMemberName("git")]
-    Git = 2,
+    Git,
     [JsonStringEnumMemberName("other")]
-    Other = 3
+    Other
 }
 
 /// <summary>
@@ -224,7 +224,7 @@ internal class RegionScope : DisposableObject
 }
 
 /// <summary>
-/// The application's process-wide TRACE2 tracing system.
+/// The application's process-wide Trace2 tracing system.
 /// </summary>
 public static class Trace2
 {
@@ -246,6 +246,16 @@ public static class Trace2
     // Increment for each new logical thread created
     private static int _nextThreadId;
 
+    /// <summary>
+    /// Initializes the process-wide Trace2 session and enabled output targets.
+    /// </summary>
+    /// <param name="args">The command-line arguments passed to the application.</param>
+    /// <param name="filePath">The source file initializing Trace2.</param>
+    /// <param name="lineNumber">The source line initializing Trace2.</param>
+    /// <remarks>
+    /// This method emits the <c>version</c> and <c>start</c> events. Subsequent
+    /// calls have no effect.
+    /// </remarks>
     public static void Initialize(
         string[] args,
         [CallerFilePath] string filePath = "",
@@ -350,6 +360,16 @@ public static class Trace2
         WriteStart(appPath, args, filePath, lineNumber);
     }
 
+    /// <summary>
+    /// Stops the process-wide Trace2 session.
+    /// </summary>
+    /// <param name="exitCode">The application exit code.</param>
+    /// <param name="filePath">The source file stopping TRACE2.</param>
+    /// <param name="lineNumber">The source line stopping TRACE2.</param>
+    /// <remarks>
+    /// This method emits the <c>exit</c> event and disposes all enabled output
+    /// targets. It has no effect if Trace2 has not been initialized.
+    /// </remarks>
     public static void Stop(
         int exitCode,
         [CallerFilePath] string filePath = "",
@@ -429,6 +449,24 @@ public static class Trace2
         });
     }
 
+    /// <summary>
+    /// Writes an event immediately before starting a child process.
+    /// </summary>
+    /// <param name="childId">
+    /// The process-local identifier used to correlate the child start and exit
+    /// events.
+    /// </param>
+    /// <param name="processClass">The classification of the child process.</param>
+    /// <param name="useShell">
+    /// Whether the child process is started through a command shell.
+    /// </param>
+    /// <param name="appName">The child executable name or path.</param>
+    /// <param name="argv">The child process argument string.</param>
+    /// <param name="filePath">The source file starting the child process.</param>
+    /// <param name="lineNumber">The source line starting the child process.</param>
+    /// <returns>
+    /// The event timestamp to pass to <see cref="WriteChildExit(int, DateTimeOffset, int, int, string, int)"/>.
+    /// </returns>
     public static DateTimeOffset WriteChildStart(
         int childId,
         Trace2ProcessClass processClass,
@@ -473,6 +511,17 @@ public static class Trace2
         return startTime;
     }
 
+    /// <summary>
+    /// Writes an event after a child process exits.
+    /// </summary>
+    /// <param name="childId">
+    /// The process-local identifier from the corresponding child start event.
+    /// </param>
+    /// <param name="startTime">The timestamp returned by <see cref="WriteChildStart"/>.</param>
+    /// <param name="pid">The operating-system process identifier of the child.</param>
+    /// <param name="code">The child process exit code.</param>
+    /// <param name="filePath">The source file observing the child exit.</param>
+    /// <param name="lineNumber">The source line observing the child exit.</param>
     public static void WriteChildExit(
         int childId,
         DateTimeOffset startTime,
@@ -482,6 +531,17 @@ public static class Trace2
         [CallerLineNumber] int lineNumber = 0) =>
         WriteChildExit(childId, DateTimeOffset.UtcNow - startTime, pid, code, filePath, lineNumber);
 
+    /// <summary>
+    /// Writes an event after a child process exits.
+    /// </summary>
+    /// <param name="childId">
+    /// The process-local identifier from the corresponding child start event.
+    /// </param>
+    /// <param name="relativeTime">The elapsed time between child start and exit.</param>
+    /// <param name="pid">The operating-system process identifier of the child.</param>
+    /// <param name="code">The child process exit code.</param>
+    /// <param name="filePath">The source file observing the child exit.</param>
+    /// <param name="lineNumber">The source line observing the child exit.</param>
     public static void WriteChildExit(
         int childId,
         TimeSpan relativeTime,
@@ -491,6 +551,19 @@ public static class Trace2
         [CallerLineNumber] int lineNumber = 0) =>
         WriteChildExit(childId, relativeTime.TotalSeconds, pid, code, filePath, lineNumber);
 
+    /// <summary>
+    /// Writes an event after a child process exits.
+    /// </summary>
+    /// <param name="childId">
+    /// The process-local identifier from the corresponding child start event.
+    /// </param>
+    /// <param name="relativeTime">
+    /// The elapsed time between child start and exit, in seconds.
+    /// </param>
+    /// <param name="pid">The operating-system process identifier of the child.</param>
+    /// <param name="code">The child process exit code.</param>
+    /// <param name="filePath">The source file observing the child exit.</param>
+    /// <param name="lineNumber">The source line observing the child exit.</param>
     public static void WriteChildExit(
         int childId,
         double relativeTime,
@@ -518,6 +591,16 @@ public static class Trace2
         });
     }
 
+    /// <summary>
+    /// Writes a TRACE2 error event.
+    /// </summary>
+    /// <param name="errorMessage">The fully formatted error message.</param>
+    /// <param name="parameterizedMessage">
+    /// The parameterized message format, or <see langword="null"/> to use
+    /// <paramref name="errorMessage"/>.
+    /// </param>
+    /// <param name="filePath">The source file reporting the error.</param>
+    /// <param name="lineNumber">The source line reporting the error.</param>
     public static void WriteError(
         string errorMessage,
         string parameterizedMessage = null,
@@ -666,7 +749,7 @@ public static class Trace2
     }
 
     /// <summary>
-    /// Writes a thread- and region-local TRACE2 data event.
+    /// Writes a thread- and region-local Trace2 data event.
     /// </summary>
     /// <param name="category">The broad category of the data.</param>
     /// <param name="key">The name of the data value.</param>
@@ -710,7 +793,7 @@ public static class Trace2
     }
 
     /// <summary>
-    /// Writes a thread- and region-local integer TRACE2 data event.
+    /// Writes a thread- and region-local integer Trace2 data event.
     /// </summary>
     /// <param name="category">The broad category of the data.</param>
     /// <param name="key">The name of the data value.</param>
@@ -733,14 +816,14 @@ public static class Trace2
     }
 
     /// <summary>
-    /// Writes a thread- and region-local TRACE2 structured data event.
+    /// Writes a thread- and region-local Trace2 structured data event.
     /// </summary>
     /// <param name="category">The broad category of the data.</param>
     /// <param name="key">The name of the data value.</param>
     /// <param name="value">The structured JSON value.</param>
     /// <param name="filePath">The source file writing the event.</param>
     /// <param name="lineNumber">The source line writing the event.</param>
-    public static void WriteDataJson(
+    public static void WriteData(
         string category,
         string key,
         JsonElement value,
