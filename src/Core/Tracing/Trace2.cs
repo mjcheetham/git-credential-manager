@@ -5,63 +5,13 @@ using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using GitCredentialManager.Interop;
 
 namespace GitCredentialManager;
-
-/// <summary>
-/// The different event types tracked in the TRACE2 tracing
-/// system.
-/// </summary>
-public enum Trace2Event
-{
-    [JsonStringEnumMemberName("version")]
-    Version,
-    [JsonStringEnumMemberName("start")]
-    Start,
-    [JsonStringEnumMemberName("exit")]
-    Exit,
-    [JsonStringEnumMemberName("child_start")]
-    ChildStart,
-    [JsonStringEnumMemberName("child_exit")]
-    ChildExit,
-    [JsonStringEnumMemberName("error")]
-    Error,
-    [JsonStringEnumMemberName("region_enter")]
-    RegionEnter,
-    [JsonStringEnumMemberName("region_leave")]
-    RegionLeave,
-    [JsonStringEnumMemberName("thread_start")]
-    ThreadStart,
-    [JsonStringEnumMemberName("thread_exit")]
-    ThreadExit,
-    [JsonStringEnumMemberName("data")]
-    Data,
-    [JsonStringEnumMemberName("data_json")]
-    DataJson,
-    [JsonStringEnumMemberName("cmd_name")]
-    CommandName,
-    [JsonStringEnumMemberName("cmd_mode")]
-    CommandMode,
-}
-
-/// <summary>
-/// Classifications of processes invoked by GCM.
-/// </summary>
-public enum Trace2ProcessClass
-{
-    [JsonStringEnumMemberName("none")]
-    None,
-    [JsonStringEnumMemberName("ui_helper")]
-    UiHelper,
-    [JsonStringEnumMemberName("git")]
-    Git,
-    [JsonStringEnumMemberName("other")]
-    Other
-}
 
 /// <summary>
 /// Stores various TRACE2 format targets user has enabled.
@@ -69,159 +19,8 @@ public enum Trace2ProcessClass
 /// </summary>
 internal class Trace2Settings
 {
-    public IDictionary<Trace2FormatTarget, string> FormatTargetsAndValues { get; set; } =
+    public IDictionary<Trace2FormatTarget, string> Targets { get; } =
         new Dictionary<Trace2FormatTarget, string>();
-}
-
-/// <summary>
-/// Specifies a "text span" (i.e. space between two pipes) for the performance format target.
-/// </summary>
-internal class PerformanceFormatSpan
-{
-    public int Size { get; set; }
-
-    public int BeginPadding { get; set; }
-
-    public int EndPadding { get; set; }
-}
-
-internal class Trace2ExecutionContext(
-    string threadName,
-    DateTimeOffset? startTime = null)
-{
-    public AsyncLocal<int> RegionNesting { get; } = new();
-    public AsyncLocal<DateTimeOffset?> RegionStartTime { get; } = new();
-    public DateTimeOffset StartTime { get; } = startTime ?? DateTimeOffset.UtcNow;
-    public string ThreadName { get; } = threadName;
-}
-
-internal class ThreadScope : DisposableObject
-{
-    private readonly string _filePath;
-    private readonly int _lineNumber;
-    private readonly Trace2ExecutionContext _context;
-    private readonly Trace2ExecutionContext _prevContext;
-    private readonly DateTimeOffset _startTime;
-
-    public ThreadScope(string threadName, string filePath, int lineNumber)
-    {
-        _prevContext = Trace2.GetCurrentContext();
-        _filePath = filePath;
-        _lineNumber = lineNumber;
-
-        _context = new Trace2ExecutionContext(threadName);
-        Trace2.SetContext(_context);
-
-        _startTime = Trace2.WriteThreadStart(_context.ThreadName, _filePath, _lineNumber);
-    }
-
-    protected override void ReleaseManagedResources()
-    {
-        try
-        {
-            Trace2.WriteThreadExit(_context.ThreadName, _startTime, _filePath, _lineNumber);
-        }
-        finally
-        {
-            Debug.Assert(
-                ReferenceEquals(Trace2.GetCurrentContext(), _context),
-                "Trace2 threads must be disposed in LIFO order.");
-
-            Trace2.SetContext(_prevContext);
-        }
-    }
-}
-
-internal class ContextScope : DisposableObject
-{
-    private readonly Trace2ExecutionContext _context;
-    private readonly Trace2ExecutionContext _previousContext;
-
-    public ContextScope(Trace2ExecutionContext context)
-    {
-        _context = context;
-        _previousContext = Trace2.GetCurrentContext();
-        Trace2.SetContext(_context);
-    }
-
-    protected override void ReleaseManagedResources()
-    {
-        Debug.Assert(
-            ReferenceEquals(Trace2.GetCurrentContext(), _context),
-            "Trace2 contexts must be disposed in LIFO order.");
-
-        Trace2.SetContext(_previousContext);
-    }
-}
-
-internal class RegionScope : DisposableObject
-{
-    private readonly Trace2ExecutionContext _context;
-    private readonly string _category;
-    private readonly string _label;
-    private readonly string _filePath;
-    private readonly int _lineNumber;
-    private readonly string _message;
-    private readonly int _nesting;
-    private readonly DateTimeOffset? _previousRegionStartTime;
-    private readonly DateTimeOffset _startTime;
-
-    internal RegionScope(
-        Trace2ExecutionContext context,
-        string category,
-        string label,
-        string filePath,
-        int lineNumber,
-        string message)
-    {
-        _context = context;
-        _category = category;
-        _label = label;
-        _filePath = filePath;
-        _lineNumber = lineNumber;
-        _message = message;
-
-        // Increment nesting level as we enter the region
-        _nesting = _context.RegionNesting.Value + 1;
-        _context.RegionNesting.Value = _nesting;
-        _previousRegionStartTime = _context.RegionStartTime.Value;
-
-        _startTime = Trace2.WriteRegionEnter(
-            _category,
-            _label,
-            _message,
-            _context.ThreadName,
-            _nesting,
-            _filePath,
-            _lineNumber);
-        _context.RegionStartTime.Value = _startTime;
-    }
-
-    protected override void ReleaseManagedResources()
-    {
-        try
-        {
-            Trace2.WriteRegionLeave(
-                _startTime,
-                _category,
-                _label,
-                _message,
-                _context.ThreadName,
-                _nesting,
-                _filePath,
-                _lineNumber);
-        }
-        finally
-        {
-            Debug.Assert(
-                _context.RegionNesting.Value == _nesting,
-                "Trace2 regions must be disposed in LIFO order.");
-
-            // Decrement the nesting level
-            _context.RegionNesting.Value = Math.Max(0, _nesting - 1);
-            _context.RegionStartTime.Value = _previousRegionStartTime;
-        }
-    }
 }
 
 /// <summary>
@@ -322,12 +121,12 @@ public static class Trace2
         return count;
     }
 
-    internal static void SetContext(Trace2ExecutionContext context)
+    private static void SetContext(Trace2ExecutionContext context)
     {
         ThreadContext.Value = context;
     }
 
-    internal static Trace2ExecutionContext GetCurrentContext()
+    private static Trace2ExecutionContext GetCurrentContext()
     {
         Trace2ExecutionContext context = ThreadContext.Value;
         Debug.Assert(context is not null, "Trace2 event emitted without an execution context.");
@@ -338,7 +137,7 @@ public static class Trace2
         return context ?? _mainContext;
     }
 
-    internal static IDisposable UseMainContext()
+    public static IDisposable UseMainContext()
     {
         if (!_initialized)
             return NoOpDisposable.Instance;
@@ -410,7 +209,6 @@ public static class Trace2
 
         WriteMessage(new CommandNameMessage
         {
-            Event = Trace2Event.CommandName,
             Sid = _sid,
             Time = DateTimeOffset.UtcNow,
             Thread = GetCurrentContext().ThreadName,
@@ -418,34 +216,6 @@ public static class Trace2
             Line = lineNumber,
             Name = name,
             Hierarchy = hierarchy,
-            Depth = _depth
-        });
-    }
-
-    /// <summary>
-    /// Writes the variant or mode of the command being run.
-    /// </summary>
-    /// <param name="mode">The command mode.</param>
-    /// <param name="filePath">The source file writing the event.</param>
-    /// <param name="lineNumber">The source line writing the event.</param>
-    public static void WriteCommandMode(
-        string mode,
-        [CallerFilePath] string filePath = "",
-        [CallerLineNumber] int lineNumber = 0)
-    {
-        if (!_initialized) return;
-
-        EnsureArgument.NotNullOrWhiteSpace(mode, nameof(mode));
-
-        WriteMessage(new CommandModeMessage
-        {
-            Event = Trace2Event.CommandMode,
-            Sid = _sid,
-            Time = DateTimeOffset.UtcNow,
-            Thread = GetCurrentContext().ThreadName,
-            File = Path.GetFileName(filePath),
-            Line = lineNumber,
-            Name = mode,
             Depth = _depth
         });
     }
@@ -468,7 +238,7 @@ public static class Trace2
     /// <returns>
     /// The event timestamp to pass to <see cref="WriteChildExit(int, DateTimeOffset, int, int, string, int)"/>.
     /// </returns>
-    public static DateTimeOffset WriteChildStart(
+    internal static DateTimeOffset WriteChildStart(
         int childId,
         Trace2ProcessClass processClass,
         bool useShell,
@@ -496,7 +266,6 @@ public static class Trace2
 
         WriteMessage(new ChildStartMessage
         {
-            Event = Trace2Event.ChildStart,
             Sid = _sid,
             Time = startTime,
             Thread = GetCurrentContext().ThreadName,
@@ -523,7 +292,7 @@ public static class Trace2
     /// <param name="code">The child process exit code.</param>
     /// <param name="filePath">The source file observing the child exit.</param>
     /// <param name="lineNumber">The source line observing the child exit.</param>
-    public static void WriteChildExit(
+    internal static void WriteChildExit(
         int childId,
         DateTimeOffset startTime,
         int pid,
@@ -543,7 +312,7 @@ public static class Trace2
     /// <param name="code">The child process exit code.</param>
     /// <param name="filePath">The source file observing the child exit.</param>
     /// <param name="lineNumber">The source line observing the child exit.</param>
-    public static void WriteChildExit(
+    internal static void WriteChildExit(
         int childId,
         TimeSpan relativeTime,
         int pid,
@@ -565,7 +334,7 @@ public static class Trace2
     /// <param name="code">The child process exit code.</param>
     /// <param name="filePath">The source file observing the child exit.</param>
     /// <param name="lineNumber">The source line observing the child exit.</param>
-    public static void WriteChildExit(
+    internal static void WriteChildExit(
         int childId,
         double relativeTime,
         int pid,
@@ -577,7 +346,6 @@ public static class Trace2
 
         WriteMessage(new ChildExitMessage
         {
-            Event = Trace2Event.ChildExit,
             Sid = _sid,
             Time = DateTimeOffset.UtcNow,
             Thread = GetCurrentContext().ThreadName,
@@ -612,7 +380,6 @@ public static class Trace2
 
         WriteMessage(new ErrorMessage
         {
-            Event = Trace2Event.Error,
             Sid = _sid,
             Time = DateTimeOffset.UtcNow,
             Thread = GetCurrentContext().ThreadName,
@@ -691,7 +458,7 @@ public static class Trace2
         return new ThreadScope(fullName, filePath, lineNumber);
     }
 
-    internal static DateTimeOffset WriteThreadStart(
+    private static DateTimeOffset WriteThreadStart(
         string name,
         string filePath = "",
         int lineNumber = 0)
@@ -702,7 +469,6 @@ public static class Trace2
         {
             WriteMessage(new ThreadStartMessage
             {
-                Event = Trace2Event.ThreadStart,
                 Sid = _sid,
                 Time = startTime,
                 Thread = name,
@@ -715,21 +481,21 @@ public static class Trace2
         return startTime;
     }
 
-    internal static void WriteThreadExit(
+    private static void WriteThreadExit(
         string name,
         DateTimeOffset startTime,
         string filePath,
         int lineNumber) =>
         WriteThreadExit(name, DateTimeOffset.UtcNow - startTime, filePath, lineNumber);
 
-    internal static void WriteThreadExit(
+    private static void WriteThreadExit(
         string name,
         TimeSpan relativeTime,
         string filePath,
         int lineNumber) =>
         WriteThreadExit(name, relativeTime.TotalSeconds, filePath, lineNumber);
 
-    internal static void WriteThreadExit(
+    private static void WriteThreadExit(
         string name,
         double relativeTime,
         string filePath,
@@ -739,7 +505,6 @@ public static class Trace2
 
         WriteMessage(new ThreadExitMessage
         {
-            Event = Trace2Event.ThreadExit,
             Sid = _sid,
             Time = DateTimeOffset.UtcNow,
             Thread = name,
@@ -811,7 +576,6 @@ public static class Trace2
 
         WriteMessage(new DataMessage
         {
-            Event = Trace2Event.Data,
             Sid = _sid,
             Time = now,
             Thread = context.ThreadName,
@@ -881,7 +645,6 @@ public static class Trace2
 
         WriteMessage(new DataJsonMessage
         {
-            Event = Trace2Event.DataJson,
             Sid = _sid,
             Time = now,
             Thread = context.ThreadName,
@@ -897,7 +660,7 @@ public static class Trace2
         });
     }
 
-    internal static DateTimeOffset WriteRegionEnter(
+    private static DateTimeOffset WriteRegionEnter(
         string category,
         string label,
         string message,
@@ -912,7 +675,6 @@ public static class Trace2
         {
             WriteMessage(new RegionEnterMessage
             {
-                Event = Trace2Event.RegionEnter,
                 Sid = _sid,
                 Time = start,
                 Category = category,
@@ -930,7 +692,7 @@ public static class Trace2
         return start;
     }
 
-    internal static void WriteRegionLeave(
+    private static void WriteRegionLeave(
         DateTimeOffset startTime,
         string category,
         string label,
@@ -941,7 +703,7 @@ public static class Trace2
         int lineNumber) =>
         WriteRegionLeave(DateTimeOffset.UtcNow - startTime, category, label, message, thread, nesting, filePath, lineNumber);
 
-    internal static void WriteRegionLeave(
+    private static void WriteRegionLeave(
         TimeSpan relativeTime,
         string category,
         string label,
@@ -952,7 +714,7 @@ public static class Trace2
         int lineNumber) =>
         WriteRegionLeave(relativeTime.TotalSeconds, category, label, message, thread, nesting, filePath, lineNumber);
 
-    internal static void WriteRegionLeave(
+    private static void WriteRegionLeave(
         double relativeTime,
         string category,
         string label,
@@ -966,7 +728,6 @@ public static class Trace2
 
         WriteMessage(new RegionLeaveMessage
         {
-            Event = Trace2Event.RegionLeave,
             Sid = _sid,
             Time = DateTimeOffset.UtcNow,
             Category = category,
@@ -1055,7 +816,7 @@ public static class Trace2
 
         if (value is not null)
         {
-            settings.FormatTargetsAndValues.Add(format, value);
+            settings.Targets.Add(format, value);
         }
     }
 
@@ -1094,20 +855,15 @@ public static class Trace2
     private static void InitializeWriters()
     {
         // Set up the correct writer for every enabled format target.
-        foreach (var formatTarget in _settings.FormatTargetsAndValues)
+        foreach (var formatTarget in _settings.Targets)
         {
             if (TryGetPipeName(formatTarget.Value, out string name)) // Write to named pipe/socket
             {
-                AddWriter(new Trace2CollectorWriter(formatTarget.Key, (
-                        () => new NamedPipeClientStream(".", name,
-                            PipeDirection.Out,
-                            PipeOptions.Asynchronous)
-                    )
-                ));
+                AddWriter(new Trace2PipeWriter(formatTarget.Key, name));
             }
             else if (formatTarget.Value.IsTruthy()) // Write to stderr
             {
-                AddWriter(new Trace2StreamWriter(formatTarget.Key, Console.Error));
+                AddWriter(new Trace2TextWriter(formatTarget.Key, Console.Error));
             }
             else if (Path.IsPathRooted(formatTarget.Value)) // Write to file
             {
@@ -1244,5 +1000,144 @@ public static class Trace2
     {
         public static readonly IDisposable Instance = new NoOpDisposable();
         public void Dispose(){}
+    }
+
+    private class Trace2ExecutionContext(
+        string threadName,
+        DateTimeOffset? startTime = null)
+    {
+        public AsyncLocal<int> RegionNesting { get; } = new();
+        public AsyncLocal<DateTimeOffset?> RegionStartTime { get; } = new();
+        public DateTimeOffset StartTime { get; } = startTime ?? DateTimeOffset.UtcNow;
+        public string ThreadName { get; } = threadName;
+    }
+
+    private class ContextScope : DisposableObject
+    {
+        private readonly Trace2ExecutionContext _context;
+        private readonly Trace2ExecutionContext _previousContext;
+
+        public ContextScope(Trace2ExecutionContext context)
+        {
+            _context = context;
+            _previousContext = Trace2.GetCurrentContext();
+            Trace2.SetContext(_context);
+        }
+
+        protected override void ReleaseManagedResources()
+        {
+            Debug.Assert(
+                ReferenceEquals(Trace2.GetCurrentContext(), _context),
+                "Trace2 contexts must be disposed in LIFO order.");
+
+            Trace2.SetContext(_previousContext);
+        }
+    }
+
+    private class ThreadScope : DisposableObject
+    {
+        private readonly string _filePath;
+        private readonly int _lineNumber;
+        private readonly Trace2ExecutionContext _context;
+        private readonly Trace2ExecutionContext _prevContext;
+        private readonly DateTimeOffset _startTime;
+
+        public ThreadScope(string threadName, string filePath, int lineNumber)
+        {
+            _prevContext = Trace2.GetCurrentContext();
+            _filePath = filePath;
+            _lineNumber = lineNumber;
+
+            _context = new Trace2ExecutionContext(threadName);
+            Trace2.SetContext(_context);
+
+            _startTime = Trace2.WriteThreadStart(_context.ThreadName, _filePath, _lineNumber);
+        }
+
+        protected override void ReleaseManagedResources()
+        {
+            try
+            {
+                Trace2.WriteThreadExit(_context.ThreadName, _startTime, _filePath, _lineNumber);
+            }
+            finally
+            {
+                Debug.Assert(
+                    ReferenceEquals(Trace2.GetCurrentContext(), _context),
+                    "Trace2 threads must be disposed in LIFO order.");
+
+                Trace2.SetContext(_prevContext);
+            }
+        }
+    }
+
+    private class RegionScope : DisposableObject
+    {
+        private readonly Trace2ExecutionContext _context;
+        private readonly string _category;
+        private readonly string _label;
+        private readonly string _filePath;
+        private readonly int _lineNumber;
+        private readonly string _message;
+        private readonly int _nesting;
+        private readonly DateTimeOffset? _previousRegionStartTime;
+        private readonly DateTimeOffset _startTime;
+
+        internal RegionScope(
+            Trace2ExecutionContext context,
+            string category,
+            string label,
+            string filePath,
+            int lineNumber,
+            string message)
+        {
+            _context = context;
+            _category = category;
+            _label = label;
+            _filePath = filePath;
+            _lineNumber = lineNumber;
+            _message = message;
+
+            // Increment nesting level as we enter the region
+            _nesting = _context.RegionNesting.Value + 1;
+            _context.RegionNesting.Value = _nesting;
+            _previousRegionStartTime = _context.RegionStartTime.Value;
+
+            _startTime = Trace2.WriteRegionEnter(
+                _category,
+                _label,
+                _message,
+                _context.ThreadName,
+                _nesting,
+                _filePath,
+                _lineNumber);
+            _context.RegionStartTime.Value = _startTime;
+        }
+
+        protected override void ReleaseManagedResources()
+        {
+            try
+            {
+                Trace2.WriteRegionLeave(
+                    _startTime,
+                    _category,
+                    _label,
+                    _message,
+                    _context.ThreadName,
+                    _nesting,
+                    _filePath,
+                    _lineNumber);
+            }
+            finally
+            {
+                Debug.Assert(
+                    _context.RegionNesting.Value == _nesting,
+                    "Trace2 regions must be disposed in LIFO order.");
+
+                // Decrement the nesting level
+                _context.RegionNesting.Value = Math.Max(0, _nesting - 1);
+                _context.RegionStartTime.Value = _previousRegionStartTime;
+            }
+        }
     }
 }

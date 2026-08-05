@@ -17,7 +17,7 @@ public class Trace2MessageTests
     [InlineData(100000.31608, "100000.316080")]
     public void BuildTimeSpan_Match_Returns_Expected_String(double input, string expected)
     {
-        var actual = Trace2Message.BuildTimeSpan(input);
+        var actual = PerformanceFormatFields.GetTimeSpan(input);
         Assert.Equal(expected, actual);
     }
 
@@ -26,7 +26,7 @@ public class Trace2MessageTests
     {
         var input = 1;
         var expected = " r1  ";
-        var actual = Trace2Message.BuildRepoSpan(input);
+        var actual = PerformanceFormatFields.GetRepoSpan(input);
         Assert.Equal(expected, actual);
     }
 
@@ -37,16 +37,15 @@ public class Trace2MessageTests
     [InlineData("foobarbazfoo",      " foobarbazfo ")]
     public void BuildCategorySpan_Match_Returns_Expected_String(string input, string expected)
     {
-        var actual = Trace2Message.BuildCategorySpan(input);
+        var actual = PerformanceFormatFields.GetCategorySpan(input);
         Assert.Equal(expected, actual);
     }
 
     [Fact]
     public void Event_Message_Without_Snake_Case_ToJson_Creates_Expected_Json()
     {
-        var errorMessage = new ErrorMessage()
+        var errorMessage = new ErrorMessage
         {
-            Event = Trace2Event.Error,
             Sid = "123",
             Thread = "main",
             Time = new DateTimeOffset(),
@@ -66,9 +65,8 @@ public class Trace2MessageTests
     [Fact]
     public void Event_Message_With_Snake_Case_ToJson_Creates_Expected_Json()
     {
-        var childStartMessage = new ChildStartMessage()
+        var childStartMessage = new ChildStartMessage
         {
-            Event = Trace2Event.ChildStart,
             Sid = "123",
             Thread = "main",
             Time = new DateTimeOffset(),
@@ -91,9 +89,8 @@ public class Trace2MessageTests
     [Fact]
     public void Thread_Events_ToJson_Create_Expected_Json()
     {
-        var startMessage = new ThreadStartMessage()
+        var startMessage = new ThreadStartMessage
         {
-            Event = Trace2Event.ThreadStart,
             Sid = "123",
             Thread = "AppMain",
             Time = new DateTimeOffset(),
@@ -101,9 +98,8 @@ public class Trace2MessageTests
             Line = 1,
             Depth = 1
         };
-        var exitMessage = new ThreadExitMessage()
+        var exitMessage = new ThreadExitMessage
         {
-            Event = Trace2Event.ThreadExit,
             Sid = "123",
             Thread = "AppMain",
             Time = new DateTimeOffset(),
@@ -126,7 +122,6 @@ public class Trace2MessageTests
     {
         var message = new DataMessage
         {
-            Event = Trace2Event.Data,
             Sid = "123",
             Thread = "main",
             Time = new DateTimeOffset(),
@@ -152,7 +147,6 @@ public class Trace2MessageTests
     {
         var message = new CommandNameMessage
         {
-            Event = Trace2Event.CommandName,
             Sid = "123",
             Thread = "main",
             Time = new DateTimeOffset(),
@@ -169,26 +163,6 @@ public class Trace2MessageTests
     }
 
     [Fact]
-    public void CommandMode_Event_ToJson_Creates_Expected_Json()
-    {
-        var message = new CommandModeMessage
-        {
-            Event = Trace2Event.CommandMode,
-            Sid = "123",
-            Thread = "main",
-            Time = new DateTimeOffset(),
-            File = "foo.cs",
-            Line = 1,
-            Depth = 1,
-            Name = "interactive"
-        };
-
-        const string expected = "{\"event\":\"cmd_mode\",\"sid\":\"123\",\"thread\":\"main\",\"time\":\"0001-01-01T00:00:00+00:00\",\"file\":\"foo.cs\",\"line\":1,\"depth\":1,\"name\":\"interactive\"}";
-
-        Assert.Equal(expected, message.ToJson());
-    }
-
-    [Fact]
     public void DataJson_Event_ToJson_Creates_Expected_Json()
     {
         using JsonDocument document = JsonDocument.Parse(
@@ -196,7 +170,6 @@ public class Trace2MessageTests
 
         var message = new DataJsonMessage
         {
-            Event = Trace2Event.DataJson,
             Sid = "123",
             Thread = "main",
             Time = new DateTimeOffset(),

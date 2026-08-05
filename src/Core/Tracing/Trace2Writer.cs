@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Text;
 
 namespace GitCredentialManager;
@@ -48,6 +47,5 @@ public abstract class Trace2Writer : DisposableObject, ITrace2Writer
         return sb.ToString();
     }
 
-    public virtual void Write(Trace2Message message)
-    { }
+    public abstract void Write(Trace2Message message);
 }

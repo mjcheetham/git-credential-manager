@@ -10,8 +10,6 @@ using System.Threading.Tasks;
 using GitCredentialManager.Commands;
 using GitCredentialManager.Diagnostics;
 using GitCredentialManager.Interop;
-using GitCredentialManager.Tty;
-using Spectre.Console;
 
 namespace GitCredentialManager
 {
