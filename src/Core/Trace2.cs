@@ -277,7 +277,7 @@ public static class Trace2
     }
 
     /// <summary>
-    /// Create the TRACE2 "session id" (sid) for this process.
+    /// Create the Trace2 "session id" (sid) for this process.
     /// </summary>
     internal static string CreateSid()
     {
@@ -294,7 +294,7 @@ public static class Trace2
     }
 
     /// <summary>
-    /// Get "depth" of current process relative to top-level GCM process.
+    /// Get "depth" of current process relative to top-level Trace2 process.
     /// </summary>
     /// <returns>Depth of current process.</returns>
     internal static int GetProcessDepth(string sid)

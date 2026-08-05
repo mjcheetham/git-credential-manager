@@ -57,8 +57,9 @@ namespace GitCredentialManager.Commands
             {
                 provider = await _hostProviderRegistry.GetProviderAsync(request);
 
-                Trace2.WriteData("cmd", "provider/id", provider.Id);
-                Trace2.WriteData("cmd", "provider/name", provider.Name);
+                Trace2.WriteData("git_cmd", "provider/id", provider.Id);
+                Trace2.WriteData("git_cmd", "provider/name", provider.Name);
+                Trace2.GetProcessDepth()
             }
             Context.Trace.WriteLine($"Host provider '{provider.Name}' was selected.");
 
