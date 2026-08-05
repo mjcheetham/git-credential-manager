@@ -240,7 +240,7 @@ namespace GitCredentialManager
             {
                 var format = "Failed to start Git helper '{0}'";
                 var message = string.Format(format, args);
-                throw new Trace2Exception(message, format);
+                throw new Exception(message);
             }
 
             if (!(standardInput is null))
@@ -275,7 +275,7 @@ namespace GitCredentialManager
                 ? git.StandardError.ReadToEnd()
                 : null;
 
-            throw new Trace2GitException(message, git.ExitCode, gitMessage);
+            throw new GitException(message, gitMessage, git.ExitCode);
         }
     }
 
