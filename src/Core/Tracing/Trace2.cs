@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.IO.Pipes;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
@@ -787,14 +788,18 @@ public static class Trace2
     private static Trace2Settings ReadSettings()
     {
         var settings = new Trace2Settings();
+        var gitConfig = new Lazy<Dictionary<string,string>>(ReadGitConfig);
 
-        AddTarget(settings, Trace2FormatTarget.Event,
+        AddTarget(settings, gitConfig,
+            Trace2FormatTarget.Event,
             Constants.EnvironmentVariables.GitTrace2Event,
             Constants.GitConfiguration.Trace2.EventTarget);
-        AddTarget(settings, Trace2FormatTarget.Normal,
+        AddTarget(settings, gitConfig,
+            Trace2FormatTarget.Normal,
             Constants.EnvironmentVariables.GitTrace2Normal,
             Constants.GitConfiguration.Trace2.NormalTarget);
-        AddTarget(settings, Trace2FormatTarget.Performance,
+        AddTarget(settings, gitConfig,
+            Trace2FormatTarget.Performance,
             Constants.EnvironmentVariables.GitTrace2Performance,
             Constants.GitConfiguration.Trace2.PerformanceTarget);
 
@@ -803,6 +808,7 @@ public static class Trace2
 
     private static void AddTarget(
         Trace2Settings settings,
+        Lazy<Dictionary<string,string>> gitConfig,
         Trace2FormatTarget format,
         string environmentVariable,
         string configurationProperty)
@@ -811,7 +817,7 @@ public static class Trace2
         if (value is null)
         {
             string key = $"{Constants.GitConfiguration.Trace2.SectionName}.{configurationProperty}";
-            value = ReadGitConfig(key);
+            value = gitConfig.Value.GetValueOrDefault(key);
         }
 
         if (value is not null)
@@ -820,7 +826,7 @@ public static class Trace2
         }
     }
 
-    private static string ReadGitConfig(string key)
+    private static Dictionary<string, string> ReadGitConfig()
     {
         string programName = OperatingSystem.IsWindows() ? "git.exe" : "git";
         string gitExecPath = Environment.GetEnvironmentVariable(Constants.EnvironmentVariables.GitExecutablePath);
@@ -831,9 +837,12 @@ public static class Trace2
             ? candidatePath
             : programName;
 
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
         try
         {
-            var startInfo = new ProcessStartInfo(gitPath, $"config --get {key}")
+            // Read all Git's 'trace2.*' configuration in one shot to avoid repeated calls
+            var startInfo = new ProcessStartInfo(gitPath, "config -z --get-regexp trace2\\..*")
             {
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -842,14 +851,29 @@ public static class Trace2
             };
 
             using Process process = Process.Start(startInfo);
-            string value = process.StandardOutput.ReadToEnd();
+            string data = process.StandardOutput.ReadToEnd();
             process.WaitForExit();
-            return process.ExitCode == 0 ? value.TrimEnd('\r', '\n') : null;
+            if (process.ExitCode == 0)
+            {
+                string[] kvps = data.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+                foreach (string kvp in kvps)
+                {
+                    string[] parts = kvp.Split('\n', count: 2);
+                    if (parts.Length == 2)
+                    {
+                        string key = parts[0].Trim();
+                        string value = parts[1].Trim();
+                        dict[key] = value;
+                    }
+                }
+            }
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            return null;
+            // ignore
         }
+
+        return dict;
     }
 
     private static void InitializeWriters()
