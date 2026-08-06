@@ -19,4 +19,10 @@
             <Code Type="Class" Source="$(MSBuildThisFileDirectory)GetVersion.cs" />
         </Task>
     </UsingTask>
+
+    <UsingTask TaskName="GenerateLibGit2Info" TaskFactory="$(_TaskFactory)" AssemblyFile="$(_TaskAssembly)">
+        <Task>
+            <Code Type="Class" Source="$(MSBuildThisFileDirectory)GenerateLibGit2Info.cs" />
+        </Task>
+    </UsingTask>
 </Project>

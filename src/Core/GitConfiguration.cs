@@ -29,7 +29,7 @@ namespace GitCredentialManager
         Path
     }
 
-    public interface IGitConfiguration
+    public interface IGitConfiguration : IDisposable
     {
         /// <summary>
         /// Enumerate all configuration entries invoking the specified callback for each entry.
@@ -320,7 +320,7 @@ namespace GitCredentialManager
         }
     }
 
-    public class GitProcessConfiguration : IGitConfiguration
+    public class GitProcessConfiguration : DisposableObject, IGitConfiguration
     {
         private static readonly GitVersion TypeConfigMinVersion = new GitVersion(2, 18, 0);
         private static readonly GitVersion ConfigListTypeMinVersion = new GitVersion(2, 54, 0);

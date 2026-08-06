@@ -98,20 +98,18 @@ namespace GitCredentialManager
             Trace   = new Trace();
             Console = new ConsoleService(Streams);
 
+            bool useLg2 = System.Environment.GetEnvironmentVariable("USE_LG2").ToBooleanyOrDefault(false);
+            if (useLg2)
+            {
+                Git = new LibGit2();
+            }
+
             if (PlatformUtils.IsWindows())
             {
                 FileSystem        = new WindowsFileSystem();
                 Environment       = new WindowsEnvironment(FileSystem);
                 SessionManager    = new WindowsSessionManager(Trace, Environment, FileSystem);
                 ProcessManager    = new WindowsProcessManager();
-                string gitPath    = GetGitPath(Environment, FileSystem, Trace);
-                Git               = new GitProcess(
-                                            Trace,
-                                            ProcessManager,
-                                            gitPath,
-                                            FileSystem.GetCurrentDirectory()
-                                        );
-                Settings          = new WindowsSettings(Environment, Git, Trace);
             }
             else if (PlatformUtils.IsMacOS())
             {
@@ -119,14 +117,6 @@ namespace GitCredentialManager
                 Environment       = new MacOSEnvironment(FileSystem);
                 SessionManager    = new MacOSSessionManager(Trace, Environment, FileSystem);
                 ProcessManager    = new ProcessManager();
-                string gitPath    = GetGitPath(Environment, FileSystem, Trace);
-                Git               = new GitProcess(
-                                            Trace,
-                                            ProcessManager,
-                                            gitPath,
-                                            FileSystem.GetCurrentDirectory()
-                                        );
-                Settings          = new MacOSSettings(Environment, Git, Trace);
             }
             else if (PlatformUtils.IsLinux())
             {
@@ -134,14 +124,34 @@ namespace GitCredentialManager
                 Environment       = new PosixEnvironment(FileSystem);
                 SessionManager    = new LinuxSessionManager(Trace, Environment, FileSystem);
                 ProcessManager    = new ProcessManager();
-                string gitPath    = GetGitPath(Environment, FileSystem, Trace);
-                Git               = new GitProcess(
-                                            Trace,
-                                            ProcessManager,
-                                            gitPath,
-                                            FileSystem.GetCurrentDirectory()
-                                        );
-                Settings          = new LinuxSettings(Environment, Git, Trace, FileSystem);
+            }
+            else
+            {
+                throw new PlatformNotSupportedException();
+            }
+
+            if (Git is null)
+            {
+                string gitPath = GetGitPath(Environment, FileSystem, Trace);
+                Git = new GitProcess(
+                    Trace,
+                    ProcessManager,
+                    gitPath,
+                    FileSystem.GetCurrentDirectory()
+                );
+            }
+
+            if (PlatformUtils.IsWindows())
+            {
+                Settings = new WindowsSettings(Environment, Git, Trace);
+            }
+            else if (PlatformUtils.IsMacOS())
+            {
+                Settings = new MacOSSettings(Environment, Git, Trace);
+            }
+            else if (PlatformUtils.IsLinux())
+            {
+                Settings = new LinuxSettings(Environment, Git, Trace, FileSystem);
             }
             else
             {

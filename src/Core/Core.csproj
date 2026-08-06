@@ -18,6 +18,7 @@
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
+    <PackageReference Include="LibGit2Sharp.NativeBinaries" />
   </ItemGroup>
 
 </Project>

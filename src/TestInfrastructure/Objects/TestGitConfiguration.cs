@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 
 namespace GitCredentialManager.Tests.Objects
 {
-    public class TestGitConfiguration : IGitConfiguration
+    public class TestGitConfiguration : DisposableObject, IGitConfiguration
     {
         public const string CanonicalPathPrefix = "/my/path/prefix";
 

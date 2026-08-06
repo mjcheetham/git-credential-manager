@@ -42,4 +42,22 @@
     </ItemGroup>
   </Target>
 
+  <!-- Generate the LibGit2Info file -->
+  <ItemGroup Condition="'$(libgit2_filename)' != '' AND '$(libgit2_hash)' != ''">
+    <Compile Include="$(IntermediateOutputPath)LibGit2Info.g.cs"
+             AutoGen="true"
+             DesignTime="true" />
+  </ItemGroup>
+
+  <Target Name="GenerateLibGit2Info"
+          BeforeTargets="CoreCompile"
+          Condition="'$(libgit2_filename)' != '' AND '$(libgit2_hash)' != ''">
+    <GenerateLibGit2Info BinaryName="$(libgit2_filename)"
+                         CommitHash="$(libgit2_hash)"
+                         OutputFile="$(IntermediateOutputPath)LibGit2Info.g.cs"/>
+    <ItemGroup>
+      <FileWrites Include="$(IntermediateOutputPath)LibGit2Info.g.cs" />
+    </ItemGroup>
+  </Target>
+
 </Project>
