@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -10,225 +11,129 @@ namespace GitCredentialManager;
 /// Stores various TRACE2 format targets user has enabled.
 /// Check <see cref="Trace2FormatTarget"/> for supported formats.
 /// </summary>
-public class Trace2Settings
+internal class Trace2Settings
 {
-    public IDictionary<Trace2FormatTarget, string> FormatTargetsAndValues { get; set; } =
+    public IDictionary<Trace2FormatTarget, string> Targets { get; } =
         new Dictionary<Trace2FormatTarget, string>();
 }
 
-/// <summary>
-/// Class that manages regions.
-/// </summary>
-public class Region : DisposableObject
+internal class RegionScope : DisposableObject
 {
-    private readonly ITrace2 _trace2;
     private readonly string _category;
     private readonly string _label;
     private readonly string _filePath;
     private readonly int _lineNumber;
     private readonly string _message;
+    private readonly string _thread;
+    private readonly int _nesting;
     private readonly DateTimeOffset _startTime;
 
-    public Region(ITrace2 trace2, string category, string label, string filePath, int lineNumber, string message = "")
+    internal RegionScope(
+        string category,
+        string label,
+        string filePath,
+        int lineNumber,
+        string message,
+        string thread,
+        int nesting)
     {
-        _trace2 = trace2;
         _category = category;
         _label = label;
         _filePath = filePath;
         _lineNumber = lineNumber;
         _message = message;
+        _thread = thread;
+        _nesting = nesting;
 
         _startTime = DateTimeOffset.UtcNow;
 
-        _trace2.WriteRegionEnter(_category, _label, _message, _filePath, _lineNumber);
+        Trace2.WriteRegionEnter(_category, _label, _message, _thread, _nesting, _filePath, _lineNumber);
     }
 
     protected override void ReleaseManagedResources()
     {
         double relativeTime = (DateTimeOffset.UtcNow - _startTime).TotalSeconds;
-        _trace2.WriteRegionLeave(relativeTime, _category, _label, _message, _filePath, _lineNumber);
+        Trace2.WriteRegionLeave(
+            relativeTime, _category, _label, _message, _thread, _nesting, _filePath, _lineNumber);
+        Trace2.CompleteRegion(_nesting);
     }
 }
 
 /// <summary>
-/// Represents the application's TRACE2 tracing system.
+/// The application's process-wide TRACE2 tracing system.
 /// </summary>
-public interface ITrace2 : IDisposable
+public static class Trace2
 {
-    /// <summary>
-    /// Initialize TRACE2 tracing by initializing multi-use fields and setting up any configured target formats.
-    /// </summary>
-    /// <param name="startTime">Approximate time calling application began executing.</param>
-    void Initialize(DateTimeOffset startTime);
+    internal const string SidEnvar = "GIT_TRACE2_PARENT_SID";
+    private static readonly object WritersLock = new object();
+    private static readonly List<ITrace2Writer> Writers = new List<ITrace2Writer>();
+    private static readonly AsyncLocal<int> RegionNesting = new AsyncLocal<int>();
 
-    /// <summary>
-    /// Write Version and Start events.
-    /// </summary>
-    /// <param name="appPath">The path to the application.</param>
-    /// <param name="args">Args passed to the application (if applicable).</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void Start(string appPath,
+    private static DateTimeOffset _applicationStartTime;
+    private static Trace2Settings _settings;
+    private static string _sid;
+    private static int _depth;
+
+    private static bool _initialized;
+    // Increment with each new child process that is tracked
+    private static int _childProcCounter;
+
+    public static void Initialize(
         string[] args,
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0);
-
-    /// <summary>
-    /// Write Exit event and dispose of writers.
-    /// </summary>
-    /// <param name="exitCode">The exit code of the GCM application.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void Stop(int exitCode,
-        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0);
-
-    /// <summary>
-    /// Writes information related to startup of child process to trace writer.
-    /// </summary>
-    /// <param name="startTime">Time at which child process began executing.</param>
-    /// <param name="processClass">Process classification.</param>
-    /// <param name="useShell">Specifies whether or not OS shell was used to start the process.</param>
-    /// <param name="appName">Name of application running in child process.</param>
-    /// <param name="argv">Arguments specific to the child process.</param>
-    /// <param name="sid">The child process's session id.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void WriteChildStart(DateTimeOffset startTime,
-        Trace2ProcessClass processClass,
-        bool useShell,
-        string appName,
-        string argv,
-        [System.Runtime.CompilerServices.CallerFilePath]
-        string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber]
-        int lineNumber = 0);
-
-    /// <summary>
-    /// Writes information related to exit of child process to trace writer.
-    /// </summary>
-    /// <param name="relativeTime">Runtime of child process.</param>
-    /// <param name="pid">Id of exiting process.</param>
-    /// <param name="code">Process exit code.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void WriteChildExit(
-        double relativeTime,
-        int pid,
-        int code,
-        [System.Runtime.CompilerServices.CallerFilePath]
-        string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber]
-        int lineNumber = 0);
-
-    /// <summary>
-    /// Writes an error as a message to the trace writer.
-    /// </summary>
-    /// <param name="errorMessage">The error message to write.</param>
-    /// <param name="parameterizedMessage">The error format string.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void WriteError(
-        string errorMessage,
-        string parameterizedMessage = null,
-        [System.Runtime.CompilerServices.CallerFilePath]
-        string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber]
-        int lineNumber = 0);
-
-    /// <summary>
-    /// Creates a region and manages entry/leaving.
-    /// </summary>
-    /// <param name="category">Category of region.</param>
-    /// <param name="label">Description of region.</param>
-    /// <param name="message">Message associated with entering region.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    Region CreateRegion(
-        string category,
-        string label,
-        string message = "",
-        [System.Runtime.CompilerServices.CallerFilePath]
-        string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber]
-        int lineNumber = 0);
-
-    /// <summary>
-    /// Writes a region enter message to the trace writer.
-    /// </summary>
-    /// <param name="category">Category of region.</param>
-    /// <param name="label">Description of region.</param>
-    /// <param name="message">Message associated with entering region.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void WriteRegionEnter(
-        string category,
-        string label,
-        string message = "",
-        [System.Runtime.CompilerServices.CallerFilePath]
-        string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber]
-        int lineNumber = 0);
-
-    /// <summary>
-    /// Writes a region leave message to the trace writer.
-    /// </summary>
-    /// <param name="relativeTime">Time of region execution.</param>
-    /// <param name="category">Category of region.</param>
-    /// <param name="label">Description of region.</param>
-    /// <param name="message">Message associated with entering region.</param>
-    /// <param name="filePath">Path of the file this method is called from.</param>
-    /// <param name="lineNumber">Line number of file this method is called from.</param>
-    void WriteRegionLeave(
-        double relativeTime,
-        string category,
-        string label,
-        string message = "",
-        [System.Runtime.CompilerServices.CallerFilePath]
-        string filePath = "",
-        [System.Runtime.CompilerServices.CallerLineNumber]
-        int lineNumber = 0);
-}
-
-public class Trace2 : DisposableObject, ITrace2
-{
-    private readonly ICommandContext _commandContext;
-    private readonly object _writersLock = new object();
-    private readonly Encoding _utf8NoBomEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
-    private readonly List<ITrace2Writer> _writers = new List<ITrace2Writer>();
-
-    private const string GitSidVariable = "GIT_TRACE2_PARENT_SID";
-
-    private DateTimeOffset _applicationStartTime;
-    private Trace2Settings _settings;
-    private string _sid;
-
-    private bool _initialized;
-    // Increment with each new child process that is tracked
-    private int _childProcCounter = 0;
-
-    public Trace2(ICommandContext commandContext)
-    {
-        _commandContext = commandContext;
-    }
-
-    public void Initialize(DateTimeOffset startTime)
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
         if (_initialized)
         {
             return;
         }
 
-        _applicationStartTime = startTime;
-        _settings = _commandContext.Settings.GetTrace2Settings();
-        _sid = ProcessManager.Sid;
+        _applicationStartTime = DateTimeOffset.UtcNow;
+        _sid = CreateSid();
+        Environment.SetEnvironmentVariable(SidEnvar, _sid);
+        _depth = GetProcessDepth(_sid);
+        _settings = ReadSettings();
 
         InitializeWriters();
-
         _initialized = true;
+
+        string appPath = Environment.ProcessPath ?? Environment.GetCommandLineArgs()[0];
+        Start(appPath, args, filePath, lineNumber);
     }
 
-    public void Start(string appPath,
+    internal static string CreateSid()
+    {
+        // Use trim to ensure no accidental leading or trailing slashes
+        var sid = Environment.GetEnvironmentVariable(SidEnvar)?.Trim('/');
+
+        // If we are the root process we must create our own 'root' SID,
+        // otherwise append a new UUID to the existing root.
+        sid = string.IsNullOrEmpty(sid)
+            ? Guid.NewGuid().ToString("D")
+            : $"{sid}/{Guid.NewGuid():D}";
+
+        return sid;
+    }
+
+    /// <summary>
+    /// Get "depth" of current process relative to top-level Trace2 process.
+    /// </summary>
+    /// <returns>Depth of current process.</returns>
+    internal static int GetProcessDepth(string sid)
+    {
+        const char processSeparator = '/';
+
+        int count = 0;
+        for (var i = 0; i < sid.Length; i++) // use for-loop to avoid IEnumerable overhead from a foreach-loop
+        {
+            if (sid[i] == processSeparator)
+                count++;
+        }
+
+        return count;
+    }
+
+    private static void Start(string appPath,
         string[] args,
         string filePath,
         int lineNumber)
@@ -243,18 +148,23 @@ public class Trace2 : DisposableObject, ITrace2
         WriteStart(appPath, args, filePath, lineNumber);
     }
 
-    public void Stop(int exitCode, string filePath, int lineNumber)
+    public static void Stop(
+        int exitCode,
+        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
         WriteExit(exitCode, filePath, lineNumber);
+        DisposeWriters();
     }
 
-    public void WriteChildStart(DateTimeOffset startTime,
+    public static void WriteChildStart(
+        DateTimeOffset startTime,
         Trace2ProcessClass processClass,
         bool useShell,
         string appName,
         string argv,
-        string filePath = "",
-        int lineNumber = 0)
+        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
         // Some child processes are started before TRACE2 can be initialized.
         // Since certain dependencies are not available until initialization,
@@ -290,16 +200,32 @@ public class Trace2 : DisposableObject, ITrace2
             UseShell = useShell,
             Argv = procArgs,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
-            Depth = ProcessManager.Depth,
+            Depth = _depth,
         });
     }
 
-    public void WriteChildExit(
+    public static void WriteChildExit(
+        DateTimeOffset startTime,
+        int pid,
+        int code,
+        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0) =>
+        WriteChildExit(DateTimeOffset.UtcNow - startTime, pid, code, filePath, lineNumber);
+
+    public static void WriteChildExit(
+        TimeSpan relativeTime,
+        int pid,
+        int code,
+        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0) =>
+        WriteChildExit(relativeTime.TotalSeconds, pid, code, filePath, lineNumber);
+
+    public static void WriteChildExit(
         double relativeTime,
         int pid,
         int code,
-        string filePath = "",
-        int lineNumber = 0)
+        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
     {
         // Some child processes are started before TRACE2 can be initialized.
         // Since certain dependencies are not available until initialization,
@@ -323,11 +249,11 @@ public class Trace2 : DisposableObject, ITrace2
             Code = code,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
             RelativeTime = relativeTime,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
-    public void WriteError(
+    public static void WriteError(
         string errorMessage,
         string parameterizedMessage = null,
         [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
@@ -352,26 +278,30 @@ public class Trace2 : DisposableObject, ITrace2
             Line = lineNumber,
             Message = errorMessage,
             ParameterizedMessage = parameterizedMessage ?? errorMessage,
-            Depth = ProcessManager.Depth
+            Depth = _depth
         });
     }
 
-    public Region CreateRegion(
-        string category,
-        string label,
-        string message,
-        string filePath,
-        int lineNumber)
-    {
-        return new Region(this, category, label, filePath, lineNumber, message);
-    }
-
-    public void WriteRegionEnter(
+    public static IDisposable CreateRegion(
         string category,
         string label,
         string message = "",
-        string filePath = "",
-        int lineNumber = 0)
+        [System.Runtime.CompilerServices.CallerFilePath] string filePath = "",
+        [System.Runtime.CompilerServices.CallerLineNumber] int lineNumber = 0)
+    {
+        int nesting = RegionNesting.Value + 1;
+        RegionNesting.Value = nesting;
+        return new RegionScope(category, label, filePath, lineNumber, message, BuildThreadName(), nesting);
+    }
+
+    internal static void WriteRegionEnter(
+        string category,
+        string label,
+        string message,
+        string thread,
+        int nesting,
+        string filePath,
+        int lineNumber)
     {
         WriteMessage(new RegionEnterMessage()
         {
@@ -381,21 +311,24 @@ public class Trace2 : DisposableObject, ITrace2
             Category = category,
             Label = label,
             Message = message == "" ? label : message,
-            Thread = BuildThreadName(),
+            Thread = thread,
             File = Path.GetFileName(filePath),
             Line = lineNumber,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
-            Depth = ProcessManager.Depth
+            Nesting = nesting,
+            Depth = _depth
         });
     }
 
-    public void WriteRegionLeave(
+    internal static void WriteRegionLeave(
         double relativeTime,
         string category,
         string label,
-        string message = "",
-        string filePath = "",
-        int lineNumber = 0)
+        string message,
+        string thread,
+        int nesting,
+        string filePath,
+        int lineNumber)
     {
         WriteMessage(new RegionLeaveMessage()
         {
@@ -405,26 +338,32 @@ public class Trace2 : DisposableObject, ITrace2
             Category = category,
             Label = label,
             Message = message == "" ? label : message,
-            Thread = BuildThreadName(),
+            Thread = thread,
             File = Path.GetFileName(filePath),
             Line = lineNumber,
             ElapsedTime = (DateTimeOffset.UtcNow - _applicationStartTime).TotalSeconds,
             RelativeTime = relativeTime,
-            Depth = ProcessManager.Depth
+            Nesting = nesting,
+            Depth = _depth
         });
     }
 
-    protected override void ReleaseManagedResources()
+    internal static void CompleteRegion(int nesting)
     {
-        lock (_writersLock)
+        RegionNesting.Value = Math.Max(0, nesting - 1);
+    }
+
+    private static void DisposeWriters()
+    {
+        lock (WritersLock)
         {
             try
             {
-                for (int i = _writers.Count - 1; i >= 0; i--)
+                for (int i = Writers.Count - 1; i >= 0; i--)
                 {
-                    using (_writers[i])
+                    using (Writers[i])
                     {
-                        _writers.RemoveAt(i);
+                        Writers.RemoveAt(i);
                     }
                 }
             }
@@ -433,8 +372,6 @@ public class Trace2 : DisposableObject, ITrace2
                 /* squelch */
             }
         }
-
-        base.ReleaseManagedResources();
     }
 
     internal static bool TryGetPipeName(string eventTarget, out string name)
@@ -457,10 +394,101 @@ public class Trace2 : DisposableObject, ITrace2
         return false;
     }
 
-    private void InitializeWriters()
+    private static Trace2Settings ReadSettings()
+    {
+        var settings = new Trace2Settings();
+        var gitConfig = new Lazy<Dictionary<string,string>>(ReadGitConfig);
+
+        AddTarget(settings, gitConfig,
+            Trace2FormatTarget.Event,
+            Constants.EnvironmentVariables.GitTrace2Event,
+            Constants.GitConfiguration.Trace2.EventTarget);
+        AddTarget(settings, gitConfig,
+            Trace2FormatTarget.Normal,
+            Constants.EnvironmentVariables.GitTrace2Normal,
+            Constants.GitConfiguration.Trace2.NormalTarget);
+        AddTarget(settings, gitConfig,
+            Trace2FormatTarget.Performance,
+            Constants.EnvironmentVariables.GitTrace2Performance,
+            Constants.GitConfiguration.Trace2.PerformanceTarget);
+
+        return settings;
+    }
+
+    private static void AddTarget(
+        Trace2Settings settings,
+        Lazy<Dictionary<string,string>> gitConfig,
+        Trace2FormatTarget format,
+        string environmentVariable,
+        string configurationProperty)
+    {
+        string value = Environment.GetEnvironmentVariable(environmentVariable);
+        if (value is null)
+        {
+            string key = $"{Constants.GitConfiguration.Trace2.SectionName}.{configurationProperty}";
+            value = gitConfig.Value.GetValueOrDefault(key);
+        }
+
+        if (value is not null)
+        {
+            settings.Targets.Add(format, value);
+        }
+    }
+
+    private static Dictionary<string, string> ReadGitConfig()
+    {
+        string programName = OperatingSystem.IsWindows() ? "git.exe" : "git";
+        string gitExecPath = Environment.GetEnvironmentVariable(Constants.EnvironmentVariables.GitExecutablePath);
+        string candidatePath = string.IsNullOrEmpty(gitExecPath)
+            ? null
+            : Path.Combine(gitExecPath, programName);
+        string gitPath = candidatePath is not null && File.Exists(candidatePath)
+            ? candidatePath
+            : programName;
+
+        var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        try
+        {
+            // Read all Git's 'trace2.*' configuration in one shot to avoid repeated calls
+            var startInfo = new ProcessStartInfo(gitPath, "config -z --get-regexp trace2\\..*")
+            {
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false
+            };
+
+            using Process process = Process.Start(startInfo);
+            string data = process.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+            if (process.ExitCode == 0)
+            {
+                string[] kvps = data.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+                foreach (string kvp in kvps)
+                {
+                    string[] parts = kvp.Split('\n', count: 2);
+                    if (parts.Length == 2)
+                    {
+                        string key = parts[0].Trim();
+                        string value = parts[1].Trim();
+                        dict[key] = value;
+                    }
+                }
+            }
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
+        {
+            // ignore
+        }
+
+        return dict;
+    }
+
+    private static void InitializeWriters()
     {
         // Set up the correct writer for every enabled format target.
-        foreach (var formatTarget in _settings.FormatTargetsAndValues)
+        foreach (var formatTarget in _settings.Targets)
         {
             if (TryGetPipeName(formatTarget.Value, out string name)) // Write to named pipe/socket
             {
@@ -468,7 +496,7 @@ public class Trace2 : DisposableObject, ITrace2
             }
             else if (formatTarget.Value.IsTruthy()) // Write to stderr
             {
-                AddWriter(new Trace2TextWriter(formatTarget.Key, _commandContext.Streams.Error));
+                AddWriter(new Trace2TextWriter(formatTarget.Key, Console.Error));
             }
             else if (Path.IsPathRooted(formatTarget.Value)) // Write to file
             {
@@ -484,7 +512,7 @@ public class Trace2 : DisposableObject, ITrace2
         }
     }
 
-    private void WriteVersion(
+    private static void WriteVersion(
         string gcmVersion,
         string filePath,
         int lineNumber,
@@ -505,7 +533,7 @@ public class Trace2 : DisposableObject, ITrace2
         });
     }
 
-    private void WriteStart(
+    private static void WriteStart(
         string appPath,
         string[] args,
         string filePath,
@@ -535,7 +563,7 @@ public class Trace2 : DisposableObject, ITrace2
         });
     }
 
-    private void WriteExit(int code, string filePath = "", int lineNumber = 0)
+    private static void WriteExit(int code, string filePath = "", int lineNumber = 0)
     {
         EnsureArgument.NotNull(code, nameof(code));
 
@@ -552,37 +580,33 @@ public class Trace2 : DisposableObject, ITrace2
         });
     }
 
-    private void AddWriter(ITrace2Writer writer)
+    private static void AddWriter(ITrace2Writer writer)
     {
-        ThrowIfDisposed();
-
-        lock (_writersLock)
+        lock (WritersLock)
         {
             // Try not to add the same writer more than once
-            if (_writers.Contains(writer))
+            if (Writers.Contains(writer))
                 return;
 
-            _writers.Add(writer);
+            Writers.Add(writer);
         }
     }
 
-    private void WriteMessage(Trace2Message message)
+    private static void WriteMessage(Trace2Message message)
     {
-        ThrowIfDisposed();
-
         if (!_initialized)
         {
             return;
         }
 
-        lock (_writersLock)
+        lock (WritersLock)
         {
-            if (_writers.Count == 0)
+            if (Writers.Count == 0)
             {
                 return;
             }
 
-            foreach (var writer in _writers)
+            foreach (var writer in Writers)
             {
                 if (!writer.Failed)
                 {
