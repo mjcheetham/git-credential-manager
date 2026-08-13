@@ -183,6 +183,8 @@ namespace GitCredentialManager
 
         private bool WriteException(Exception ex)
         {
+            Trace2.WriteError(ex);
+
             // Try and use a nicer format for some well-known exception types
             switch (ex)
             {
