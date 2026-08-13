@@ -30,6 +30,10 @@ namespace GitCredentialManager.Commands
                 ? ConfigurationTarget.System
                 : ConfigurationTarget.User;
 
+            using var _ = Trace2.CreateRegion("cfg_cmd", "run");
+            Trace2.WriteData("cfg_cmd", "name", Name);
+            Trace2.WriteData("cfg_cmd", "target", target.ToString());
+
             return ExecuteInternalAsync(target);
         }
 
