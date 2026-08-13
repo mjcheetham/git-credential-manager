@@ -86,7 +86,7 @@ namespace Atlassian.Bitbucket
                 StringComparer.OrdinalIgnoreCase.Equals(request.Protocol, "http") &&
                 BitbucketHelper.IsBitbucketOrg(request))
             {
-                throw new Trace2Exception(
+                throw new Exception(
                     "Unencrypted HTTP is not recommended for Bitbucket.org. " +
                     "Ensure the repository remote URL is using HTTPS " +
                     $"or see {Constants.HelpUrls.GcmUnsafeRemotes} about how to allow unsafe remotes.");
@@ -158,7 +158,7 @@ namespace Atlassian.Bitbucket
                 {
                     var message = "User cancelled credential prompt";
                     _context.Trace.WriteLine(message);
-                    throw new Trace2Exception(message);
+                    throw new Exception(message);
                 }
 
                 switch (result.AuthenticationMode)
@@ -374,7 +374,7 @@ namespace Atlassian.Bitbucket
                 return result.Response.UserName;
             }
 
-            throw new Trace2Exception(
+            throw new Exception(
                 $"Failed to resolve username. HTTP: {result.StatusCode}");
         }
 
@@ -386,7 +386,7 @@ namespace Atlassian.Bitbucket
                 return result.Response.UserName;
             }
 
-            throw new Trace2Exception(
+            throw new Exception(
                 $"Failed to resolve username. HTTP: {result.StatusCode}");
         }
 
