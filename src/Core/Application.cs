@@ -83,6 +83,15 @@ namespace GitCredentialManager
                 }
             }
 
+            void Trace2CommandNameHandler(InvocationContext context)
+            {
+                Command command = context.ParseResult.CommandResult.Command;
+                if (!ReferenceEquals(command, rootCommand))
+                {
+                    Trace2.WriteCommandName(command.Name);
+                }
+            }
+
             // Add standard commands
             rootCommand.AddCommand(new GetCommand(Context, _providerRegistry));
             rootCommand.AddCommand(new StoreCommand(Context, _providerRegistry));
@@ -118,6 +127,7 @@ namespace GitCredentialManager
                 .UseDefaults()
                 .UseExceptionHandler(OnException)
                 .AddMiddleware(NoGuiOptionHandler)
+                .AddMiddleware(Trace2CommandNameHandler)
                 .Build();
 
             return await parser.InvokeAsync(args);
