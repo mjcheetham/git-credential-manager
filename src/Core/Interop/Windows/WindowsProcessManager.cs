@@ -10,7 +10,8 @@ public class WindowsProcessManager : ProcessManager
         PlatformUtils.EnsureWindows();
     }
 
-    public override ChildProcess CreateProcess(string path, string args, bool useShellExecute, string workingDirectory)
+    public override ChildProcess CreateProcess(string path, string args, bool useShellExecute, string workingDirectory,
+        Trace2ProcessClass @class = Trace2ProcessClass.None)
     {
         // If we're asked to start a WSL executable we must launch via the wsl.exe command tool
         if (!useShellExecute && WslUtils.IsWslPath(path))
@@ -19,6 +20,6 @@ public class WindowsProcessManager : ProcessManager
             return WslUtils.CreateWslProcess(distro, $"{wslPath} {args}", workingDirectory);
         }
 
-        return base.CreateProcess(path, args, useShellExecute, workingDirectory);
+        return base.CreateProcess(path, args, useShellExecute, workingDirectory, @class);
     }
 }

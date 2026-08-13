@@ -130,7 +130,7 @@ namespace GitCredentialManager
                 WorkingDirectory = workingDirectory ?? string.Empty
             };
 
-            return new ChildProcess(psi);
+            return new ChildProcess(psi, Trace2ProcessClass.Other);
         }
 
         /// <summary>
