@@ -197,15 +197,10 @@ There are two flavors of standalone installation on Windows:
 To install, double-click the desired installation package and follow the
 instructions presented.
 
-### Uninstall (Windows 10)
+### Uninstall
 
 To uninstall, open the Settings app and navigate to the Apps section. Select
 "Git Credential Manager" and click "Uninstall".
-
-### Uninstall (Windows 7-8.1)
-
-To uninstall, open Control Panel and navigate to the Programs and Features
-screen. Select "Git Credential Manager" and click "Remove".
 
 ### Windows Subsystem for Linux (WSL)
 
@@ -262,4 +257,4 @@ dotnet tool uninstall -g git-credential-manager
 [fromsrc-uninstall]: fromsrc-uninstall.md
 [linux-validate-gpg-debian]: ./linux-validate-gpg.md#debian-package
 [linux-validate-gpg-tarball]: ./linux-validate-gpg.md#tarball
-[ms-wsl]: https://aka.ms/wsl#
+[ms-wsl]: https://aka.ms/wsl

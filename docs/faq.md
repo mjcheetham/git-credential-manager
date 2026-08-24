@@ -147,6 +147,12 @@ Bitbucket|`git config --global credential.https://example.com.provider bitbucket
 Azure DevOps|`git config --global credential.https://example.com.provider azure-repos`
 Generic|`git config --global credential.https://example.com.provider generic`
 
+### How can I use GCM on Windows 7 or 8.x?
+
+Support for Windows 7 and 8.x was dropped in GCM v3.0. If you require a GCM for
+Windows 7 or 8.x, please use the latest GCM v2.x, which is the last major
+version of GCM to support these operating systems.
+
 ### How do I fix "Could not create SSL/TLS secure channel" errors on Windows 7?
 
 This likely indicates that you don't have newer TLS versions available. Please
