@@ -13,6 +13,7 @@ namespace GitCredentialManager
     {
         private static int _exitCode;
 
+        [STAThread]
         public static void Main(string[] args)
         {
             Trace2.Initialize(args);
