@@ -33,25 +33,7 @@ namespace GitCredentialManager.UI
             _win32SoftwareRendering = win32SoftwareRendering;
         }
 
-        public static Task ShowViewAsync(Func<Control> viewFunc, WindowViewModel viewModel, IntPtr parentHandle, CancellationToken ct) =>
-            ShowWindowAsync(() => new DialogWindow(viewFunc()), viewModel, parentHandle, ct);
-
-        public static Task ShowViewAsync<TView>(WindowViewModel viewModel, IntPtr parentHandle, CancellationToken ct)
-            where TView : Control, new() =>
-            ShowWindowAsync(() => new DialogWindow(new TView()), viewModel, parentHandle, ct);
-
-        public static Task ShowWindowAsync(Func<Window> windowFunc, IntPtr parentHandle, CancellationToken ct) =>
-            ShowWindowAsync(windowFunc, null, parentHandle, ct);
-
-        public static Task ShowWindowAsync<TWindow>(IntPtr parentHandle, CancellationToken ct)
-            where TWindow : Window, new() =>
-            ShowWindowAsync(() => new TWindow(), null, parentHandle, ct);
-
-        public static Task ShowWindowAsync<TWindow>(object dataContext, IntPtr parentHandle, CancellationToken ct)
-            where TWindow : Window, new() =>
-            ShowWindowAsync(() => new TWindow(), dataContext, parentHandle, ct);
-
-        public static Task ShowWindowAsync(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
+        internal static void EnsureAppStarted()
         {
             if (!_isAppStarted)
             {
@@ -87,6 +69,29 @@ namespace GitCredentialManager.UI
                 // and for the Avalonia framework (and their dispatcher) to be initialized.
                 appInitialized.Wait();
             }
+        }
+
+        public static Task ShowViewAsync(Func<Control> viewFunc, WindowViewModel viewModel, IntPtr parentHandle, CancellationToken ct) =>
+            ShowWindowAsync(() => new DialogWindow(viewFunc()), viewModel, parentHandle, ct);
+
+        public static Task ShowViewAsync<TView>(WindowViewModel viewModel, IntPtr parentHandle, CancellationToken ct)
+            where TView : Control, new() =>
+            ShowWindowAsync(() => new DialogWindow(new TView()), viewModel, parentHandle, ct);
+
+        public static Task ShowWindowAsync(Func<Window> windowFunc, IntPtr parentHandle, CancellationToken ct) =>
+            ShowWindowAsync(windowFunc, null, parentHandle, ct);
+
+        public static Task ShowWindowAsync<TWindow>(IntPtr parentHandle, CancellationToken ct)
+            where TWindow : Window, new() =>
+            ShowWindowAsync(() => new TWindow(), null, parentHandle, ct);
+
+        public static Task ShowWindowAsync<TWindow>(object dataContext, IntPtr parentHandle, CancellationToken ct)
+            where TWindow : Window, new() =>
+            ShowWindowAsync(() => new TWindow(), dataContext, parentHandle, ct);
+
+        public static Task ShowWindowAsync(Func<Window> windowFunc, object dataContext, IntPtr parentHandle, CancellationToken ct)
+        {
+            EnsureAppStarted();
 
             // Post the window action to the Avalonia dispatcher (which should be running)
             return AvnDispatcher.UIThread.InvokeAsync(
