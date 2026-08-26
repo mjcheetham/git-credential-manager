@@ -11,6 +11,7 @@ using GitCredentialManager.UI.ViewModels;
 using GitCredentialManager.UI.Views;
 using Microsoft.Identity.Client;
 using Microsoft.Identity.Client.Broker;
+using Microsoft.Identity.Client.Extensibility;
 using Spectre.Console;
 
 namespace GitCredentialManager.Authentication.Entra;
@@ -356,10 +357,19 @@ public partial class EntraAuthentication
             case InteractionMode.EmbeddedWebView:
                 Trace2.WriteData(Trace2Category, "mode/resolved", GetModeName(InteractionMode.EmbeddedWebView));
                 Context.Trace.WriteLine("Performing interactive authentication via embedded webview...");
-                return await app.AcquireTokenInteractive(scopes)
-                    .WithUseEmbeddedWebView(true)
-                    .WithEmbeddedWebViewOptions(GetEmbeddedWebViewOptions())
-                    .ExecuteAsync(ct);
+                try
+                {
+                    return await app.AcquireTokenInteractive(scopes)
+                        .WithUseEmbeddedWebView(true)
+                        .WithEmbeddedWebViewOptions(GetEmbeddedWebViewOptions())
+                        .WithCustomWebUi(new MsalAvaloniaCustomWebUi(Context, GetParentWindowHandle()))
+                        .ExecuteAsync(ct);
+                }
+                catch (MsalAvaloniaCustomWebUi.SystemBrowserSwitchException)
+                {
+                    Context.Trace.WriteLine("User requested to switch to system browser for authentication from embedded webview.");
+                    goto case InteractionMode.SystemWebView;
+                }
 
             case InteractionMode.SystemWebView:
                 Trace2.WriteData(Trace2Category, "mode/resolved", GetModeName(InteractionMode.SystemWebView));
@@ -719,9 +729,7 @@ public partial class EntraAuthentication
     }
 
     private bool IsEmbeddedWebViewAvailable() =>
-        // TODO: check for desktop session once embedded web view is added back
-        // return Context.SessionManager.IsDesktopSession;
-        false;
+        PlatformUtils.IsWindows() && Context.SessionManager.IsDesktopSession;
 
     private bool IsSystemWebViewAvailable() => Context.SessionManager.IsWebBrowserAvailable;
 
