@@ -17,6 +17,7 @@
     <PackageReference Include="System.CommandLine" />
     <PackageReference Include="Avalonia" />
     <PackageReference Include="Avalonia.Desktop" />
+    <PackageReference Include="Avalonia.Controls.WebView" />
     <PackageReference Include="Avalonia.Themes.Fluent" />
   </ItemGroup>
 
