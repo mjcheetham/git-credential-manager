@@ -5,7 +5,6 @@ using Avalonia;
 using GitHub;
 using GitLab;
 using Microsoft.AzureRepos;
-using GitCredentialManager.Authentication;
 using GitCredentialManager.UI;
 
 namespace GitCredentialManager
