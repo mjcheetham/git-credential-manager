@@ -437,7 +437,7 @@ _(unset)_|Automatically detect modes
 #### Windows
 
 ```batch
-SET GCM_BITBUCKET_AUTHMODES="oauth,basic"
+SET GCM_BITBUCKET_AUTHMODES=oauth,basic
 ```
 
 #### macOS/Linux
@@ -628,7 +628,7 @@ _(unset)_|Automatically detect modes
 #### Windows
 
 ```batch
-SET GCM_GITHUB_AUTHMODES="oauth,basic"
+SET GCM_GITHUB_AUTHMODES=oauth,basic
 ```
 
 #### macOS/Linux
@@ -659,7 +659,7 @@ _(unset)_|Automatically detect modes
 #### Windows
 
 ```batch
-SET GCM_GITLAB_AUTHMODES="browser"
+SET GCM_GITLAB_AUTHMODES=browser
 ```
 
 #### macOS/Linux
@@ -683,7 +683,7 @@ Defaults to the value `git`.
 #### Windows
 
 ```batch
-SET GCM_NAMESPACE="my-namespace"
+SET GCM_NAMESPACE=my-namespace
 ```
 
 #### macOS/Linux
@@ -721,7 +721,7 @@ _(unset)_|Windows: `wincredman`, macOS: `keychain`, Linux: _(none)_|-
 #### Windows
 
 ```batch
-SET GCM_CREDENTIAL_STORE="gpg"
+SET GCM_CREDENTIAL_STORE=gpg
 ```
 
 #### macOS/Linux
@@ -748,7 +748,7 @@ Defaults to empty.
 #### Windows
 
 ```batch
-SET GCM_CREDENTIAL_CACHE_OPTIONS="--timeout 300"
+SET GCM_CREDENTIAL_CACHE_OPTIONS=--timeout 300
 ```
 
 #### macOS/Linux
@@ -843,7 +843,7 @@ Value|Authentication Flow
 #### Windows
 
 ```batch
-SET GCM_MSAUTH_FLOW="devicecode"
+SET GCM_MSAUTH_FLOW=devicecode
 ```
 
 #### macOS/Linux
@@ -877,7 +877,7 @@ Value|Description
 #### Windows
 
 ```batch
-SET GCM_MSAUTH_USEBROKER="true"
+SET GCM_MSAUTH_USEBROKER=true
 ```
 
 #### macOS/Linux
@@ -907,7 +907,7 @@ Value|Description
 #### Windows
 
 ```batch
-SET GCM_MSAUTH_USEDEFAULTACCOUNT="true"
+SET GCM_MSAUTH_USEDEFAULTACCOUNT=true
 ```
 
 #### macOS/Linux
@@ -938,7 +938,7 @@ More information about Azure Access tokens can be found [here][azure-access-toke
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_CREDENTIALTYPE="oauth"
+SET GCM_AZREPOS_CREDENTIALTYPE=oauth
 ```
 
 #### macOS/Linux
@@ -978,7 +978,7 @@ Value|Description
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_MANAGEDIDENTITY="id://11111111-1111-1111-1111-111111111111"
+SET GCM_AZREPOS_MANAGEDIDENTITY=id://11111111-1111-1111-1111-111111111111
 ```
 
 #### macOS/Linux
@@ -1018,7 +1018,7 @@ For more information about workload identity federation, see the
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_WIF="githubactions"
+SET GCM_AZREPOS_WIF=githubactions
 ```
 
 #### macOS/Linux
@@ -1040,7 +1040,7 @@ token for when using [Workload Identity Federation][wif] with
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_WIF_CLIENTID="11111111-1111-1111-1111-111111111111"
+SET GCM_AZREPOS_WIF_CLIENTID=11111111-1111-1111-1111-111111111111
 ```
 
 #### macOS/Linux
@@ -1062,7 +1062,7 @@ token for when using [Workload Identity Federation][wif] with
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_WIF_TENANTID="22222222-2222-2222-2222-222222222222"
+SET GCM_AZREPOS_WIF_TENANTID=22222222-2222-2222-2222-222222222222
 ```
 
 #### macOS/Linux
@@ -1086,7 +1086,7 @@ Defaults to `api://AzureADTokenExchange`.
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_WIF_AUDIENCE="api://AzureADTokenExchange"
+SET GCM_AZREPOS_WIF_AUDIENCE=api://AzureADTokenExchange
 ```
 
 #### macOS/Linux
@@ -1110,7 +1110,7 @@ This setting is required when `GCM_AZREPOS_WIF` is set to `generic`.
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_WIF_ASSERTION="eyJhbGci..."
+SET GCM_AZREPOS_WIF_ASSERTION=eyJhbGci...
 ```
 
 #### macOS/Linux
@@ -1144,7 +1144,7 @@ Value|Description
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_WIF_MANAGEDIDENTITY="system"
+SET GCM_AZREPOS_WIF_MANAGEDIDENTITY=system
 ```
 
 #### macOS/Linux
@@ -1175,7 +1175,7 @@ For more information about service principals, see the Azure DevOps
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_SERVICE_PRINCIPAL="11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222"
+SET GCM_AZREPOS_SERVICE_PRINCIPAL=11111111-1111-1111-1111-111111111111/22222222-2222-2222-2222-222222222222
 ```
 
 #### macOS/Linux
@@ -1197,7 +1197,7 @@ performing Microsoft authentication for Azure Repos with
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_SP_SECRET="da39a3ee5e6b4b0d3255bfef95601890afd80709"
+SET GCM_AZREPOS_SP_SECRET=da39a3ee5e6b4b0d3255bfef95601890afd80709
 ```
 
 #### macOS/Linux
@@ -1219,7 +1219,7 @@ Specifies the thumbprint of a certificate to use when authenticating as a
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_SP_CERT_THUMBPRINT="9b6555292e4ea21cbc2ebd23e66e2f91ebbe92dc"
+SET GCM_AZREPOS_SP_CERT_THUMBPRINT=9b6555292e4ea21cbc2ebd23e66e2f91ebbe92dc
 ```
 
 #### macOS/Linux
@@ -1245,7 +1245,7 @@ certificate rollover. For details see [https://aka.ms/msal-net-sni](https://aka.
 #### Windows
 
 ```batch
-SET GCM_AZREPOS_SP_CERT_SEND_X5C="true"
+SET GCM_AZREPOS_SP_CERT_SEND_X5C=true
 ```
 
 #### macOS/Linux
