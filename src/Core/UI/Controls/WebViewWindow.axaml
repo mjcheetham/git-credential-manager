@@ -1,0 +1,85 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:wv="clr-namespace:Avalonia.Controls;assembly=Avalonia.Controls.WebView"
+        mc:Ignorable="d" d:DesignWidth="550" d:DesignHeight="750"
+        WindowStartupLocation="CenterScreen"
+        x:Class="GitCredentialManager.UI.Controls.WebViewWindow"
+        x:Name="Window">
+    <DockPanel>
+        <Border DockPanel.Dock="Bottom"
+                Background="{DynamicResource SystemControlPageBackgroundChromeLowBrush}"
+                Padding="5">
+            <Border.IsVisible>
+                <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                    <Binding ElementName="NavigationControls" Path="IsVisible" />
+                    <Binding ElementName="OpenInBrowserButton" Path="IsVisible" />
+                </MultiBinding>
+            </Border.IsVisible>
+            <Grid DockPanel.Dock="Bottom" ColumnDefinitions="*, Auto">
+                <Grid.Styles>
+                    <Style Selector="Button">
+                        <Setter Property="FontSize" Value="12"/>
+                        <Setter Property="Padding" Value="8,5"/>
+                    </Style>
+                </Grid.Styles>
+                <StackPanel Grid.Column="0"
+                            x:Name="NavigationControls"
+                            Orientation="Horizontal"
+                            Spacing="5">
+                    <Button x:Name="BackButton"
+                            Content="&#8592;"
+                            IsEnabled="False"
+                            Click="OnBackClicked"/>
+                    <Button x:Name="ForwardButton"
+                            Content="&#8594;"
+                            IsEnabled="False"
+                            Click="OnForwardClicked"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="5">
+                    <Button x:Name="OpenInBrowserButton"
+                            Content="Open in browser"
+                            Click="OnOpenInBrowserClicked"
+                            ToolTip.Tip="Open in the default browser"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+        <Panel>
+            <Ellipse x:Name="LoadingIndicator"
+                     Width="30" Height="30"
+                     Stroke="{DynamicResource SystemAccentColor}"
+                     StrokeThickness="4"
+                     StrokeDashArray="15,10">
+                <Ellipse.RenderTransform>
+                    <RotateTransform Angle="0"/>
+                </Ellipse.RenderTransform>
+                <Ellipse.Styles>
+                    <Style Selector="Ellipse">
+                        <Style.Animations>
+                            <Animation Duration="0:0:1" IterationCount="INFINITE">
+                                <KeyFrame Cue="0%">
+                                    <Setter Property="RotateTransform.Angle" Value="0"/>
+                                </KeyFrame>
+                                <KeyFrame Cue="100%">
+                                    <Setter Property="RotateTransform.Angle" Value="360"/>
+                                </KeyFrame>
+                            </Animation>
+                        </Style.Animations>
+                    </Style>
+                </Ellipse.Styles>
+            </Ellipse>
+            <!--
+              Start with the NativeWebView control hidden to prevent flashing as the control
+              is initialized. On first navigation complete the control will be made visible.
+            -->
+            <wv:NativeWebView x:Name="WebView"
+                              IsVisible="False"
+                              NavigationCompleted="OnNavigationCompleted"
+                              NavigationStarted="OnNavigationStarted"
+                              EnvironmentRequested="OnEnvironmentRequested"/>
+        </Panel>
+    </DockPanel>
+</Window>

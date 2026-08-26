@@ -8,6 +8,7 @@
     <!-- Avalonia -->
     <PackageVersion Include="Avalonia" Version="12.0.5" />
     <PackageVersion Include="Avalonia.Desktop" Version="12.0.5" />
+    <PackageVersion Include="Avalonia.Controls.WebView" Version="12.0.1" />
     <PackageVersion Include="Avalonia.Themes.Fluent" Version="12.0.5" />
 
     <!-- Microsoft Identity -->
