@@ -52,9 +52,19 @@ namespace GitCredentialManager
             }
 
             // If the provider has custom commands to offer then create them here
+            var cmdAliases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             if (provider is ICommandProvider cmdProvider)
             {
                 ProviderCommand providerCommand = cmdProvider.CreateCommand();
+                foreach (var alias in providerCommand.Aliases)
+                {
+                    // Ensure we don't have duplicate command aliases across providers,
+                    // as this will cause ambiguity when parsing commands!
+                    if (!cmdAliases.Add(alias))
+                    {
+                        throw new InvalidOperationException($"Duplicate command alias '{alias}' detected for provider '{provider.Id}'.");
+                    }
+                }
                 _providerCommands.Add(providerCommand);
             }
 
