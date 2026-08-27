@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using GitCredentialManager;
 using GitCredentialManager.Authentication.Entra;
 using GitCredentialManager.Commands;
+using Microsoft.AzureRepos.Accounts;
 using KnownGitCfg = GitCredentialManager.Constants.GitConfiguration;
 
 namespace Microsoft.AzureRepos
@@ -18,36 +19,63 @@ namespace Microsoft.AzureRepos
         private readonly ICommandContext _context;
         private readonly IAzureDevOpsRestApi _azDevOps;
         private readonly IAzureDevOpsAuthorityCache _authorityCache;
-        private readonly IAzureReposBindingManager _bindingManager;
+        private readonly IAccountBindingManager _bindingManager;
+        private readonly IAccountBindingTargetResolver _bindingTargetResolver;
         private readonly Lazy<IEntraAuthentication> _entraAuth;
 
         public AzureReposHostProvider(ICommandContext context)
             : this(context, new AzureDevOpsRestApi(context),
-                new AzureDevOpsAuthorityCache(context), new AzureReposBindingManager(context))
+                new AzureDevOpsAuthorityCache(context), new AccountBindingManager(context))
         {
         }
 
         public AzureReposHostProvider(ICommandContext context, IAzureDevOpsRestApi azDevOps,
             IAzureDevOpsAuthorityCache authorityCache,
-            IAzureReposBindingManager bindingManager)
+            IAccountBindingManager bindingManager)
+            : this(
+                context,
+                azDevOps,
+                authorityCache,
+                bindingManager,
+                new AccountBindingTargetResolver(context, azDevOps))
+        {
+        }
+
+        public AzureReposHostProvider(ICommandContext context, IAzureDevOpsRestApi azDevOps,
+            IAzureDevOpsAuthorityCache authorityCache,
+            IAccountBindingManager bindingManager,
+            IAccountBindingTargetResolver bindingTargetResolver)
         {
             EnsureArgument.NotNull(context, nameof(context));
             EnsureArgument.NotNull(azDevOps, nameof(azDevOps));
             EnsureArgument.NotNull(authorityCache, nameof(authorityCache));
             EnsureArgument.NotNull(bindingManager, nameof(bindingManager));
+            EnsureArgument.NotNull(bindingTargetResolver, nameof(bindingTargetResolver));
 
             _context = context;
             _azDevOps = azDevOps;
             _authorityCache = authorityCache;
             _bindingManager = bindingManager;
+            _bindingTargetResolver = bindingTargetResolver;
             _entraAuth = new Lazy<IEntraAuthentication>(
                 () => new EntraAuthentication(_context, GetEntraConfig()));
         }
 
         public AzureReposHostProvider(ICommandContext context, IAzureDevOpsRestApi azDevOps,
             IEntraAuthentication entraAuth, IAzureDevOpsAuthorityCache authorityCache,
-            IAzureReposBindingManager bindingManager)
+            IAccountBindingManager bindingManager)
             : this(context, azDevOps, authorityCache, bindingManager)
+        {
+            EnsureArgument.NotNull(entraAuth, nameof(entraAuth));
+
+            _entraAuth = new Lazy<IEntraAuthentication>(() => entraAuth);
+        }
+
+        public AzureReposHostProvider(ICommandContext context, IAzureDevOpsRestApi azDevOps,
+            IEntraAuthentication entraAuth, IAzureDevOpsAuthorityCache authorityCache,
+            IAccountBindingManager bindingManager,
+            IAccountBindingTargetResolver bindingTargetResolver)
+            : this(context, azDevOps, authorityCache, bindingManager, bindingTargetResolver)
         {
             EnsureArgument.NotNull(entraAuth, nameof(entraAuth));
 
@@ -180,9 +208,8 @@ namespace Microsoft.AzureRepos
             }
             else
             {
-                string orgName = UriHelpers.GetOrganizationName(remoteUri);
-                _context.Trace.WriteLine($"Signing user {request.UserName} in to organization '{orgName}'...");
-                _bindingManager.SignIn(orgName, request.UserName);
+                _context.Trace.WriteLine(
+                    "Account bindings are updated immediately after successful Entra authentication.");
             }
 
             return Task.CompletedTask;
@@ -225,8 +252,18 @@ namespace Microsoft.AzureRepos
             {
                 string orgName = UriHelpers.GetOrganizationName(remoteUri);
 
-                _context.Trace.WriteLine($"Signing out of organization '{orgName}'...");
-                _bindingManager.SignOut(orgName);
+                if (_context.Git.IsInsideRepository())
+                {
+                    _context.Trace.WriteLine(
+                        $"Setting local account binding to no-inherit for organization '{orgName}'...");
+                    _bindingManager.SetNoInherit(
+                        AccountBindingTarget.ForOrganization(orgName));
+                }
+                else
+                {
+                    _context.Trace.WriteLine(
+                        "Cannot set local account binding to no-inherit outside a Git repository.");
+                }
 
                 // Clear the authority cache in case this was the reason for failure
                 _authorityCache.EraseAuthority(orgName);
@@ -335,32 +372,51 @@ namespace Microsoft.AzureRepos
             // user manager for a bound user for this organization, if one exists...
             //
             var icmp = StringComparer.OrdinalIgnoreCase;
-            if (!string.IsNullOrWhiteSpace(userName) &&
-                (UriHelpers.IsVisualStudioComHost(remoteWithUserUri.Host) ||
-                 (UriHelpers.IsAzureDevOpsHost(remoteWithUserUri.Host) && !icmp.Equals(orgName, userName))))
+            bool hasUrlUser = !string.IsNullOrWhiteSpace(userName) &&
+                              (UriHelpers.IsVisualStudioComHost(remoteWithUserUri.Host) ||
+                               (UriHelpers.IsAzureDevOpsHost(remoteWithUserUri.Host) &&
+                                !icmp.Equals(orgName, userName)));
+
+            AccountBindingTarget tenantTarget =
+                _bindingTargetResolver.ResolveAuthority(authAuthority);
+            AccountBindingResult bindingResult = null;
+            IEntraAccount account = null;
+            bool bindingSelectedAccount = false;
+            var accountResolver = new EntraAccountResolver(_entraAuth.Value);
+
+            if (hasUrlUser)
             {
                 _context.Trace.WriteLine("Using username as specified in remote.");
+                EntraAccountResolution resolution =
+                    await accountResolver.ResolveByUserNameAsync(userName);
+                account = resolution.Status == EntraAccountResolutionStatus.Found
+                    ? resolution.Account
+                    : null;
             }
             else
             {
-                _context.Trace.WriteLine($"Looking up user for organization '{orgName}'...");
-                userName = _bindingManager.GetUser(orgName);
+                _context.Trace.WriteLine(
+                    $"Looking up account binding for organization '{orgName}'...");
+                bindingResult = _bindingManager.Resolve(
+                    orgName,
+                    tenantTarget?.TenantId);
+
+                if (bindingResult.SelectedBinding is not null)
+                {
+                    EntraAccountResolution resolution =
+                        await accountResolver.ResolveAsync(
+                            bindingResult.SelectedBinding.Account);
+                    if (resolution.Status == EntraAccountResolutionStatus.Found)
+                    {
+                        account = resolution.Account;
+                        bindingSelectedAccount = true;
+                    }
+                }
             }
 
-            IEntraAccount account = null;
-            if (string.IsNullOrWhiteSpace(userName))
-            {
-                _context.Trace.WriteLine("No user found.");
-            }
-            else
-            {
-                _context.Trace.WriteLine($"Looking for cached Entra account matching username '{userName}'...");
-                IReadOnlyList<IEntraAccount> cached = await _entraAuth.Value.GetUserAccountsAsync();
-                account = cached.FirstOrDefault(a => icmp.Equals(a.UserName, userName));
-                _context.Trace.WriteLine(account is null
-                    ? "No cached account found."
-                    : $"Found cached account '{account.HomeAccountId}'");
-            }
+            _context.Trace.WriteLine(account is null
+                ? "No cached bound account found."
+                : $"Found cached account '{account.HomeAccountId}'");
 
             // Get an AAD access token for the Azure DevOps SPS
             _context.Trace.WriteLine("Getting Entra access token...");
@@ -371,7 +427,92 @@ namespace Microsoft.AzureRepos
             _context.Trace.WriteLineSecrets(
                 $"Acquired Entra access token. Account='{result.Account.UserName}' Token='{{0}}'", new object[] {result.AccessToken});
 
+            RememberAccount(
+                orgName,
+                bindingResult,
+                bindingSelectedAccount,
+                result.Account);
+
             return result;
+        }
+
+        private void RememberAccount(
+            string organization,
+            AccountBindingResult bindingResult,
+            bool bindingSelectedAccount,
+            IEntraAccount account)
+        {
+            EnsureArgument.NotNull(account, nameof(account));
+
+            if (bindingSelectedAccount)
+            {
+                AccountBinding selected = bindingResult.SelectedBinding;
+                if (selected.Account.IsLegacy ||
+                    !StringComparer.OrdinalIgnoreCase.Equals(
+                        selected.Account.HomeAccountId, account.HomeAccountId) ||
+                    !StringComparer.OrdinalIgnoreCase.Equals(
+                        selected.Account.UserName, account.UserName))
+                {
+                    _bindingManager.Set(selected.Target, selected.Scope, account);
+                }
+
+                return;
+            }
+
+            if (bindingResult?.SuppressingBinding is
+                {
+                    Scope: AccountBindingScope.Local,
+                    Target.Kind: AccountBindingTargetKind.Organization
+                } suppressingOrganization)
+            {
+                _bindingManager.Set(
+                    suppressingOrganization.Target,
+                    AccountBindingScope.Local,
+                    account);
+                return;
+            }
+
+            AccountBindingTarget organizationTarget =
+                AccountBindingTarget.ForOrganization(organization);
+            AccountBinding global = _bindingManager.Get(
+                organizationTarget, AccountBindingScope.Global);
+            bool globalMatches = global is {State: AccountBindingState.Bound} &&
+                                 StringComparer.OrdinalIgnoreCase.Equals(
+                                     global.Account.HomeAccountId,
+                                     account.HomeAccountId);
+
+            if (global is null || global.State != AccountBindingState.Bound || globalMatches)
+            {
+                _bindingManager.Set(
+                    organizationTarget,
+                    AccountBindingScope.Global,
+                    account);
+
+                if (_context.Git.IsInsideRepository() &&
+                    _bindingManager.Get(
+                        organizationTarget,
+                        AccountBindingScope.Local) is not null)
+                {
+                    _bindingManager.Unset(
+                        organizationTarget,
+                        AccountBindingScope.Local);
+                }
+
+                return;
+            }
+
+            if (_context.Git.IsInsideRepository())
+            {
+                _bindingManager.Set(
+                    organizationTarget,
+                    AccountBindingScope.Local,
+                    account);
+            }
+            else
+            {
+                _context.Trace.WriteLine(
+                    "A different global account binding exists and no local repository is available for an override.");
+            }
         }
 
         internal /* for testing purposes */ static bool TryGetAuthorityFromHeaders(IEnumerable<string> headers, out string authority)

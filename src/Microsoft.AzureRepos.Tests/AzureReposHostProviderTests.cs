@@ -1,11 +1,14 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager;
 using GitCredentialManager.Authentication.Entra;
+using GitCredentialManager.Commands;
 using GitCredentialManager.Tests;
 using GitCredentialManager.Tests.Objects;
+using Microsoft.AzureRepos.Accounts;
 using Moq;
 using Xunit;
 
@@ -133,7 +136,7 @@ namespace Microsoft.AzureRepos.Tests
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var entraAuth = Mock.Of<IEntraAuthentication>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
 
             var provider = new AzureReposHostProvider(context, azDevOps, entraAuth, authorityCache, userMgr);
 
@@ -179,7 +182,7 @@ namespace Microsoft.AzureRepos.Tests
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
+            var userMgrMock = new Mock<IAccountBindingManager>();
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
@@ -232,7 +235,7 @@ namespace Microsoft.AzureRepos.Tests
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
+            var userMgrMock = new Mock<IAccountBindingManager>();
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
@@ -279,9 +282,9 @@ namespace Microsoft.AzureRepos.Tests
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName)).Returns((AzureReposBinding)null);
-
+            var userMgrMock = new Mock<IAccountBindingManager>();
+            userMgrMock.Setup(x => x.Resolve(OrgName, null))
+                .Returns(new AccountBindingResult());
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
 
@@ -327,9 +330,9 @@ namespace Microsoft.AzureRepos.Tests
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName)).Returns((AzureReposBinding)null);
-
+            var userMgrMock = new Mock<IAccountBindingManager>();
+            userMgrMock.Setup(x => x.Resolve(OrgName, null))
+                .Returns(new AccountBindingResult());
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
 
@@ -379,9 +382,13 @@ namespace Microsoft.AzureRepos.Tests
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
             authorityCacheMock.Setup(x => x.GetAuthority(OrgName)).Returns(authorityUrl);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName))
-                .Returns(new AzureReposBinding(OrgName, account, null));
+            var userMgrMock = new Mock<IAccountBindingManager>();
+            userMgrMock.Setup(x => x.Resolve(OrgName, null))
+                .Returns(new AccountBindingResult(
+                    selectedBinding: AccountBinding.Bound(
+                        AccountBindingTarget.ForOrganization(OrgName),
+                        AccountBindingScope.Global,
+                        new AccountReference(null, account))));
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
@@ -392,6 +399,274 @@ namespace Microsoft.AzureRepos.Tests
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
             Assert.Equal(accessToken, credential.Password);
+            userMgrMock.Verify(x => x.Set(
+                AccountBindingTarget.ForOrganization(OrgName),
+                AccountBindingScope.Global,
+                It.Is<IEntraAccount>(a =>
+                    a.HomeAccountId == "account-id" && a.UserName == account)),
+                Times.Once);
+        }
+
+        [Fact]
+        public async Task AzureReposProvider_GetCredentialAsync_TenantBinding_SelectsAccountById()
+        {
+            var tenantId = Guid.NewGuid();
+            string authority = $"https://login.microsoftonline.com/{tenantId:D}";
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo"
+            });
+            var account = new EntraAccount("account-id", "john.doe");
+            var context = new TestCommandContext();
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+            var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+            var authentication = new Mock<IEntraAuthentication>(MockBehavior.Strict);
+            authentication.Setup(x => x.GetUserAccountsAsync(CancellationToken.None))
+                .ReturnsAsync(new IEntraAccount[] {account});
+            authentication.Setup(x => x.GetTokenForUserAsync(
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    authority,
+                    account,
+                    InteractionMode.Auto,
+                    CancellationToken.None))
+                .ReturnsAsync(CreateAuthResult(account.UserName, "ACCESS-TOKEN"));
+            var authorityCache = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
+            authorityCache.Setup(x => x.GetAuthority(OrgName)).Returns(authority);
+            var bindingManager = new Mock<IAccountBindingManager>(MockBehavior.Strict);
+            bindingManager.Setup(x => x.Resolve(OrgName, tenantId))
+                .Returns(new AccountBindingResult(
+                    selectedBinding: AccountBinding.Bound(
+                        AccountBindingTarget.ForTenant(tenantId),
+                        AccountBindingScope.Local,
+                        new AccountReference(account.HomeAccountId, account.UserName))));
+
+            var provider = new AzureReposHostProvider(
+                context,
+                azureDevOps.Object,
+                authentication.Object,
+                authorityCache.Object,
+                bindingManager.Object);
+
+            await provider.GetCredentialAsync(request);
+
+            bindingManager.VerifyAll();
+            bindingManager.Verify(
+                x => x.Set(
+                    It.IsAny<AccountBindingTarget>(),
+                    It.IsAny<AccountBindingScope>(),
+                    It.IsAny<IEntraAccount>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task AzureReposProvider_GetCredentialAsync_OrganizationNoInherit_ReplacesLocalBinding()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo"
+            });
+            const string authority = "https://login.microsoftonline.com/common";
+            const string account = "john.doe";
+            var context = new TestCommandContext();
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+            var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+            var authentication = new Mock<IEntraAuthentication>(MockBehavior.Strict);
+            authentication.Setup(x => x.GetTokenForUserAsync(
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    authority,
+                    null,
+                    InteractionMode.Auto,
+                    CancellationToken.None))
+                .ReturnsAsync(CreateAuthResult(account, "ACCESS-TOKEN"));
+            var authorityCache = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
+            authorityCache.Setup(x => x.GetAuthority(OrgName)).Returns(authority);
+            var target = AccountBindingTarget.ForOrganization(OrgName);
+            var bindingManager = new Mock<IAccountBindingManager>(MockBehavior.Strict);
+            bindingManager.Setup(x => x.Resolve(OrgName, null))
+                .Returns(new AccountBindingResult(
+                    suppressingBinding: AccountBinding.NoInherit(target)));
+            bindingManager.Setup(x => x.Set(
+                target,
+                AccountBindingScope.Local,
+                It.Is<IEntraAccount>(a => a.HomeAccountId == "account-id")));
+
+            var provider = new AzureReposHostProvider(
+                context,
+                azureDevOps.Object,
+                authentication.Object,
+                authorityCache.Object,
+                bindingManager.Object);
+
+            await provider.GetCredentialAsync(request);
+
+            bindingManager.VerifyAll();
+        }
+
+        [Fact]
+        public async Task AzureReposProvider_GetCredentialAsync_TenantNoInherit_CreatesOrganizationBinding()
+        {
+            var tenantId = Guid.NewGuid();
+            string authority = $"https://login.microsoftonline.com/{tenantId:D}";
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo"
+            });
+            var context = new TestCommandContext();
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+            var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+            var authentication = new Mock<IEntraAuthentication>(MockBehavior.Strict);
+            authentication.Setup(x => x.GetTokenForUserAsync(
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes,
+                    authority,
+                    null,
+                    InteractionMode.Auto,
+                    CancellationToken.None))
+                .ReturnsAsync(CreateAuthResult("john.doe", "ACCESS-TOKEN"));
+            var authorityCache = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
+            authorityCache.Setup(x => x.GetAuthority(OrgName)).Returns(authority);
+            var organizationTarget = AccountBindingTarget.ForOrganization(OrgName);
+            var tenantTarget = AccountBindingTarget.ForTenant(tenantId);
+            var bindingManager = new Mock<IAccountBindingManager>(MockBehavior.Strict);
+            bindingManager.Setup(x => x.Resolve(OrgName, tenantId))
+                .Returns(new AccountBindingResult(
+                    suppressingBinding: AccountBinding.NoInherit(tenantTarget)));
+            bindingManager.Setup(x => x.Get(
+                    organizationTarget, AccountBindingScope.Global))
+                .Returns((AccountBinding)null);
+            bindingManager.Setup(x => x.Set(
+                organizationTarget,
+                AccountBindingScope.Global,
+                It.Is<IEntraAccount>(a => a.HomeAccountId == "account-id")));
+            bindingManager.Setup(x => x.Get(
+                    organizationTarget, AccountBindingScope.Local))
+                .Returns((AccountBinding)null);
+
+            var provider = new AzureReposHostProvider(
+                context,
+                azureDevOps.Object,
+                authentication.Object,
+                authorityCache.Object,
+                bindingManager.Object);
+
+            await provider.GetCredentialAsync(request);
+
+            bindingManager.VerifyAll();
+            bindingManager.Verify(
+                x => x.Set(tenantTarget, It.IsAny<AccountBindingScope>(), It.IsAny<IEntraAccount>()),
+                Times.Never);
+        }
+
+        [Fact]
+        public async Task AzureReposProvider_StoreCredentialAsync_Entra_DoesNotWriteBinding()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo",
+                ["username"] = "john.doe",
+                ["password"] = "ACCESS-TOKEN"
+            });
+            var context = new TestCommandContext();
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+            var bindingManager = new Mock<IAccountBindingManager>(MockBehavior.Strict);
+            var provider = new AzureReposHostProvider(
+                context,
+                Mock.Of<IAzureDevOpsRestApi>(),
+                Mock.Of<IEntraAuthentication>(),
+                Mock.Of<IAzureDevOpsAuthorityCache>(),
+                bindingManager.Object);
+
+            await provider.StoreCredentialAsync(request);
+
+            bindingManager.VerifyNoOtherCalls();
+        }
+
+        [Fact]
+        public async Task AzureReposProvider_EraseCredentialAsync_InsideRepository_SetsNoInherit()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo"
+            });
+            var context = new TestCommandContext();
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+            var target = AccountBindingTarget.ForOrganization(OrgName);
+            var bindingManager = new Mock<IAccountBindingManager>(MockBehavior.Strict);
+            bindingManager.Setup(x => x.SetNoInherit(target));
+            var authorityCache = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
+            authorityCache.Setup(x => x.EraseAuthority(OrgName));
+            var provider = new AzureReposHostProvider(
+                context,
+                Mock.Of<IAzureDevOpsRestApi>(),
+                Mock.Of<IEntraAuthentication>(),
+                authorityCache.Object,
+                bindingManager.Object);
+
+            await provider.EraseCredentialAsync(request);
+
+            bindingManager.VerifyAll();
+            authorityCache.VerifyAll();
+        }
+
+        [Fact]
+        public async Task AzureReposProvider_EraseCredentialAsync_OutsideRepository_LeavesBindings()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo"
+            });
+            var context = new TestCommandContext();
+            context.Git.CurrentRepository = null;
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.OAuthCredentialType;
+            var bindingManager = new Mock<IAccountBindingManager>(MockBehavior.Strict);
+            var authorityCache = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
+            authorityCache.Setup(x => x.EraseAuthority(OrgName));
+            var provider = new AzureReposHostProvider(
+                context,
+                Mock.Of<IAzureDevOpsRestApi>(),
+                Mock.Of<IEntraAuthentication>(),
+                authorityCache.Object,
+                bindingManager.Object);
+
+            await provider.EraseCredentialAsync(request);
+
+            bindingManager.VerifyNoOtherCalls();
+            authorityCache.VerifyAll();
+        }
+
+        [Fact]
+        public void AzureReposProvider_CreateCommand_RegistersAccountCommands()
+        {
+            var provider = new AzureReposHostProvider(
+                new TestCommandContext(),
+                Mock.Of<IAzureDevOpsRestApi>(),
+                Mock.Of<IEntraAuthentication>(),
+                Mock.Of<IAzureDevOpsAuthorityCache>(),
+                Mock.Of<IAccountBindingManager>(),
+                Mock.Of<IAccountBindingTargetResolver>());
+
+            ProviderCommand command = ((ICommandProvider)provider).CreateCommand();
+
+            Assert.Equal(
+                new[] {"clear-cache", "list", "login", "logout", "set", "show", "unset"},
+                command.Subcommands.Select(x => x.Name).OrderBy(x => x).ToArray());
         }
 
         [Fact]
@@ -430,9 +705,9 @@ namespace Microsoft.AzureRepos.Tests
             authorityCacheMock.Setup(x => x.GetAuthority(It.IsAny<string>())).Returns((string)null);
             authorityCacheMock.Setup(x => x.UpdateAuthority(OrgName, authorityUrl));
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
-            userMgrMock.Setup(x => x.GetBinding(OrgName)).Returns((AzureReposBinding)null);
-
+            var userMgrMock = new Mock<IAccountBindingManager>();
+            userMgrMock.Setup(x => x.Resolve(OrgName, null))
+                .Returns(new AccountBindingResult());
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
 
@@ -476,7 +751,9 @@ namespace Microsoft.AzureRepos.Tests
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
+            var userMgrMock = new Mock<IAccountBindingManager>();
+            userMgrMock.Setup(x => x.Resolve(OrgName, null))
+                .Returns(new AccountBindingResult());
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
@@ -522,7 +799,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var authorityCacheMock = new Mock<IAzureDevOpsAuthorityCache>(MockBehavior.Strict);
 
-            var userMgrMock = new Mock<IAzureReposBindingManager>(MockBehavior.Strict);
+            var userMgrMock = new Mock<IAccountBindingManager>();
 
             var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
                 authorityCacheMock.Object, userMgrMock.Object);
@@ -557,7 +834,7 @@ namespace Microsoft.AzureRepos.Tests
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var entraAuth = Mock.Of<IEntraAuthentication>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
 
             var provider = new AzureReposHostProvider(context, azDevOps, entraAuth, authorityCache, userMgr);
 
@@ -596,7 +873,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
             var entraAuthMock = new Mock<IEntraAuthentication>();
 
             entraAuthMock.Setup(x => x.GetTokenForManagedIdentityAsync(
@@ -645,7 +922,7 @@ namespace Microsoft.AzureRepos.Tests
                 Mock.Of<IAzureDevOpsRestApi>(),
                 Mock.Of<IEntraAuthentication>(),
                 Mock.Of<IAzureDevOpsAuthorityCache>(),
-                Mock.Of<IAzureReposBindingManager>());
+                Mock.Of<IAccountBindingManager>());
 
             await Assert.ThrowsAsync<ArgumentException>(() => provider.GetCredentialAsync(request));
         }
@@ -682,7 +959,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
             var entraAuthMock = new Mock<IEntraAuthentication>();
 
             entraAuthMock.Setup(x => x.GetTokenUsingWorkloadFederationAsync(
@@ -747,7 +1024,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
             var entraAuthMock = new Mock<IEntraAuthentication>();
 
             entraAuthMock.Setup(x => x.GetTokenUsingWorkloadFederationAsync(
@@ -809,7 +1086,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
             var entraAuthMock = new Mock<IEntraAuthentication>();
 
             entraAuthMock.Setup(x => x.GetTokenUsingWorkloadFederationAsync(
@@ -873,7 +1150,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
             var entraAuthMock = new Mock<IEntraAuthentication>();
 
             entraAuthMock.Setup(x => x.GetTokenUsingWorkloadFederationAsync(
@@ -934,7 +1211,7 @@ namespace Microsoft.AzureRepos.Tests
 
             var azDevOps = Mock.Of<IAzureDevOpsRestApi>();
             var authorityCache = Mock.Of<IAzureDevOpsAuthorityCache>();
-            var userMgr = Mock.Of<IAzureReposBindingManager>();
+            var userMgr = Mock.Of<IAccountBindingManager>();
             var entraAuthMock = new Mock<IEntraAuthentication>();
 
             entraAuthMock.Setup(x => x.GetTokenForServicePrincipalAsync(
@@ -1131,7 +1408,7 @@ namespace Microsoft.AzureRepos.Tests
         {
             return new MockEntraAuthResult
             {
-                Account = new EntraAccount(homeAccountId: null, userName: upn),
+                Account = new EntraAccount(homeAccountId: "account-id", userName: upn),
                 AccessToken = token,
             };
         }

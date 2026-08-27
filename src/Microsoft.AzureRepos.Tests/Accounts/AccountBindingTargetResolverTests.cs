@@ -10,6 +10,63 @@ namespace Microsoft.AzureRepos.Tests.Accounts;
 public class AccountBindingTargetResolverTests
 {
     [Fact]
+    public void AccountBindingTargetResolver_Constructor_DoesNotReadAuthorityBase()
+    {
+        var context = Mock.Of<GitCredentialManager.ICommandContext>();
+        var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+
+        _ = new AccountBindingTargetResolver(context, azureDevOps.Object);
+    }
+
+    [Fact]
+    public void AccountBindingTargetResolver_ResolveAuthority_StandardTenant_ReturnsTarget()
+    {
+        var tenantId = Guid.NewGuid();
+        var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+        var resolver = new AccountBindingTargetResolver(
+            azureDevOps.Object, Mock.Of<IEntraTenantResolver>());
+
+        AccountBindingTarget result = resolver.ResolveAuthority(
+            $"https://login.microsoftonline.com/{tenantId:D}/oauth2/authorize");
+
+        Assert.Equal(AccountBindingTarget.ForTenant(tenantId), result);
+    }
+
+    [Theory]
+    [InlineData("common")]
+    [InlineData("organizations")]
+    [InlineData("consumers")]
+    [InlineData("not-an-authority")]
+    public void AccountBindingTargetResolver_ResolveAuthority_NonTenant_ReturnsNull(
+        string authority)
+    {
+        var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+        var resolver = new AccountBindingTargetResolver(
+            azureDevOps.Object, Mock.Of<IEntraTenantResolver>());
+        string value = authority.Contains("authority", StringComparison.Ordinal)
+            ? authority
+            : $"https://login.microsoftonline.com/{authority}";
+
+        Assert.Null(resolver.ResolveAuthority(value));
+    }
+
+    [Fact]
+    public void AccountBindingTargetResolver_ResolveAuthority_CustomBase_ReturnsTarget()
+    {
+        var tenantId = Guid.NewGuid();
+        var authorityBase = new Uri("https://example.com/identity/");
+        var azureDevOps = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+        azureDevOps.Setup(x => x.GetAuthorityBaseUri()).Returns(authorityBase);
+        var resolver = new AccountBindingTargetResolver(
+            azureDevOps.Object, Mock.Of<IEntraTenantResolver>());
+
+        AccountBindingTarget result = resolver.ResolveAuthority(
+            new Uri(authorityBase, $"{tenantId:D}/v2.0").ToString());
+
+        Assert.Equal(AccountBindingTarget.ForTenant(tenantId), result);
+    }
+
+    [Fact]
     public async Task AccountBindingTargetResolver_ResolveOrganizationAsync_TenantAuthority_ReturnsTargets()
     {
         const string organization = "MyOrg";

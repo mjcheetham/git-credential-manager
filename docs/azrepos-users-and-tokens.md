@@ -44,15 +44,16 @@ re-authenticate due to expired tokens!
 
 #### User accounts
 
-In versions of Git Credential Manager that support Microsoft identity OAuth
-tokens, the user account used to authenticate for a particular Azure DevOps
-organization will now be remembered.
+The first time you access an Azure DevOps organization with Microsoft identity
+OAuth tokens, GCM prompts you to select an account. After authentication
+succeeds, GCM records an account binding in Git configuration so it can select
+the same cached account for later Git operations.
 
-The first time you clone, fetch or push from/to an Azure DevOps organization you
-will be prompted to sign-in and select a user account. Git Credential Manager
-will remember which account you used and continue to use that for all future
-remote Git operations (clone/fetch/push). An account is said to be "bound" to
-an Azure DevOps organization.
+A binding stores both the account's stable Microsoft Entra home account ID and
+its username. The account ID is used for selection, while the username remains
+useful for display and compatibility with bindings written by older GCM
+versions. A legacy username-only binding is upgraded automatically after a
+successful authentication.
 
 ---
 
@@ -62,164 +63,116 @@ credential. This may change in the future.
 
 ---
 
-Normally you won't need to worry about managing which user accounts Git
-Credential Manager is using as this is configured automatically when you first
-authenticate for a particular Azure DevOps organization.
+Bindings can target either an Azure DevOps organization or a Microsoft Entra
+tenant. Organization bindings are more specific and always take precedence
+over tenant bindings. Within each target, a local repository binding takes
+precedence over a global user binding. The complete lookup order is:
 
-In advanced scenarios (such as using multiple accounts) you can interact with
-and manage remembered user accounts using the 'azure-repos' provider command:
+1. Local organization binding.
+2. Global organization binding.
+3. Local tenant binding.
+4. Global tenant binding.
 
-```shell
-git-credential-manager azure-repos [ list | bind | unbind | ... ] <options>
-```
+Global bindings are stored in the user Git configuration, such as
+`~/.gitconfig` or `%USERPROFILE%\.gitconfig`. Local bindings are stored in the
+current repository's `.git/config`.
 
-##### Listing remembered accounts
-
-You can list all bound user accounts by Git Credential Manager for each Azure
-DevOps organization using the `list` command:
-
-```shell
-$ git-credential-manager azure-repos list
-contoso:
-  (global) -> alice@contoso.com
-fabrikam:
-  (global) -> user42@fabrikam.com
-```
-
-In the above example, the `contoso` Azure DevOps organization is associated with
-the `alice@contoso.com` user account, while the `fabrikam` organization is
-associated to the `user42@fabrikam.com` user account.
-
-Global "bindings" apply to all remote Git operations for the current computer
-user profile and are stored in `~/.gitconfig` or `%USERPROFILE%\.gitconfig`.
-
-##### Using different accounts within a repository
-
-If you generally use one account for an Azure DevOps organization, the default
-global bindings will be sufficient. However, if you wish to use a different
-user account for an organization in a particular repository you can use a local
-binding.
-
-Local account bindings only apply within a single repository and are stored in
-the `.git/config` file. If there are local bindings in a repository you can show
-them with the `list` command:
+Normally GCM manages organization bindings automatically. For advanced
+scenarios, use the `azure-repos` provider commands:
 
 ```shell
-~/myrepo$ git-credential-manager azure-repos list
-contoso:
-  (global) -> alice@contoso.com
-  (local)  -> alice-alt@contoso.com
+git-credential-manager azure-repos <command> <options>
 ```
 
-Within the `~/myrepo` repository, the `alice-alt@contoso.com` account will be
-used by Git and GCM for the `contoso` Azure DevOps organization.
+##### Inspect accounts and bindings
 
-To create a local binding, use the `bind` command with the `--local` option when
-inside a repository:
+`list` displays all cached Microsoft Entra accounts together with bindings at
+the selected scope. This includes unbound accounts and stale, legacy, invalid,
+or no-inherit bindings.
 
 ```shell
-~/myrepo$ git-credential-manager azure-repos bind --local contoso alice-alt@contso.com
+git-credential-manager azure-repos list
+git-credential-manager azure-repos list --local
+git-credential-manager azure-repos list --org contoso
+git-credential-manager azure-repos list --tenant contoso.onmicrosoft.com
 ```
 
-```diff
-  contoso:
-    (global) -> alice@contoso.com
-+   (local)  -> alice-alt@contoso.com
-```
-
-##### Forget an account
-
-To have Git Credential Manager forget a user account, use the `unbind` command:
+`show` displays the local and global records for one organization or tenant,
+along with the effective resolution:
 
 ```shell
-git-credential-manager azure-repos unbind fabrikam
+git-credential-manager azure-repos show --org contoso
+git-credential-manager azure-repos show --tenant contoso.onmicrosoft.com
 ```
 
-```diff
-  contoso:
-    (global) -> alice@contoso.com
-- fabrikam:
--   (global) -> user42@fabrikam.com
-```
+##### Manage the account cache
 
-In the above example, and global account binding for the `fabrikam` organization
-will be forgotten. The next time you need to renew a PAT (if using PATs) or
-perform any remote Git operation (is using Azure tokens) you will be prompted
-to authenticate again.
-
-To forget or remove a local binding, within the repository run the `unbind`
-command with the `--local` option:
+`login` authenticates and adds an account to the shared Microsoft Entra cache.
+It does not create a binding.
 
 ```shell
-~/myrepo$ git-credential-manager azure-repos unbind --local contoso
+git-credential-manager azure-repos login
+git-credential-manager azure-repos login --org contoso
+git-credential-manager azure-repos login --tenant contoso.onmicrosoft.com
 ```
 
-```diff
-  contoso:
-    (global) -> alice@contoso.com
--   (local)  -> alice-alt@contoso.com
-```
-
-##### Using different accounts for specific Git remotes
-
-As well as global and local user account bindings, you can instruct Git
-Credential Manager to use a specific user account for an individual Git remotes
-within the same local repository.
-
-To show which accounts are being used for each Git remote in a repository use
-the `list` command with the `--show-remotes` option:
+`logout` removes one account from the shared cache. It does not remove its
+bindings, which remain visible as stale records until the account signs in
+again or the bindings are changed.
 
 ```shell
-~/myrepo$ git-credential-manager azure-repos list --show-remotes
-contoso:
-  (global) -> alice@contoso.com
-  origin:
-    (fetch) -> (inherit)
-    (push)  -> (inherit)
-fabrikam:
-  (global) -> alice@fabrikam.com
+git-credential-manager azure-repos logout --id <home-account-id>
+git-credential-manager azure-repos logout --username alice@contoso.com
 ```
 
-In the above example, the `~/myrepo` repository has a single Git remote named
-`origin` that points to the `contoso` Azure DevOps organization. There is no
-user account specifically associated with the `origin` remote, so the global
-user account binding for `contoso` will be used (the global binding is
-inherited).
+The Microsoft Entra cache is shared with other Microsoft developer tools, so
+logging out can affect those tools.
 
-To associate a user account with a particular Git remote you must manually edit
-the remote URL using `git config` commands to include the username in the
-[user information][rfc3986-s321] part of the URL.
+##### Manage bindings
+
+Use `set` to bind an organization or tenant to exactly one cached account.
+Specify the account by home account ID or by an unambiguous username. Global
+scope is the default; use `--local` inside a repository to override it.
 
 ```shell
-git config --local remote.origin.url https://alice-alt%40contoso.com@contoso.visualstudio.com/project/_git/repo
+git-credential-manager azure-repos set --org contoso \
+    --username alice@contoso.com
+git-credential-manager azure-repos set --tenant contoso.onmicrosoft.com \
+    --id <home-account-id>
+git-credential-manager azure-repos set --local --org contoso \
+    --username alice-alt@contoso.com
 ```
 
-In the above example the `alice-alt@contoso.com` account is being set as the
-account to use for the `origin` Git remote.
-
----
-
-**Note:** All special characters must be URL encoded/escaped, for example `@`
-becomes `%40`.
-
----
-
-The `list --show-remotes` command will show the user account specified in the
-remote URL:
+Use `unset` to remove the record at an exact scope and restore inheritance:
 
 ```shell
-~/myrepo$ git-credential-manager azure-repos list --show-remotes
-contoso:
-  (global) -> alice@contoso.com
-  origin:
-    (fetch) -> alice-alt@contoso.com
-    (push)  -> alice-alt@contoso.com
-fabrikam:
-  (global) -> alice@fabrikam.com
+git-credential-manager azure-repos unset --org contoso
+git-credential-manager azure-repos unset --local --org contoso
+git-credential-manager azure-repos unset --tenant contoso.onmicrosoft.com
 ```
+
+To prevent a repository from inheriting a binding, set a local no-inherit
+record. An organization no-inherit record suppresses both global organization
+and tenant fallback. A tenant no-inherit record suppresses only the global
+binding for that tenant.
+
+```shell
+git-credential-manager azure-repos set --local --org contoso --no-inherit
+git-credential-manager azure-repos set --local \
+    --tenant contoso.onmicrosoft.com --no-inherit
+```
+
+When Git reports that an Entra credential was rejected, GCM automatically
+writes a local organization no-inherit record if the operation is inside a
+repository. The next credential request therefore prompts for an account
+instead of repeatedly selecting the rejected inherited binding. After
+authentication succeeds, GCM replaces that organization no-inherit record with
+the newly selected account.
+
+`clear-cache` clears cached Azure DevOps authority discovery. It does not clear
+Microsoft Entra accounts or account bindings.
 
 [azure-devops-pats]: https://docs.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=preview-page
 [credential-azreposCredentialType]: configuration.md#credentialazreposcredentialtype
 [gcm-azrepos-credential-type]: environment.md#GCM_AZREPOS_CREDENTIALTYPE
 [azure-devops-api]: https://docs.microsoft.com/en-gb/rest/api/azure/devops/tokens/pats
-[rfc3986-s321]: https://www.rfc-editor.org/rfc/rfc3986#section-3.2.1

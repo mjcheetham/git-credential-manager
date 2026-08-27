@@ -37,9 +37,9 @@ Set your user-level Git configuration (`~/.gitconfig`) to use GCM. If you pass
 
 ### azure-repos
 
-Interact with the Azure Repos host provider to bind/unbind user accounts to
-Azure DevOps organizations or specific remote URLs, and manage the
-authentication authority cache.
+Interact with the Azure Repos host provider to manage cached Microsoft Entra
+accounts, organization and tenant account bindings, and the authentication
+authority cache.
 
 For more information about managing user account bindings see
 [here][azure-access-tokens-ua].
