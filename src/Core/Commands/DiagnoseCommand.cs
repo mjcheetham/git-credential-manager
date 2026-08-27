@@ -13,7 +13,7 @@ namespace GitCredentialManager.Commands
         private const string TestOutputIndent = "    ";
 
         private readonly ICommandContext _context;
-        private readonly ICollection<IDiagnostic> _diagnostics;
+        private readonly List<IDiagnostic> _diagnostics = new();
 
         public DiagnoseCommand(ICommandContext context)
             : base("diagnose", "Run diagnostics and gather logs to diagnose problems with Git Credential Manager")
@@ -21,16 +21,6 @@ namespace GitCredentialManager.Commands
             EnsureArgument.NotNull(context, nameof(context));
 
             _context = context;
-            _diagnostics = new List<IDiagnostic>
-            {
-                // Add standard diagnostics
-                new EnvironmentDiagnostic(context),
-                new FileSystemDiagnostic(context),
-                new NetworkingDiagnostic(context),
-                new GitDiagnostic(context),
-                new CredentialStoreDiagnostic(context),
-                new EntraAuthenticationDiagnostic(context)
-            };
 
             var output = new Option<string>(new[] { "--output", "-o" }, "Output directory for diagnostic logs.");
             AddOption(output);
@@ -38,9 +28,24 @@ namespace GitCredentialManager.Commands
             this.SetHandler(ExecuteAsync, output);
         }
 
+        public void AddStandardDiagnostics()
+        {
+            _diagnostics.Add(new EnvironmentDiagnostic(_context));
+            _diagnostics.Add(new FileSystemDiagnostic(_context));
+            _diagnostics.Add(new NetworkingDiagnostic(_context));
+            _diagnostics.Add(new GitDiagnostic(_context));
+            _diagnostics.Add(new CredentialStoreDiagnostic(_context));
+            _diagnostics.Add(new EntraAuthenticationDiagnostic(_context));
+        }
+
         public void AddDiagnostic(IDiagnostic diagnostic)
         {
             _diagnostics.Add(diagnostic);
+        }
+
+        public void AddDiagnostics(IEnumerable<IDiagnostic> diagnostics)
+        {
+            _diagnostics.AddRange(diagnostics);
         }
 
         private async Task<int> ExecuteAsync(string output)
