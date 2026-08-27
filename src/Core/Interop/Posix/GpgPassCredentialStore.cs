@@ -19,6 +19,8 @@ namespace GitCredentialManager.Interop.Posix
             _gpg = gpg;
         }
 
+        public override string Name => "GPG/Pass";
+
         protected override string CredentialFileExtension => ".gpg";
 
         private string GetGpgId(string credentialFullPath)

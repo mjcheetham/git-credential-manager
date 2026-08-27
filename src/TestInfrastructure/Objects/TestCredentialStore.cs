@@ -14,6 +14,8 @@ namespace GitCredentialManager.Tests.Objects
 
         #region ICredentialStore
 
+        public string Name => "Test Credential Store";
+
         public IList<string> GetAccounts(string service)
         {
             return Query(service, null).Select(x => x.Account).Distinct().ToList();

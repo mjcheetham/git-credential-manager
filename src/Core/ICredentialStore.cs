@@ -8,6 +8,11 @@ namespace GitCredentialManager
     public interface ICredentialStore
     {
         /// <summary>
+        /// Get the name of the credential store.
+        /// </summary>
+        string Name { get; }
+
+        /// <summary>
         /// Get all accounts from the store for the given service.
         /// </summary>
         /// <param name="service">Name of the service to match against. Use null to match all values.</param>

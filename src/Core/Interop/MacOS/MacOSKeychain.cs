@@ -31,6 +31,8 @@ namespace GitCredentialManager.Interop.MacOS
 
         #region ICredentialStore
 
+        public string Name => "macOS Keychain";
+
         public IList<string> GetAccounts(string service)
         {
             IntPtr query = IntPtr.Zero;

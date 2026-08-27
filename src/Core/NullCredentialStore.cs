@@ -9,6 +9,8 @@ namespace GitCredentialManager;
 /// </summary>
 public class NullCredentialStore : ICredentialStore
 {
+    public string Name => "No-op";
+
     public IList<string> GetAccounts(string service) => Array.Empty<string>();
 
     public ICredential Get(string service, string account) => null;

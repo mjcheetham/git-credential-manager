@@ -25,6 +25,15 @@ namespace GitCredentialManager
 
         #region ICredentialStore
 
+        public string Name
+        {
+            get
+            {
+                EnsureBackingStore();
+                return _backingStore.Name;
+            }
+        }
+
         public IList<string> GetAccounts(string service)
         {
             EnsureBackingStore();
