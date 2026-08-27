@@ -67,6 +67,8 @@ public partial class AzureReposHostProvider
         unbindCmd.SetHandler(UnbindCmd, orgArg, localOpt);
 
         var rootCmd = new ProviderCommand(this);
+        rootCmd.AddAlias("azrepos");
+        rootCmd.AddAlias("ado");
         rootCmd.AddCommand(listCmd);
         rootCmd.AddCommand(bindCmd);
         rootCmd.AddCommand(unbindCmd);
