@@ -61,10 +61,6 @@ namespace GitCredentialManager.Commands
                 return 0;
             }
 
-            int numFailed = 0;
-            int numSkipped = 0;
-            int numWarned = 0;
-
             string currentDir = Directory.GetCurrentDirectory();
             string outputDir;
             if (string.IsNullOrWhiteSpace(output))
@@ -82,131 +78,40 @@ namespace GitCredentialManager.Commands
             }
 
             string logFilePath = Path.Combine(outputDir, "gcm-diagnose.log");
-            var extraLogs = new List<string>();
+            var results = new List<DiagnosticResult>();
 
             using var fullLog = new StreamWriter(logFilePath, append: false, Encoding.UTF8);
-            fullLog.WriteLine("Diagnose log at {0:s}Z", DateTime.UtcNow);
-            fullLog.WriteLine();
-            fullLog.WriteLine($"AppPath: {_context.ApplicationPath}");
-            fullLog.WriteLine($"InstallDir: {_context.InstallationDirectory}");
-            fullLog.WriteLine(
-                AssemblyUtils.TryGetAssemblyVersion(out string version)
-                    ? $"Version: {version}"
-                    : "Version: [!] Failed to get version information [!]"
-            );
-            fullLog.WriteLine();
+            WriteLogHeader(fullLog);
 
             foreach (IDiagnostic diagnostic in _diagnostics)
             {
-                fullLog.WriteLine("------------");
-                fullLog.WriteLine($"Diagnostic: {diagnostic.Name}");
-
-                if (!diagnostic.CanRun(out string skipReason))
-                {
-                    fullLog.Write("Outcome: Skipped");
-                    if (!string.IsNullOrWhiteSpace(skipReason))
-                    {
-                        fullLog.Write($" ({skipReason})");
-                    }
-                    fullLog.WriteLine();
-
-                    Console.Write(" ");
-                    ConsoleEx.WriteColor("[SKIP]", ConsoleColor.DarkGray);
-                    Console.WriteLine(" {0}", diagnostic.Name);
-
-                    numSkipped++;
-                    continue;
-                }
-
-                string inProgressMsg = $"  >>>>  {diagnostic.Name}";
-                Console.Write(inProgressMsg);
-
-                DiagnosticResult result = await diagnostic.RunAsync();
-                fullLog.WriteLine("Outcome: {0}", result.Outcome);
-
-                if (result.Exception is AggregateException aex)
-                {
-                    fullLog.WriteLine("Exception: AggregateException");
-                    fullLog.WriteLine("InnerExceptions (flattened):");
-                    foreach (var inner in aex.Flatten().InnerExceptions)
-                    {
-                        fullLog.WriteLine(inner.ToString());
-                    }
-                }
-                else if (result.Exception is not null)
-                {
-                    fullLog.WriteLine("Exception: {0}", result.Exception);
-                }
-
-                fullLog.WriteLine("Log:");
-                foreach (var report in result.Reports)
-                {
-                    fullLog.WriteLine(report.Message);
-                }
-
-                Console.Write(new string('\b', inProgressMsg.Length - 1));
-                switch (result.Outcome)
-                {
-                    case DiagnosticOutcome.Success:
-                        ConsoleEx.WriteColor("[ OK ]", ConsoleColor.DarkGreen);
-                        break;
-                    case DiagnosticOutcome.Warning:
-                        ConsoleEx.WriteColor("[WARN]", ConsoleColor.DarkYellow);
-                        numWarned++;
-                        break;
-                    case DiagnosticOutcome.Error:
-                        ConsoleEx.WriteColor("[FAIL]", ConsoleColor.Red);
-                        numFailed++;
-                        break;
-                    default:
-                        throw new ArgumentOutOfRangeException();
-                }
-                Console.WriteLine(" {0}", diagnostic.Name);
-
-                if (result.Outcome != DiagnosticOutcome.Success)
-                {
-                    if (result.Exception is not null)
-                    {
-                        Console.WriteLine();
-                        ConsoleEx.WriteLineIndent("[!] Encountered an exception [!]");
-                        ConsoleEx.WriteLineIndent(result.Exception.ToString());
-                    }
-
-                    Console.WriteLine();
-                    ConsoleEx.WriteLineIndent("[*] Diagnostic test log [*]");
-                    ConsoleEx.WriteLineIndent(result.Reports.Select(x => x.Message));
-
-                    Console.WriteLine();
-                }
-
-                foreach (string filePath in result.AdditionalFiles)
-                {
-                    string fileName = Path.GetFileName(filePath);
-                    string destPath = Path.Combine(outputDir, fileName);
-                    try
-                    {
-                        File.Copy(filePath, destPath, overwrite: true);
-                    }
-                    catch
-                    {
-                        ConsoleEx.WriteLineIndent($"Failed to copy additional file '{filePath}'");
-                    }
-
-                    extraLogs.Add(destPath);
-                }
-
-                fullLog.Flush();
+                DiagnosticResult result = await RunDiagnosticAsync(diagnostic, fullLog);
+                results.Add(result);
             }
 
+            IReadOnlyList<string> additionalFiles = CopyFiles(outputDir, results.SelectMany(x => x.AdditionalFiles));
+
             Console.WriteLine();
-            int numPassed = _diagnostics.Count - numFailed - numSkipped - numWarned;
+            PrintSummary(logFilePath, results, additionalFiles);
+
+            fullLog.Close();
+            return results.Any(x => x.Outcome == DiagnosticOutcome.Error) ? 1 : 0;
+        }
+
+        private void PrintSummary(string logFilePath, IReadOnlyList<DiagnosticResult> results, IReadOnlyList<string> additionalFiles)
+        {
+            int numPassed = results.Count(x => x.Outcome == DiagnosticOutcome.Success);
+            int numFailed = results.Count(x => x.Outcome == DiagnosticOutcome.Error);
+            int numWarned = results.Count(x => x.Outcome == DiagnosticOutcome.Warning);
+            int numSkipped = results.Count(x => x.Outcome == DiagnosticOutcome.Skipped);
+
             string summary = $"Diagnostic summary: {numPassed} passed, {numSkipped} skipped, {numWarned} warned, {numFailed} failed.";
             Console.WriteLine(summary);
             Console.WriteLine("Log files:");
             Console.WriteLine($"  {logFilePath}");
-            foreach (string log in extraLogs)
+            foreach (string filePath in additionalFiles)
             {
-                Console.WriteLine($"  {log}");
+                Console.WriteLine($"  {filePath}");
             }
             Console.WriteLine();
             Console.WriteLine("Caution: Log files may include sensitive information - redact before sharing.");
@@ -218,9 +123,136 @@ namespace GitCredentialManager.Commands
                 Console.WriteLine($"Please open an issue at {Constants.HelpUrls.GcmNewIssue} and include log files.");
                 Console.WriteLine();
             }
+        }
 
-            fullLog.Close();
-            return numFailed > 0 ? 1 : 0;
+        private void WriteLogHeader(StreamWriter fullLog)
+        {
+            fullLog.WriteLine("Diagnose log at {0:s}Z", DateTime.UtcNow);
+            fullLog.WriteLine();
+            fullLog.WriteLine($"AppPath: {_context.ApplicationPath}");
+            fullLog.WriteLine($"InstallDir: {_context.InstallationDirectory}");
+            fullLog.WriteLine(
+                AssemblyUtils.TryGetAssemblyVersion(out string version)
+                    ? $"Version: {version}"
+                    : "Version: [!] Failed to get version information [!]"
+            );
+            fullLog.WriteLine();
+        }
+
+        private async Task<DiagnosticResult> RunDiagnosticAsync(IDiagnostic diagnostic, StreamWriter fullLog)
+        {
+            fullLog.WriteLine("------------");
+            fullLog.WriteLine($"Diagnostic: {diagnostic.Name}");
+
+            if (!diagnostic.CanRun(out string skipReason))
+            {
+                fullLog.Write("Outcome: Skipped");
+                if (!string.IsNullOrWhiteSpace(skipReason))
+                {
+                    fullLog.Write($" ({skipReason})");
+                }
+                fullLog.WriteLine();
+
+                Console.Write(" ");
+                ConsoleEx.WriteColor("[SKIP]", ConsoleColor.DarkGray);
+                Console.WriteLine(" {0}", diagnostic.Name);
+
+                return DiagnosticResult.Skipped(skipReason);
+            }
+
+            string inProgressMsg = $"  >>>>  {diagnostic.Name}";
+            Console.Write(inProgressMsg);
+
+            DiagnosticResult result = await diagnostic.RunAsync();
+            fullLog.WriteLine("Outcome: {0}", result.Outcome);
+
+            WriteException(fullLog, result.Exception);
+
+            fullLog.WriteLine("Log:");
+            foreach (var report in result.Reports)
+            {
+                fullLog.WriteLine(report.Message);
+            }
+
+            Console.Write(new string('\b', inProgressMsg.Length - 1));
+            switch (result.Outcome)
+            {
+                case DiagnosticOutcome.Success:
+                    ConsoleEx.WriteColor("[ OK ]", ConsoleColor.DarkGreen);
+                    break;
+                case DiagnosticOutcome.Warning:
+                    ConsoleEx.WriteColor("[WARN]", ConsoleColor.DarkYellow);
+                    break;
+                case DiagnosticOutcome.Error:
+                    ConsoleEx.WriteColor("[FAIL]", ConsoleColor.Red );
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+            Console.WriteLine(" {0}", diagnostic.Name);
+
+            if (result.Outcome != DiagnosticOutcome.Success)
+            {
+                if (result.Exception is not null)
+                {
+                    Console.WriteLine();
+                    ConsoleEx.WriteLineIndent("[!] Encountered an exception [!]");
+                    ConsoleEx.WriteLineIndent(result.Exception.ToString());
+                }
+
+                Console.WriteLine();
+                ConsoleEx.WriteLineIndent("[*] Diagnostic test log [*]");
+                ConsoleEx.WriteLineIndent(result.Reports.Select(x => x.ToLogString()));
+
+                Console.WriteLine();
+            }
+
+            fullLog.Flush();
+            return result;
+        }
+
+        private static IReadOnlyList<string> CopyFiles(string outputDir, IEnumerable<string> additionalFiles)
+        {
+            var extraLogs = new List<string>();
+            foreach (string filePath in additionalFiles)
+            {
+                string fileName = Path.GetFileName(filePath);
+                string destPath = Path.Combine(outputDir, fileName);
+                try
+                {
+                    File.Copy(filePath, destPath, overwrite: true);
+                }
+                catch
+                {
+                    ConsoleEx.WriteLineIndent($"Failed to copy additional file '{filePath}'");
+                }
+
+                extraLogs.Add(destPath);
+            }
+
+            return extraLogs;
+        }
+
+        private void WriteException(StreamWriter log, Exception exception)
+        {
+            if (exception is null)
+            {
+                return;
+            }
+
+            if (exception is AggregateException aex)
+            {
+                log.WriteLine("Exception: AggregateException");
+                log.WriteLine("InnerExceptions (flattened):");
+                foreach (var inner in aex.Flatten().InnerExceptions)
+                {
+                    log.WriteLine(inner.ToString());
+                }
+            }
+            else
+            {
+                log.WriteLine("Exception: {0}", exception);
+            }
         }
 
         private static class ConsoleEx
