@@ -25,6 +25,7 @@ namespace Microsoft.AzureRepos
 
         public const string UrnScheme = "azrepos";
         public const string UrnOrgPrefix = "org";
+        public const string UrnTenantPrefix = "tenant";
 
         public static class PersonalAccessTokenScopes
         {
@@ -58,6 +59,7 @@ namespace Microsoft.AzureRepos
                 public const string DevAadAuthorityBaseUri = "azreposDevAuthorityBaseUri";
                 public const string CredentialType = "azreposCredentialType";
                 public const string AzureAuthority = "azureAuthority";
+                public const string AccountId = "accountId";
                 public const string ServicePrincipal = "azreposServicePrincipal";
                 public const string ServicePrincipalSecret = "azreposServicePrincipalSecret";
                 public const string ServicePrincipalCertificateThumbprint = "azreposServicePrincipalCertificateThumbprint";
