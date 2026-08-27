@@ -12,6 +12,7 @@ namespace Microsoft.AzureRepos
 {
     public interface IAzureDevOpsRestApi : IDisposable
     {
+        Uri GetAuthorityBaseUri();
         Task<string> GetAuthorityAsync(Uri organizationUri);
         Task<string> CreatePersonalAccessTokenAsync(Uri organizationUri, string accessToken, IEnumerable<string> scopes);
     }
@@ -88,7 +89,7 @@ namespace Microsoft.AzureRepos
             return commonAuthority.ToString();
         }
 
-        private Uri GetAuthorityBaseUri()
+        public Uri GetAuthorityBaseUri()
         {
             // Check for developer override value
             if (_context.Settings.TryGetSetting(
