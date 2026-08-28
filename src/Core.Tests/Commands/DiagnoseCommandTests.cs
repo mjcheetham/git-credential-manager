@@ -65,7 +65,7 @@ public class DiagnoseCommandTests
     }
 
     [Fact]
-    public async Task DiagnoseCommand_Warnings_ReturnsZero()
+    public async Task DiagnoseCommand_Warnings_NonStrict_ReturnsZero()
     {
         string skip = It.IsAny<string>();
         var diagnosticMock = new Mock<IDiagnostic>(MockBehavior.Strict);
@@ -83,6 +83,28 @@ public class DiagnoseCommandTests
         int result = await command.InvokeAsync([]);
 
         Assert.Equal(0, result);
+        diagnosticMock.Verify(x => x.RunAsync(It.IsAny<Action<string>>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task DiagnoseCommand_Warnings_Strict_ReturnsNonZero()
+    {
+        string skip = It.IsAny<string>();
+        var diagnosticMock = new Mock<IDiagnostic>(MockBehavior.Strict);
+        diagnosticMock.SetupGet(x => x.Name).Returns("TestDiagnostic");
+        diagnosticMock.Setup(x => x.CanRun(out skip)).Returns(true);
+        diagnosticMock.Setup(x => x.RunAsync(It.IsAny<Action<string>>()))
+            .ReturnsAsync(new DiagnosticResult([
+                new DiagnosticReport(DiagnosticReportKind.Warning, "Caution")
+            ], []));
+
+        var context = new TestCommandContext();
+        var command = new DiagnoseCommand(context);
+        command.AddDiagnostic(diagnosticMock.Object);
+
+        int result = await command.InvokeAsync(["--strict"]);
+
+        Assert.NotEqual(0, result);
         diagnosticMock.Verify(x => x.RunAsync(It.IsAny<Action<string>>()), Times.Once);
     }
 

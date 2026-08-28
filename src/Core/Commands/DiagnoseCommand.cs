@@ -23,10 +23,13 @@ namespace GitCredentialManager.Commands
 
             _context = context;
 
-            var output = new Option<string>(new[] { "--output", "-o" }, "Output directory for diagnostic logs.");
+            var output = new Option<string>(["--output", "-o"], "Output directory for diagnostic logs.");
             AddOption(output);
 
-            this.SetHandler(ExecuteAsync, output);
+            var strict = new Option<bool>(["--strict"], "Exit with a non-zero code if diagnostic warnings are present.");
+            AddOption(strict);
+
+            this.SetHandler(ExecuteAsync, output, strict);
         }
 
         public void AddStandardDiagnostics()
@@ -49,7 +52,7 @@ namespace GitCredentialManager.Commands
             _diagnostics.AddRange(diagnostics);
         }
 
-        private async Task<int> ExecuteAsync(string output)
+        private async Task<int> ExecuteAsync(string output, bool strict)
         {
             // Don't use IStandardStreams for writing output in this command as we
             // cannot trust any component on the ICommandContext is working correctly.
@@ -95,7 +98,12 @@ namespace GitCredentialManager.Commands
             PrintSummary(logFilePath, results, additionalFiles);
 
             fullLog.Close();
-            return results.Any(x => x.Outcome == DiagnosticOutcome.Error) ? 1 : 0;
+
+            // In strict mode we treat warnings as errors, otherwise we only treat errors as failures.
+            DiagnosticOutcome[] failureOutcomes = strict
+                ? [DiagnosticOutcome.Error, DiagnosticOutcome.Warning]
+                : [DiagnosticOutcome.Error];
+            return results.Any(x => failureOutcomes.Contains(x.Outcome)) ? 1 : 0;
         }
 
         private void PrintSummary(string logFilePath, IReadOnlyList<DiagnosticResult> results, IReadOnlyList<string> additionalFiles)
