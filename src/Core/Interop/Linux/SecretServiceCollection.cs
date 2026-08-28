@@ -37,6 +37,8 @@ namespace GitCredentialManager.Interop.Linux
 
         #region ICredentialStore
 
+        public string Name => "freedesktop.org Secret Service";
+
         public IList<string> GetAccounts(string service)
         {
             return Enumerate(service, null).Select(x => x.Account).Distinct().ToList();

@@ -23,6 +23,8 @@ namespace GitCredentialManager
 
         #region ICredentialStore
 
+        public string Name => "Git Credential Cache";
+
         public IList<string> GetAccounts(string service)
         {
             // Listing accounts is not supported by the credential-cache store so we just attempt to retrieve

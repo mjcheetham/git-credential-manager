@@ -14,6 +14,8 @@ namespace GitCredentialManager.Interop.Windows
             PlatformUtils.EnsureWindows();
         }
 
+        public override string Name => "DPAPI";
+
         protected override bool TryDeserializeCredential(string path, out FileCredential credential)
         {
             string text;

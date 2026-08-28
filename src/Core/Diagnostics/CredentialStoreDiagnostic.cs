@@ -13,7 +13,7 @@ namespace GitCredentialManager.Diagnostics
 
         protected override Task<bool> RunInternalAsync(StringBuilder log, IList<string> additionalFiles)
         {
-            log.AppendLine($"ICredentialStore instance is of type: {CommandContext.CredentialStore.GetType().Name}");
+            log.AppendLine($"Credential store is: {CommandContext.CredentialStore.Name}");
 
             // Create a service that is guaranteed to be unique
             string service = $"https://example.com/{Guid.NewGuid():N}";
