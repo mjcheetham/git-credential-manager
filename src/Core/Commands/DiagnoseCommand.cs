@@ -6,13 +6,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using GitCredentialManager.Diagnostics;
+using Spectre.Console;
 
 namespace GitCredentialManager.Commands
 {
     public class DiagnoseCommand : Command
     {
-        private const string TestOutputIndent = "    ";
-
         private readonly ICommandContext _context;
         private readonly List<IDiagnostic> _diagnostics = new();
 
@@ -54,13 +53,15 @@ namespace GitCredentialManager.Commands
 
         private async Task<int> ExecuteAsync(string output, bool strict)
         {
-            // Don't use IStandardStreams for writing output in this command as we
-            // cannot trust any component on the ICommandContext is working correctly.
-            Console.WriteLine($"Running diagnostics...{Environment.NewLine}");
+            // Don't use IStandardStreams or IConsoleService for writing output in this command
+            // as we cannot trust any component on the ICommandContext is working correctly.
+            // Using the default AnsiConsole directly should be safe.
+            AnsiConsole.MarkupLine("[b]Running diagnostics...[/]");
+            AnsiConsole.WriteLine();
 
             if (_diagnostics.Count == 0)
             {
-                Console.WriteLine("No diagnostics to run.");
+                AnsiConsole.WriteLine("No diagnostics to run.");
                 return 0;
             }
 
@@ -86,15 +87,20 @@ namespace GitCredentialManager.Commands
             using var fullLog = new StreamWriter(logFilePath, append: false, Encoding.UTF8);
             WriteLogHeader(fullLog);
 
-            foreach (IDiagnostic diagnostic in _diagnostics)
+            await AnsiConsole.Status()
+                .Spinner(Spinner.Known.BouncingBar)
+                .StartAsync("Running", async ctx =>
             {
-                DiagnosticResult result = await RunDiagnosticAsync(diagnostic, fullLog);
-                results.Add(result);
-            }
+                foreach (IDiagnostic diagnostic in _diagnostics)
+                {
+                    DiagnosticResult result = await RunDiagnosticAsync(diagnostic, fullLog, ctx);
+                    results.Add(result);
+                }
+            });
 
             IReadOnlyList<string> additionalFiles = CopyFiles(outputDir, results.SelectMany(x => x.AdditionalFiles));
 
-            Console.WriteLine();
+            AnsiConsole.WriteLine();
             PrintSummary(logFilePath, results, additionalFiles);
 
             fullLog.Close();
@@ -113,23 +119,46 @@ namespace GitCredentialManager.Commands
             int numWarned = results.Count(x => x.Outcome == DiagnosticOutcome.Warning);
             int numSkipped = results.Count(x => x.Outcome == DiagnosticOutcome.Skipped);
 
-            string summary = $"Diagnostic summary: {numPassed} passed, {numSkipped} skipped, {numWarned} warned, {numFailed} failed.";
-            Console.WriteLine(summary);
-            Console.WriteLine("Log files:");
-            Console.WriteLine($"  {logFilePath}");
+            AnsiConsole.MarkupLine("[b u]Summary[/]");
+
+            void WriteCount(int count, string label, string color = null)
+            {
+                if (color is not null && count > 0)
+                {
+                    AnsiConsole.Markup($"[{color}][b]{Markup.Escape(count.ToString())}[/] {Markup.Escape(label)}[/]");
+                }
+                else
+                {
+                    AnsiConsole.MarkupInterpolated($"[b]{count}[/] {Markup.Escape(label)}");
+                }
+            }
+
+            const string sep = "    ";
+            WriteCount(numPassed, "passed", "green");
+            AnsiConsole.Write(sep);
+            WriteCount(numSkipped, "skipped");
+            AnsiConsole.Write(sep);
+            WriteCount(numWarned, "warned", "yellow");
+            AnsiConsole.Write(sep);
+            WriteCount(numFailed, "failed", "red");
+            AnsiConsole.WriteLine();
+
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[b u]Log files[/]");
+            AnsiConsole.WriteLine(logFilePath);
             foreach (string filePath in additionalFiles)
             {
-                Console.WriteLine($"  {filePath}");
+                AnsiConsole.WriteLine(filePath);
             }
-            Console.WriteLine();
-            Console.WriteLine("Caution: Log files may include sensitive information - redact before sharing.");
-            Console.WriteLine();
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[yellow]Caution: Log files may include [b]sensitive information[/] - redact before sharing![/]");
+            AnsiConsole.WriteLine();
 
             if (numFailed + numWarned > 0)
             {
-                Console.WriteLine("Diagnostics indicate a possible problem with your installation.");
-                Console.WriteLine($"Please open an issue at {Constants.HelpUrls.GcmNewIssue} and include log files.");
-                Console.WriteLine();
+                AnsiConsole.MarkupLine("[yellow]Diagnostics indicate a possible problem with your installation.[/]");
+                AnsiConsole.MarkupLine($"[yellow]Please open an issue at [link]{Constants.HelpUrls.GcmNewIssue}[/] and include log files.[/]");
+                AnsiConsole.WriteLine();
             }
         }
 
@@ -147,7 +176,8 @@ namespace GitCredentialManager.Commands
             fullLog.WriteLine();
         }
 
-        private async Task<DiagnosticResult> RunDiagnosticAsync(IDiagnostic diagnostic, StreamWriter fullLog)
+        private async Task<DiagnosticResult> RunDiagnosticAsync(
+            IDiagnostic diagnostic, StreamWriter fullLog, StatusContext statusContext)
         {
             fullLog.WriteLine("------------");
             fullLog.WriteLine($"Diagnostic: {diagnostic.Name}");
@@ -161,17 +191,14 @@ namespace GitCredentialManager.Commands
                 }
                 fullLog.WriteLine();
 
-                Console.Write(" ");
-                ConsoleEx.WriteColor("[SKIP]", ConsoleColor.DarkGray);
-                Console.WriteLine(" {0}", diagnostic.Name);
+                AnsiConsole.MarkupLineInterpolated($"[grey b][[SKIP]][/] {diagnostic.Name} [grey i]({skipReason})[/]");
 
                 return DiagnosticResult.Skipped(skipReason);
             }
 
-            string inProgressMsg = $"  >>>>  {diagnostic.Name}";
-            Console.Write(inProgressMsg);
-
+            statusContext.Status(diagnostic.Name);
             DiagnosticResult result = await diagnostic.RunAsync();
+
             fullLog.WriteLine("Outcome: {0}", result.Outcome);
 
             WriteException(fullLog, result.Exception);
@@ -182,37 +209,38 @@ namespace GitCredentialManager.Commands
                 fullLog.WriteLine(report.Message);
             }
 
-            Console.Write(new string('\b', inProgressMsg.Length - 1));
             switch (result.Outcome)
             {
                 case DiagnosticOutcome.Success:
-                    ConsoleEx.WriteColor("[ OK ]", ConsoleColor.DarkGreen);
+                    AnsiConsole.MarkupLineInterpolated($"[green b][[ OK ]][/] {diagnostic.Name}");
                     break;
                 case DiagnosticOutcome.Warning:
-                    ConsoleEx.WriteColor("[WARN]", ConsoleColor.DarkYellow);
+                    AnsiConsole.MarkupLineInterpolated($"[yellow b][[WARN]][/] {diagnostic.Name}");
                     break;
                 case DiagnosticOutcome.Error:
-                    ConsoleEx.WriteColor("[FAIL]", ConsoleColor.Red );
+                    AnsiConsole.MarkupLineInterpolated($"[red b][[FAIL]][/] {diagnostic.Name}");
                     break;
                 default:
                     throw new ArgumentOutOfRangeException();
             }
-            Console.WriteLine(" {0}", diagnostic.Name);
 
             if (result.Outcome != DiagnosticOutcome.Success)
             {
                 if (result.Exception is not null)
                 {
-                    Console.WriteLine();
-                    ConsoleEx.WriteLineIndent("[!] Encountered an exception [!]");
-                    ConsoleEx.WriteLineIndent(result.Exception.ToString());
+                    AnsiConsole.WriteLine();
+                    AnsiConsole.MarkupLine("[red u]Exception Details[/]");
+                    AnsiConsole.WriteLine(result.Exception.ToString());
                 }
 
-                Console.WriteLine();
-                ConsoleEx.WriteLineIndent("[*] Diagnostic test log [*]");
-                ConsoleEx.WriteLineIndent(result.Reports.Select(x => x.ToLogString()));
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLine("[u]Diagnostic Log[/]");
+                foreach (var report in result.Reports)
+                {
+                    AnsiConsole.WriteLine(report.Message);
+                }
 
-                Console.WriteLine();
+                AnsiConsole.WriteLine();
             }
 
             fullLog.Flush();
@@ -232,7 +260,7 @@ namespace GitCredentialManager.Commands
                 }
                 catch
                 {
-                    ConsoleEx.WriteLineIndent($"Failed to copy additional file '{filePath}'");
+                    AnsiConsole.MarkupLineInterpolated($"[red]Failed to copy additional file '{filePath}'[/]");
                 }
 
                 extraLogs.Add(destPath);
@@ -260,34 +288,6 @@ namespace GitCredentialManager.Commands
             else
             {
                 log.WriteLine("Exception: {0}", exception);
-            }
-        }
-
-        private static class ConsoleEx
-        {
-            public static void WriteLineIndent(string str)
-            {
-                string[] lines = str?.Split('\n', '\r');
-                WriteLineIndent(lines);
-            }
-
-            public static void WriteLineIndent(IEnumerable<string> lines)
-            {
-                if (lines is null) return;
-
-                foreach (string line in lines)
-                {
-                    Console.Write(TestOutputIndent);
-                    Console.WriteLine(line);
-                }
-            }
-
-            public static  void WriteColor(string str, ConsoleColor fgColor)
-            {
-                var initFgColor = Console.ForegroundColor;
-                Console.ForegroundColor = fgColor;
-                Console.Write(str);
-                Console.ForegroundColor = initFgColor;
             }
         }
     }
