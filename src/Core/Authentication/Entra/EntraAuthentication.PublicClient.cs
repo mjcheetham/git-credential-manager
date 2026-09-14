@@ -628,8 +628,8 @@ public partial class EntraAuthentication
     /// </remarks>
     private bool IsBrokerEnabled()
     {
-        // Default to using the OS broker only on DevBox for the time being
-        bool defaultValue = PlatformUtils.IsDevBox();
+        // Default to using the OS broker
+        const bool defaultValue = true;
 
         if (Context.Settings.TryGetSetting(Constants.EnvironmentVariables.MsAuthUseBroker,
                 Constants.GitConfiguration.Credential.SectionName,
