@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager.Tests.Objects;
@@ -16,6 +17,63 @@ public class AnsiConsoleFactoryTests
         IAnsiConsole console = AnsiConsoleFactory.CreateForTty();
 
         Assert.NotNull(console);
+    }
+
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public void CreateForWriter_UsesAnsiSupportAndRedirection(bool isRedirected, bool ansiSupport)
+    {
+        using var writer = new StringWriter();
+        IAnsiConsole console = AnsiConsoleFactory.CreateForWriter(writer, isRedirected, ansiSupport);
+
+        Assert.Equal(ansiSupport, console.Profile.Capabilities.Ansi);
+        Assert.Equal(!isRedirected, console.Profile.Out.IsTerminal);
+        Assert.False(console.Profile.Capabilities.Interactive);
+
+        console.MarkupLine("[red]error[/]");
+
+        Assert.Contains("error", writer.ToString());
+        if (isRedirected || !ansiSupport)
+        {
+            Assert.Equal(ColorSystem.NoColors, console.Profile.Capabilities.ColorSystem);
+            Assert.DoesNotContain('\u001b', writer.ToString());
+        }
+    }
+
+    [Fact]
+    public void CreateForWriter_CustomWriter_UsesDetectedAnsi()
+    {
+        using var writer = new StringWriter();
+        bool supportsAnsi = AnsiCapabilities.Create(writer).Ansi;
+        IAnsiConsole console = AnsiConsoleFactory.CreateForWriter(writer);
+
+        Assert.Equal(supportsAnsi, console.Profile.Capabilities.Ansi);
+        Assert.Same(writer, console.Profile.Out.Writer);
+        Assert.True(console.Profile.Out.Width > 0);
+        Assert.True(console.Profile.Out.Height > 0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CreateForWriter_StandardStream_PreservesIdentityAndRedirection(bool standardError)
+    {
+        TextWriter writer = standardError ? Console.Error : Console.Out;
+        bool isRedirected = standardError ? Console.IsErrorRedirected : Console.IsOutputRedirected;
+        bool supportsAnsi = AnsiCapabilities.Create(writer).Ansi;
+
+        IAnsiConsole console = AnsiConsoleFactory.CreateForWriter(writer);
+
+        Assert.Same(writer, console.Profile.Out.Writer);
+        Assert.Equal(!isRedirected, console.Profile.Out.IsTerminal);
+        Assert.Equal(supportsAnsi, console.Profile.Capabilities.Ansi);
+        if (isRedirected || !supportsAnsi)
+        {
+            Assert.Equal(ColorSystem.NoColors, console.Profile.Capabilities.ColorSystem);
+        }
     }
 
     [Fact]
@@ -94,5 +152,3 @@ public class AnsiConsoleFactoryTests
         Assert.NotNull(ctx.Console);
     }
 }
-
-

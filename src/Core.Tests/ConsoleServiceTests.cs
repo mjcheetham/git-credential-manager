@@ -14,7 +14,7 @@ public class ConsoleServiceTests
         var err = new StringWriter();
         var console = new ConsoleService(
             AnsiConsoleFactory.CreateHeadless,
-            () => AnsiConsoleFactory.CreateForWriter(err, isRedirected: true));
+            () => AnsiConsoleFactory.CreateForWriter(err, isRedirected: true, ansiSupport: false));
 
         console.WriteInfo("info-[marker]");
         console.WriteWarning("warn-[marker]");
@@ -31,18 +31,16 @@ public class ConsoleServiceTests
     }
 
     [Fact]
-    public void ConsoleService_WriteFatal_RoutesToAutoFlushStreamWriter()
+    public void ConsoleService_WriteFatal_FlushesErrorWriter()
     {
-        // Mirror StandardStreams.Error exactly: a UTF-8 StreamWriter with AutoFlush.
         using var ms = new MemoryStream();
         using var sw = new StreamWriter(ms, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
 
         var console = new ConsoleService(
             AnsiConsoleFactory.CreateHeadless,
-            () => AnsiConsoleFactory.CreateForWriter(sw, isRedirected: true));
+            () => AnsiConsoleFactory.CreateForWriter(sw, isRedirected: true, ansiSupport: false));
 
         console.WriteFatal("fatal-marker");
-        sw.Flush();
 
         string output = new UTF8Encoding(false).GetString(ms.ToArray());
         Assert.Contains("fatal-marker", output);

@@ -65,18 +65,28 @@ public static class AnsiConsoleFactory
     /// Unlike <see cref="CreateForTty"/> this never opens the controlling TTY: standard error
     /// is always available (and capturable via <c>2&gt;</c>), so messages are never
     /// silently dropped even when no terminal is attached. The console carries no input.
-    /// Styling follows whether standard error is redirected: coloured when connected to a
-    /// terminal, plain text otherwise.
+    /// Styling follows whether the writer is a standard handle, is redirected, and supports ANSI:
+    /// coloured when supported, plain text otherwise.
     /// </remarks>
-    public static IAnsiConsole CreateForWriter(TextWriter writer, bool isRedirected)
+    public static IAnsiConsole CreateForWriter(TextWriter writer) => CreateForWriter(writer, IsRedirected(writer), null);
+
+    internal static IAnsiConsole CreateForWriter(TextWriter writer, bool isRedirected, bool? ansiSupport)
     {
         using var _ = Trace2.StartRegion("ansi_console", "create_writer");
+
+        // Detection also attempts to enable VT processing on non-redirected
+        // Windows standard handles, so it must receive the original writer.
+        bool ansi = ansiSupport ?? AnsiCapabilities.Create(writer).Ansi;
+
+        // Disable colours when the writer is redirected, or if we don't have ANSI support.
+        bool useColors = ansi && !isRedirected;
+
         return AnsiConsole.Create(
             new AnsiConsoleSettings
             {
                 Out = new TextWriterAnsiConsoleOutput(writer, isRedirected),
-                Ansi = isRedirected ? AnsiSupport.No : AnsiSupport.Yes,
-                ColorSystem = isRedirected ? ColorSystemSupport.NoColors : ColorSystemSupport.Detect,
+                Ansi = ansi ? AnsiSupport.Yes : AnsiSupport.No,
+                ColorSystem = useColors ? ColorSystemSupport.Detect : ColorSystemSupport.NoColors,
                 Interactive = InteractionSupport.No,
             }
         );
@@ -104,6 +114,26 @@ public static class AnsiConsoleFactory
         );
 
         return new AnsiConsoleWithInput(inner, new NullAnsiConsoleInput());
+    }
+
+    private static bool IsRedirected(TextWriter writer)
+    {
+        if (writer is null)
+        {
+            return false;
+        }
+
+        if (writer == Console.Error)
+        {
+            return Console.IsErrorRedirected;
+        }
+
+        if (writer == Console.Out)
+        {
+            return Console.IsOutputRedirected;
+        }
+
+        return false;
     }
 
     private static IAnsiConsoleOutput TryCreatePlatformOutput()
@@ -168,15 +198,16 @@ public static class AnsiConsoleFactory
 
     private sealed class TextWriterAnsiConsoleOutput : IAnsiConsoleOutput
     {
+        private readonly bool _isRedirected;
+
         public TextWriterAnsiConsoleOutput(TextWriter writer, bool isRedirected)
         {
             Writer = writer;
-            IsRedirected = isRedirected;
+            _isRedirected = isRedirected;
         }
 
         public TextWriter Writer { get; }
-        public bool IsRedirected { get; }
-        public bool IsTerminal => !IsRedirected;
+        public bool IsTerminal => !_isRedirected;
         public int Width => IsTerminal ? TryGet(() => Console.WindowWidth, 80) : 80;
         public int Height => IsTerminal ? TryGet(() => Console.WindowHeight, 24) : 24;
         public void SetEncoding(Encoding encoding) { }

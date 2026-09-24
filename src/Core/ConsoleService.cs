@@ -40,8 +40,8 @@ public class ConsoleService : IConsoleService
     private readonly Lazy<IAnsiConsole> _ttyConsole;
     private readonly Lazy<IAnsiConsole> _stderrConsole;
 
-    public ConsoleService(IStandardStreams streams)
-        : this(AnsiConsoleFactory.CreateForTty, () => AnsiConsoleFactory.CreateForWriter(streams.Error, streams.IsErrorRedirected))
+    public ConsoleService()
+        : this(AnsiConsoleFactory.CreateForTty, () => AnsiConsoleFactory.CreateForWriter(Console.Error))
     { }
 
     public ConsoleService(Func<IAnsiConsole> ttyConsoleFunc, Func<IAnsiConsole> stderrConsoleFunc)

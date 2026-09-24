@@ -96,7 +96,7 @@ namespace GitCredentialManager
 
             Streams = new StandardStreams();
             Trace   = new Trace();
-            Console = new ConsoleService(Streams);
+            Console = new ConsoleService();
 
             if (PlatformUtils.IsWindows())
             {
