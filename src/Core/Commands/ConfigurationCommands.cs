@@ -14,7 +14,7 @@ namespace GitCredentialManager.Commands
             Context = context;
             ConfigurationService = configurationService;
 
-            var system = new Option<bool>("--system", "Modify the system-wide Git configuration instead of the current user");
+            var system = new Option<bool>("--system", "Modify the system-wide configuration instead of the current user");
             AddOption(system);
 
             this.SetHandler(ExecuteAsync, system);

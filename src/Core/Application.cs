@@ -101,7 +101,8 @@ namespace GitCredentialManager
                 rootCommand.AddCommand(new CapabilityCommand(Context));
                 rootCommand.AddCommand(new ConfigureCommand(Context, _configurationService));
                 rootCommand.AddCommand(new UnconfigureCommand(Context, _configurationService));
-                rootCommand.AddCommand(new SetupCommand(Context));
+                rootCommand.AddCommand(new InstallCommand(Context));
+                rootCommand.AddCommand(new UninstallCommand(Context));
                 rootCommand.AddCommand(diagnoseCommand);
 
                 // Add any custom provider commands
