@@ -129,6 +129,9 @@ namespace GitCredentialManager
 
         public static class EnvironmentVariables
         {
+            public const string WindowsComputerName   = "COMPUTERNAME";
+            public const string UnixHostName          = "HOSTNAME";
+
             public const string GcmTrace              = "GCM_TRACE";
             public const string GcmTraceSecrets       = "GCM_TRACE_SECRETS";
             public const string GcmTraceMsAuth        = "GCM_TRACE_MSAUTH";

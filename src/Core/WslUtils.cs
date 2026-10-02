@@ -104,6 +104,40 @@ namespace GitCredentialManager
                     path.Length > WslLocalHostUncPrefix.Length);
         }
 
+        public static IReadOnlyList<string> GetWslDistributions()
+        {
+            if (!PlatformUtils.IsWindows())
+            {
+                return [];
+            }
+
+            string wslExePath = GetWslPath();
+
+            var psi = new ProcessStartInfo(wslExePath, "--list --quiet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.Unicode, // The WSL CLI always uses UTF-16LE
+                StandardErrorEncoding = Encoding.Unicode,
+            };
+            using ChildProcess proc = new ChildProcess(psi);
+            proc.Start();
+
+            // Read all output streams before waiting for exit to avoid deadlocks
+            string stdout = proc.StandardOutput.ReadToEnd();
+            string stderr = proc.StandardError.ReadToEnd();
+
+            proc.WaitForExit();
+            switch (proc.ExitCode)
+            {
+                case 0:
+                    return stdout.Trim().Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+
+                default:
+                    throw new Exception($"Failed to get WSL distributions ({proc.ExitCode}): {stderr}");
+            }
+        }
+
         /// <summary>
         /// Create a command to be executed in a Windows Subsystem for Linux distribution.
         /// </summary>
