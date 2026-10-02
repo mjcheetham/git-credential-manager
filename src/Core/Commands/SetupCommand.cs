@@ -23,7 +23,7 @@ public class SetupCommand : Command
             "Modify the system-wide Git configuration instead of the current user.");
 
         var wslDistro = new Option<string>(["--wsl-distro", "-w"],
-            "Set up a specific WSL distribution.");
+            "Set up a Windows Subsystem for Linux (WSL) distribution.");
 
         AddOption(interactive);
         AddOption(system);
@@ -76,14 +76,13 @@ public class SetupCommand : Command
                 string computerName =
                     _context.Environment.GetEnvironmentVariable(Constants.EnvironmentVariables.WindowsComputerName) ??
                     "localhost";
-                string hostLabel = $"This Computer ({computerName})";
 
                 var wslItems = wslDistros
                     .Select(x => new SelectionPromptItem<SetupTarget>(x, SetupTarget.Wsl(x)));
 
                 var prompt = TerminalPrompts.CreateSelection<SetupTarget>()
                     .Title("Select a setup target");
-                prompt.AddChoice(hostLabel, SetupTarget.Host);
+                prompt.AddChoice($"{computerName} [i dim](This Computer)[/]", SetupTarget.Host);
                 prompt.AddChoiceGroup(
                     new SelectionPromptItem<SetupTarget>("WSL Distributions", null),
                     wslItems
@@ -100,7 +99,7 @@ public class SetupCommand : Command
 
                 if (target.IsHost)
                 {
-                    _context.Console.MarkupLineInterpolated($"[b]Target:[/] {hostLabel}");
+                    _context.Console.MarkupLineInterpolated($"[b]Target:[/] {computerName} [i dim](This Computer)[/]");
                 }
                 else
                 {
