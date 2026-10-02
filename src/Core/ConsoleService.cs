@@ -23,6 +23,8 @@ public interface IConsoleService
     void WriteError(string message);
     void WriteFatal(string message);
     void WriteLine(string message);
+    void MarkupLine(string markup);
+    void MarkupLineInterpolated(FormattableString markup);
 
     /// <summary>
     /// Prompt the user for a selection on the controlling terminal.
@@ -59,6 +61,10 @@ public class ConsoleService : IConsoleService
     public void WriteFatal(string message) => _stderrConsole.Value.MarkupLine($"[red]fatal:[/] {Markup.Escape(message)}");
 
     public void WriteLine(string message) => _stderrConsole.Value.WriteLine(message);
+
+    public void MarkupLine(string markup) => _stderrConsole.Value.MarkupLine(markup);
+
+    public void MarkupLineInterpolated(FormattableString markup) => _stderrConsole.Value.MarkupLineInterpolated(markup);
 
     public T ShowPrompt<T>(IPrompt<T> prompt) =>
         prompt.Show(_ttyConsole.Value);

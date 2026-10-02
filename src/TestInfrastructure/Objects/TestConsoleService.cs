@@ -29,6 +29,9 @@ public class TestConsoleService : IConsoleService
     public void WriteFatal(string message) => WrittenMessages.Add(message);
 
     public void WriteLine(string message) => WrittenMessages.Add(message);
+    public void MarkupLine(string markup) => WrittenMessages.Add(markup);
+
+    public void MarkupLineInterpolated(FormattableString markup) => WrittenMessages.Add(markup.ToString());
 
     public T ShowPrompt<T>(IPrompt<T> prompt) => prompt.Show(TtyConsole);
 
