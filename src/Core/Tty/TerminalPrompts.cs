@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
@@ -25,6 +26,11 @@ public static class TerminalPrompts
 
     public static SelectionPrompt<SelectionPromptItem<T>> CreateSelection<T>() =>
         new SelectionPrompt<SelectionPromptItem<T>>()
+            .UseConverter(x => x.Label)
+            .AddCancelResult(() => throw new OperationCanceledException("User cancelled the prompt"));
+
+    public static MultiSelectionPrompt<SelectionPromptItem<T>> CreateMultiSelection<T>() =>
+        new MultiSelectionPrompt<SelectionPromptItem<T>>()
             .UseConverter(x => x.Label)
             .AddCancelResult(() => throw new OperationCanceledException("User cancelled the prompt"));
 
@@ -66,6 +72,38 @@ public static class TerminalPrompts
         {
             SelectionPromptItem<T> choice = await console.ShowPromptAsync(prompt, ct);
             return choice.Item;
+        }
+    }
+
+    extension<T> (MultiSelectionPrompt<SelectionPromptItem<T>> prompt)
+    {
+        public ISelectionItem<SelectionPromptItem<T>> AddChoice(string label, T item) =>
+            prompt.AddChoice(new SelectionPromptItem<T>(label, item));
+
+        public MultiSelectionPrompt<SelectionPromptItem<T>> AddChoices(IEnumerable<T> items, Func<T, string> labelFunc)
+        {
+            foreach (var item in items)
+            {
+                prompt.AddChoice(new SelectionPromptItem<T>(labelFunc(item), item));
+            }
+
+            return prompt;
+        }
+
+        public MultiSelectionPrompt<SelectionPromptItem<T>> AddChoices(params (string Label, T Item)[] items)
+        {
+            foreach (var (label, item) in items)
+            {
+                prompt.AddChoice(new SelectionPromptItem<T>(label, item));
+            }
+
+            return prompt;
+        }
+
+        public async Task<IReadOnlyList<T>> ShowAsync(IConsoleService console, CancellationToken ct = default)
+        {
+            List<SelectionPromptItem<T>> choices = await console.ShowPromptAsync(prompt, ct);
+            return choices.Select(x => x.Item).ToList();
         }
     }
 }

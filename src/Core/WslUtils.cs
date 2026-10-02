@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -102,6 +103,12 @@ namespace GitCredentialManager
                     path.Length > WslUncPrefix.Length) ||
                    (path.StartsWith(WslLocalHostUncPrefix, StringComparison.OrdinalIgnoreCase) &&
                     path.Length > WslLocalHostUncPrefix.Length);
+        }
+
+        public static bool IsDistributionExists(string distribution)
+        {
+            IReadOnlyList<string> distros = GetWslDistributions();
+            return distros.Contains(distribution, StringComparer.OrdinalIgnoreCase);
         }
 
         public static IReadOnlyList<string> GetWslDistributions()

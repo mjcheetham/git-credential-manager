@@ -17,6 +17,27 @@ namespace GitCredentialManager
         IReadOnlyDictionary<string, string> Variables { get; }
 
         /// <summary>
+        /// The current computer's host name.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// On Windows this is the value of the COMPUTERNAME environment variable,
+        /// on Unix-like systems this is the value of the HOSTNAME environment variable.
+        /// </para>
+        /// In the event of neither environment variable being set, the value "localhost" is returned.
+        /// </remarks>
+        string HostName
+        {
+            get
+            {
+                var name = PlatformUtils.IsWindows()
+                    ? Constants.EnvironmentVariables.WindowsComputerName
+                    : Constants.EnvironmentVariables.UnixHostName;
+                return Variables.GetValueOrDefault(name, "localhost");
+            }
+        }
+
+        /// <summary>
         /// Check if the given directory exists on the path.
         /// </summary>
         /// <param name="directoryPath">Path to directory to check for existence on the path.</param>
