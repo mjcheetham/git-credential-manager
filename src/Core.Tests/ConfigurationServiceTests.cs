@@ -21,13 +21,15 @@ namespace GitCredentialManager.Tests
             service.AddComponent(component2.Object);
             service.AddComponent(component3.Object);
 
-            await service.ConfigureAsync(ConfigurationTarget.System);
+            var expectedTarget = new ConfigurationTarget(ConfigurationScope.System);
 
-            component1.Verify(x => x.ConfigureAsync(ConfigurationTarget.System),
+            await service.ConfigureAsync(expectedTarget);
+
+            component1.Verify(x => x.ConfigureAsync(expectedTarget),
                 Times.Once);
-            component2.Verify(x => x.ConfigureAsync(ConfigurationTarget.System),
+            component2.Verify(x => x.ConfigureAsync(expectedTarget),
                 Times.Once);
-            component3.Verify(x => x.ConfigureAsync(ConfigurationTarget.System),
+            component3.Verify(x => x.ConfigureAsync(expectedTarget),
                 Times.Once);
         }
 
@@ -45,13 +47,15 @@ namespace GitCredentialManager.Tests
             service.AddComponent(component2.Object);
             service.AddComponent(component3.Object);
 
-            await service.ConfigureAsync(ConfigurationTarget.User);
+            var expectedTarget = new ConfigurationTarget(ConfigurationScope.CurrentUser);
 
-            component1.Verify(x => x.ConfigureAsync(ConfigurationTarget.User),
+            await service.ConfigureAsync(expectedTarget);
+
+            component1.Verify(x => x.ConfigureAsync(expectedTarget),
                 Times.Once);
-            component2.Verify(x => x.ConfigureAsync(ConfigurationTarget.User),
+            component2.Verify(x => x.ConfigureAsync(expectedTarget),
                 Times.Once);
-            component3.Verify(x => x.ConfigureAsync(ConfigurationTarget.User),
+            component3.Verify(x => x.ConfigureAsync(expectedTarget),
                 Times.Once);
         }
 
@@ -69,13 +73,15 @@ namespace GitCredentialManager.Tests
             service.AddComponent(component2.Object);
             service.AddComponent(component3.Object);
 
-            await service.UnconfigureAsync(ConfigurationTarget.System);
+            var expectedTarget = new ConfigurationTarget(ConfigurationScope.System);
 
-            component1.Verify(x => x.UnconfigureAsync(ConfigurationTarget.System),
+            await service.UnconfigureAsync(expectedTarget);
+
+            component1.Verify(x => x.UnconfigureAsync(expectedTarget),
                 Times.Once);
-            component2.Verify(x => x.UnconfigureAsync(ConfigurationTarget.System),
+            component2.Verify(x => x.UnconfigureAsync(expectedTarget),
                 Times.Once);
-            component3.Verify(x => x.UnconfigureAsync(ConfigurationTarget.System),
+            component3.Verify(x => x.UnconfigureAsync(expectedTarget),
                 Times.Once);
         }
 
@@ -93,13 +99,15 @@ namespace GitCredentialManager.Tests
             service.AddComponent(component2.Object);
             service.AddComponent(component3.Object);
 
-            await service.UnconfigureAsync(ConfigurationTarget.User);
+            var expectedTarget = new ConfigurationTarget(ConfigurationScope.CurrentUser);
 
-            component1.Verify(x => x.UnconfigureAsync(ConfigurationTarget.User),
+            await service.UnconfigureAsync(expectedTarget);
+
+            component1.Verify(x => x.UnconfigureAsync(expectedTarget),
                 Times.Once);
-            component2.Verify(x => x.UnconfigureAsync(ConfigurationTarget.User),
+            component2.Verify(x => x.UnconfigureAsync(expectedTarget),
                 Times.Once);
-            component3.Verify(x => x.UnconfigureAsync(ConfigurationTarget.User),
+            component3.Verify(x => x.UnconfigureAsync(expectedTarget),
                 Times.Once);
         }
     }

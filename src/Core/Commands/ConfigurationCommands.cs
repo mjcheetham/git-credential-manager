@@ -26,13 +26,16 @@ namespace GitCredentialManager.Commands
 
         internal async Task ExecuteAsync(bool system)
         {
-            var target = system
-                ? ConfigurationTarget.System
-                : ConfigurationTarget.User;
+            var scope = system
+                ? ConfigurationScope.System
+                : ConfigurationScope.CurrentUser;
 
             using var _ = Trace2.StartRegion("cfg_cmd", "run");
             Trace2.WriteData("cfg_cmd", "name", Name);
-            Trace2.WriteData("cfg_cmd", "target", target.ToString());
+            Trace2.WriteData("cfg_cmd", "target/host", "localhost");
+            Trace2.WriteData("cfg_cmd", "target/scope", scope == ConfigurationScope.CurrentUser ? "current_user" : "system");
+
+            var target = new ConfigurationTarget(scope);
 
             await ExecuteInternalAsync(target);
         }

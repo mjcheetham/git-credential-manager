@@ -1,7 +1,6 @@
 using System.Linq;
 using System.Threading.Tasks;
 using GitCredentialManager;
-using KnownGitCfg = GitCredentialManager.Constants.GitConfiguration;
 
 namespace Microsoft.AzureRepos;
 
@@ -12,9 +11,9 @@ public partial class AzureReposHostProvider
     public Task ConfigureAsync(ConfigurationTarget target)
     {
         string useHttpPathKey =
-            $"{KnownGitCfg.Credential.SectionName}.https://dev.azure.com.{KnownGitCfg.Credential.UseHttpPath}";
+            $"{Constants.GitConfiguration.Credential.SectionName}.https://dev.azure.com.{Constants.GitConfiguration.Credential.UseHttpPath}";
 
-        GitConfigurationLevel configurationLevel = target == ConfigurationTarget.System
+        GitConfigurationLevel configurationLevel = target.Scope == ConfigurationScope.System
             ? GitConfigurationLevel.System
             : GitConfigurationLevel.Global;
 
@@ -40,11 +39,11 @@ public partial class AzureReposHostProvider
         string helperKey =
             $"{Constants.GitConfiguration.Credential.SectionName}.{Constants.GitConfiguration.Credential.Helper}";
         string useHttpPathKey =
-            $"{KnownGitCfg.Credential.SectionName}.https://dev.azure.com.{KnownGitCfg.Credential.UseHttpPath}";
+            $"{Constants.GitConfiguration.Credential.SectionName}.https://dev.azure.com.{Constants.GitConfiguration.Credential.UseHttpPath}";
 
         _context.Trace.WriteLine("Clearing Git configuration 'credential.useHttpPath' for https://dev.azure.com...");
 
-        GitConfigurationLevel configurationLevel = target == ConfigurationTarget.System
+        GitConfigurationLevel configurationLevel = target.Scope == ConfigurationScope.System
             ? GitConfigurationLevel.System
             : GitConfigurationLevel.Global;
 
@@ -52,7 +51,7 @@ public partial class AzureReposHostProvider
 
         // On Windows, if there is a "manager" or "manager-core" entry remaining in the system config then we must
         // not clear the useHttpPath option otherwise this would break the bundled version of GCM in Git for Windows.
-        if (!PlatformUtils.IsWindows() || target != ConfigurationTarget.System ||
+        if (!PlatformUtils.IsWindows() || target.Scope != ConfigurationScope.System ||
             targetConfig.GetAll(helperKey).All(x => !string.Equals(x, "manager") && !string.Equals(x, "manager-core")))
         {
             targetConfig.Unset(configurationLevel, useHttpPathKey);

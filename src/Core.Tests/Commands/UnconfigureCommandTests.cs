@@ -21,7 +21,8 @@ namespace GitCredentialManager.Tests.Commands
 
             await command.ExecuteAsync(false);
 
-            configService.Verify(x => x.UnconfigureAsync(ConfigurationTarget.User), Times.Once);
+            configService.Verify(x => x.UnconfigureAsync(
+                It.Is<ConfigurationTarget>(t => t.Scope == ConfigurationScope.CurrentUser)), Times.Once);
         }
 
         [Fact]
@@ -37,7 +38,8 @@ namespace GitCredentialManager.Tests.Commands
 
             await command.ExecuteAsync(true);
 
-            configService.Verify(x => x.UnconfigureAsync(ConfigurationTarget.System), Times.Once);
+            configService.Verify(x => x.UnconfigureAsync(
+                It.Is<ConfigurationTarget>(t => t.Scope == ConfigurationScope.System)), Times.Once);
         }
     }
 }

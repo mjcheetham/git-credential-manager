@@ -16,7 +16,7 @@ namespace GitCredentialManager.Tests
 
             var context = new TestCommandContext {AppPath = executablePath};
             IConfigurableComponent application = new Application(context);
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -37,7 +37,7 @@ namespace GitCredentialManager.Tests
 
             context.Git.Configuration.Global[key] = new List<string> {executablePath};
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -61,7 +61,7 @@ namespace GitCredentialManager.Tests
                 emptyHelper, executablePath
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -86,7 +86,7 @@ namespace GitCredentialManager.Tests
                 beforeHelper, emptyHelper, executablePath
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -112,7 +112,7 @@ namespace GitCredentialManager.Tests
                 emptyHelper, executablePath, afterHelper
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -139,7 +139,7 @@ namespace GitCredentialManager.Tests
                 beforeHelper, emptyHelper, executablePath, afterHelper
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -166,7 +166,7 @@ namespace GitCredentialManager.Tests
                 emptyHelper, executablePath, emptyHelper, afterHelper
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -193,7 +193,7 @@ namespace GitCredentialManager.Tests
                 executablePath, emptyHelper, executablePath
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -218,7 +218,7 @@ namespace GitCredentialManager.Tests
                 emptyHelper
             };
 
-            await application.ConfigureAsync(ConfigurationTarget.User);
+            await application.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -235,7 +235,7 @@ namespace GitCredentialManager.Tests
 
             var context = new TestCommandContext {AppPath = executablePath};
             IConfigurableComponent application = new Application(context);
-            await application.UnconfigureAsync(ConfigurationTarget.User);
+            await application.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Empty(context.Git.Configuration.Global);
         }
@@ -251,7 +251,7 @@ namespace GitCredentialManager.Tests
 
             context.Git.Configuration.Global[key] = new List<string> {executablePath};
 
-            await application.UnconfigureAsync(ConfigurationTarget.User);
+            await application.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Empty(context.Git.Configuration.Global);
         }
@@ -268,7 +268,7 @@ namespace GitCredentialManager.Tests
 
             context.Git.Configuration.Global[key] = new List<string> {emptyHelper, executablePath};
 
-            await application.UnconfigureAsync(ConfigurationTarget.User);
+            await application.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Empty(context.Git.Configuration.Global);
         }
@@ -289,7 +289,7 @@ namespace GitCredentialManager.Tests
                 beforeHelper, emptyHelper, executablePath
             };
 
-            await application.UnconfigureAsync(ConfigurationTarget.User);
+            await application.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -313,7 +313,7 @@ namespace GitCredentialManager.Tests
                 emptyHelper, executablePath, afterHelper
             };
 
-            await application.UnconfigureAsync(ConfigurationTarget.User);
+            await application.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));
@@ -339,7 +339,7 @@ namespace GitCredentialManager.Tests
                 beforeHelper, emptyHelper, executablePath, afterHelper
             };
 
-            await application.UnconfigureAsync(ConfigurationTarget.User);
+            await application.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(key, out var actualValues));

@@ -1200,7 +1200,7 @@ namespace Microsoft.AzureRepos.Tests
 
             context.Git.Configuration.Global[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.ConfigureAsync(ConfigurationTarget.User);
+            await provider.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(AzDevUseHttpPathKey, out IList<string> actualValues));
@@ -1216,7 +1216,7 @@ namespace Microsoft.AzureRepos.Tests
 
             context.Git.Configuration.Global[AzDevUseHttpPathKey] = new List<string> {"false"};
 
-            await provider.ConfigureAsync(ConfigurationTarget.User);
+            await provider.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(AzDevUseHttpPathKey, out IList<string> actualValues));
@@ -1230,7 +1230,7 @@ namespace Microsoft.AzureRepos.Tests
             var context = new TestCommandContext();
             var provider = new AzureReposHostProvider(context);
 
-            await provider.ConfigureAsync(ConfigurationTarget.User);
+            await provider.ConfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Single(context.Git.Configuration.Global);
             Assert.True(context.Git.Configuration.Global.TryGetValue(AzDevUseHttpPathKey, out IList<string> actualValues));
@@ -1246,7 +1246,7 @@ namespace Microsoft.AzureRepos.Tests
 
             context.Git.Configuration.Global[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.UnconfigureAsync(ConfigurationTarget.User);
+            await provider.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.Empty(context.Git.Configuration.Global);
         }
@@ -1260,7 +1260,7 @@ namespace Microsoft.AzureRepos.Tests
             context.Git.Configuration.System[HelperKey] = new List<string> {"manager"};
             context.Git.Configuration.System[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.UnconfigureAsync(ConfigurationTarget.System);
+            await provider.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.System));
 
             Assert.True(context.Git.Configuration.System.TryGetValue(AzDevUseHttpPathKey, out IList<string> actualValues));
             Assert.Single(actualValues);
@@ -1276,7 +1276,7 @@ namespace Microsoft.AzureRepos.Tests
             context.Git.Configuration.System[HelperKey] = new List<string> {"manager-core"};
             context.Git.Configuration.System[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.UnconfigureAsync(ConfigurationTarget.System);
+            await provider.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.System));
 
             Assert.True(context.Git.Configuration.System.TryGetValue(AzDevUseHttpPathKey, out IList<string> actualValues));
             Assert.Single(actualValues);
@@ -1291,7 +1291,7 @@ namespace Microsoft.AzureRepos.Tests
 
             context.Git.Configuration.System[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.UnconfigureAsync(ConfigurationTarget.System);
+            await provider.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.System));
 
             Assert.Empty(context.Git.Configuration.System);
         }
@@ -1305,7 +1305,7 @@ namespace Microsoft.AzureRepos.Tests
             context.Git.Configuration.Global[HelperKey] = new List<string> {"manager"};
             context.Git.Configuration.Global[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.UnconfigureAsync(ConfigurationTarget.User);
+            await provider.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.False(context.Git.Configuration.Global.TryGetValue(AzDevUseHttpPathKey, out _));
         }
@@ -1319,7 +1319,7 @@ namespace Microsoft.AzureRepos.Tests
             context.Git.Configuration.Global[HelperKey] = new List<string> {"manager-core"};
             context.Git.Configuration.Global[AzDevUseHttpPathKey] = new List<string> {"true"};
 
-            await provider.UnconfigureAsync(ConfigurationTarget.User);
+            await provider.UnconfigureAsync(new ConfigurationTarget(ConfigurationScope.CurrentUser));
 
             Assert.False(context.Git.Configuration.Global.TryGetValue(AzDevUseHttpPathKey, out _));
         }

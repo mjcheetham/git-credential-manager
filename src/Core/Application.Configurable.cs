@@ -15,7 +15,7 @@ public partial class Application
             $"{Constants.GitConfiguration.Credential.SectionName}.{Constants.GitConfiguration.Credential.Helper}";
         string appPath = GetGitConfigAppPath();
 
-        GitConfigurationLevel configLevel = target == ConfigurationTarget.System
+        GitConfigurationLevel configLevel = target.Scope == ConfigurationScope.System
             ? GitConfigurationLevel.System
             : GitConfigurationLevel.Global;
 
@@ -70,7 +70,7 @@ public partial class Application
             $"{Constants.GitConfiguration.Credential.SectionName}.{Constants.GitConfiguration.Credential.Helper}";
         string appPath = GetGitConfigAppPath();
 
-        GitConfigurationLevel configLevel = target == ConfigurationTarget.System
+        GitConfigurationLevel configLevel = target.Scope == ConfigurationScope.System
             ? GitConfigurationLevel.System
             : GitConfigurationLevel.Global;
 

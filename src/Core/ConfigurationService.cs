@@ -1,23 +1,91 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Spectre.Console;
 
 namespace GitCredentialManager
 {
     /// <summary>
     /// Targets for performing configuration changes using the <see cref="IConfigurationService"/>.
     /// </summary>
-    public enum ConfigurationTarget
+    public class ConfigurationTarget : IEquatable<ConfigurationTarget>
     {
-        /// <summary>
-        /// Target configuration changes for the current user only.
-        /// </summary>
-        User,
+        public ConfigurationTarget(ConfigurationScope scope)
+            : this(ConfigurationHost.Localhost, scope) { }
+
+        public ConfigurationTarget(ConfigurationHost host, ConfigurationScope scope)
+        {
+            EnsureArgument.NotNull(host, nameof(host));
+            Host = host;
+            Scope = scope;
+        }
 
         /// <summary>
-        /// Target configuration changes for all users on the system.
+        /// Target host to apply configuration changes.
         /// </summary>
-        System,
+        public ConfigurationHost Host { get; }
+
+        /// <summary>
+        /// Target scope to apply configuration changes.
+        /// </summary>
+        public ConfigurationScope Scope { get; }
+
+        #region IEquatable
+
+        public bool Equals(ConfigurationTarget other)
+        {
+            if (other is null) return false;
+            if (ReferenceEquals(this, other)) return true;
+            return Host.Equals(other.Host) && Scope == other.Scope;
+        }
+
+        public override bool Equals(object obj)
+        {
+            if (obj is null) return false;
+            if (ReferenceEquals(this, obj)) return true;
+            if (obj.GetType() != GetType()) return false;
+            return Equals((ConfigurationTarget)obj);
+        }
+
+        public override int GetHashCode() => HashCode.Combine(Host, (int)Scope);
+
+        #endregion
+    }
+
+    public class ConfigurationHost
+    {
+        /// <summary>
+        /// The local host/computer.
+        /// </summary>
+        public static ConfigurationHost Localhost { get; } = new() { IsLocalhost = true };
+
+        /// <summary>
+        /// A Windows Subsystem for Linux (WSL) distribution.
+        /// </summary>
+        /// <param name="distroName">Name of the WSL distribution.</param>
+        public static ConfigurationHost Wsl(string distroName)
+        {
+            EnsureArgument.NotNullOrWhiteSpace(distroName, nameof(distroName));
+            return new ConfigurationHost { WslDistribution = distroName };
+        }
+
+        public bool IsLocalhost { get; private init; }
+
+        public string WslDistribution { get; private init; }
+
+        private ConfigurationHost() { }
+    }
+
+    public enum ConfigurationScope
+    {
+        /// <summary>
+        /// Scoped to the current user only.
+        /// </summary>
+        CurrentUser,
+
+        /// <summary>
+        /// Scoped to the entire system (all users).
+        /// </summary>
+        System
     }
 
     /// <summary>
