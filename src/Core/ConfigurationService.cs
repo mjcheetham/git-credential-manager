@@ -29,6 +29,22 @@ namespace GitCredentialManager
         /// </summary>
         public ConfigurationScope Scope { get; }
 
+        public IGit GetGit(ICommandContext context)
+        {
+            if (Host.IsLocalhost)
+            {
+                return context.Git;
+            }
+
+            if (WslUtils.DistributionExists(Host.WslDistribution) &&
+                WslUtils.TryLocateExecutable(Host.WslDistribution, "git", out string wslGit))
+            {
+                return new GitProcess(context.Trace, context.ProcessManager, wslGit);
+            }
+
+            throw new InvalidOperationException($"Unable to locate Git in WSL distribution '{Host.WslDistribution}'.");
+        }
+
         #region IEquatable
 
         public bool Equals(ConfigurationTarget other)

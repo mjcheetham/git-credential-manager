@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -41,6 +42,11 @@ namespace GitCredentialManager
         /// Cached Windows system drive mount path.
         /// </summary>
         private static string _sysDriveMountPath = null;
+
+        /// <summary>
+        /// Cached WSL drive mount root path.
+        /// </summary>
+        private static string _driveMountRoot = null;
 
         public static bool IsWslDistribution(IEnvironment env, IFileSystem fs, out int wslVersion)
         {
@@ -220,11 +226,11 @@ namespace GitCredentialManager
             return _windowsSessionId;
         }
 
-        private static string GetSystemDriveMountPath(IFileSystem fs)
+        private static string GetDriveMountRoot(IFileSystem fs)
         {
-            if (_sysDriveMountPath is null)
+            if (_driveMountRoot is null)
             {
-                string mountPrefix = DefaultWslMountPrefix;
+                _driveMountRoot = DefaultWslMountPrefix;
 
                 // If the wsl.conf file exists in this distribution the user may
                 // have changed the Windows volume mount point prefix. Use it!
@@ -235,9 +241,19 @@ namespace GitCredentialManager
                     if (wslConf.TryGetSection("automount", out IniSection automountSection) &&
                         automountSection.TryGetProperty("root", out string value))
                     {
-                        mountPrefix = value;
+                        _driveMountRoot = value;
                     }
                 }
+            }
+
+            return _driveMountRoot;
+        }
+
+        private static string GetSystemDriveMountPath(IFileSystem fs)
+        {
+            if (_sysDriveMountPath is null)
+            {
+                string mountPrefix = GetDriveMountRoot(fs);
 
                 // Try to locate the system volume by looking for the Windows\System32 directory
                 IEnumerable<string> mountPoints = fs.EnumerateDirectories(mountPrefix);
@@ -290,6 +306,36 @@ namespace GitCredentialManager
             return "/";
         }
 
+        public static string ConvertToUnixPath(IFileSystem fs, string path)
+        {
+            EnsureArgument.NotNullOrWhiteSpace(path, nameof(path));
+
+            if (!Path.IsPathRooted(path))
+            {
+                throw new ArgumentException("Must be an absolute path", nameof(path));
+            }
+
+            string root = Path.GetPathRoot(path);
+            if (root == "/") // we have been given a unix path
+            {
+                throw new ArgumentException("Must be a Windows path", nameof(path));
+            }
+
+            if (root is not [var driveChar, ':', '\\'])
+            {
+                throw new ArgumentException($"Invalid Windows path root '{root}'", nameof(path));
+            }
+
+            // Drive letter must be lowercase for WSL mount points
+            string driveLetter = driveChar.ToString().ToLowerInvariant();
+
+            // Convert the Windows path to a Unix path
+            string unixPath = path.Substring(root.Length).Replace('\\', '/');
+
+            string mountPrefix = GetDriveMountRoot(fs);
+            return $"{mountPrefix}/{driveLetter}/{unixPath}";
+        }
+
         internal /*for testing purposes*/ static string GetWslPath()
         {
             // WSL is only supported on 64-bit operating systems
@@ -317,6 +363,87 @@ namespace GitCredentialManager
             );
 
             return Path.Combine(sysDir, WslCommandName);
+        }
+
+        public static IReadOnlyList<string> GetWslDistributions()
+        {
+            // Can only run this from Windows
+            PlatformUtils.EnsureWindows();
+
+            string wslExePath = GetWslPath();
+
+            if (!File.Exists(wslExePath))
+            {
+                // WSL is not installed on this system
+                return [];
+            }
+
+            var psi = new ProcessStartInfo(wslExePath, "--list --quiet")
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true
+            };
+
+            using var proc = new ChildProcess(psi);
+            proc.Start();
+            proc.WaitForExit();
+
+            if (proc.ExitCode != 0)
+            {
+                throw new Exception($"Failed to list WSL distributions: {proc.StandardError.ReadToEnd()}");
+            }
+
+            var distributions = new List<string>();
+            while (proc.StandardOutput.ReadLine() is { } line)
+            {
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    distributions.Add(line.Trim());
+                }
+            }
+
+            return distributions;
+        }
+
+        public static bool DistributionExists(string distribution)
+        {
+            IReadOnlyList<string> distros = GetWslDistributions();
+
+            // Distro names are not case-sensitive
+            return distros.Contains(distribution, StringComparer.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Attempt to locate an executable file in a WSL distribution.
+        /// </summary>
+        /// <param name="distribution">The name of the WSL distribution.</param>
+        /// <param name="executableName">The name of the executable to locate.</param>
+        /// <param name="path">The full path to the executable if found.</param>
+        /// <returns>True if the executable was found; otherwise, false.</returns>
+        public static bool TryLocateExecutable(string distribution, string executableName, out string path)
+        {
+            EnsureArgument.NotNullOrWhiteSpace(distribution, nameof(distribution));
+            EnsureArgument.NotNullOrWhiteSpace(executableName, nameof(executableName));
+
+            // Can only run this on Windows
+            PlatformUtils.EnsureWindows();
+
+            path = null;
+
+            using ChildProcess which = CreateWslProcess(distribution, $"which {executableName}");
+            which.Start();
+            which.WaitForExit();
+
+            if (which.ExitCode == 0)
+            {
+                path = which.StandardOutput.ReadToEnd().Trim();
+                return !string.IsNullOrWhiteSpace(path);
+            }
+
+            // Not found
+            return false;
         }
     }
 }

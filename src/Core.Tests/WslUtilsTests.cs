@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using GitCredentialManager.Tests.Objects;
 using Moq;
 using Xunit;
 
@@ -90,6 +91,17 @@ namespace GitCredentialManager.Tests
         public void WslUtils_ConvertToDistroPath_Invalid_ThrowsException(string path)
         {
             Assert.Throws<ArgumentException>(() => WslUtils.ConvertToDistroPath(path, out _));
+        }
+
+        [WindowsTheory]
+        [InlineData(@"C:\Users\alice\foo", "/mnt/c/Users/alice/foo")]
+        [InlineData(@"X:\a\b\c", "/mnt/x/a/b/c")]
+        [InlineData(@"H:\ello world (escape me)\b - copy.txt", @"/mnt/h/ello world (escape me)/b - copy.txt")]
+        public void WslUtils_CreateDistroPath(string path, string expected)
+        {
+            var fs = new TestFileSystem();
+            string actual = WslUtils.ConvertToUnixPath(fs, path);
+            Assert.Equal(expected, actual);
         }
 
         [WindowsFact]

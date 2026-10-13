@@ -17,25 +17,37 @@ namespace GitCredentialManager.Commands
             var system = new Option<bool>("--system", "Modify the system-wide Git configuration instead of the current user");
             AddOption(system);
 
-            this.SetHandler(ExecuteAsync, system);
+            var wsl = new Option<string>(["-w", "--wsl-distro"], "Configure Git Credential Manager for a specific WSL distribution");
+            if (PlatformUtils.IsWindows())
+            {
+                AddOption(wsl);
+            }
+
+            this.SetHandler(ExecuteAsync, system, wsl);
         }
 
         protected ICommandContext Context { get; }
 
         protected IConfigurationService ConfigurationService { get; }
 
-        internal async Task ExecuteAsync(bool system)
+        internal async Task ExecuteAsync(bool system, string wslDistro)
         {
             var scope = system
                 ? ConfigurationScope.System
                 : ConfigurationScope.CurrentUser;
 
+            var host = string.IsNullOrWhiteSpace(wslDistro)
+                ? ConfigurationHost.Localhost
+                : ConfigurationHost.Wsl(wslDistro);
+
             using var _ = Trace2.StartRegion("cfg_cmd", "run");
             Trace2.WriteData("cfg_cmd", "name", Name);
-            Trace2.WriteData("cfg_cmd", "target/host", "localhost");
-            Trace2.WriteData("cfg_cmd", "target/scope", scope == ConfigurationScope.CurrentUser ? "current_user" : "system");
+            Trace2.WriteData("cfg_cmd", "target/host",
+                host == ConfigurationHost.Localhost ? "localhost" : $"wsl:{wslDistro}");
+            Trace2.WriteData("cfg_cmd", "target/scope",
+                scope == ConfigurationScope.CurrentUser ? "current_user" : "system");
 
-            var target = new ConfigurationTarget(scope);
+            var target = new ConfigurationTarget(host, scope);
 
             await ExecuteInternalAsync(target);
         }

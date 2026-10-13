@@ -17,7 +17,8 @@ public partial class AzureReposHostProvider
             ? GitConfigurationLevel.System
             : GitConfigurationLevel.Global;
 
-        IGitConfiguration targetConfig = _context.Git.GetConfiguration();
+        IGit git = target.GetGit(_context);
+        IGitConfiguration targetConfig = git.GetConfiguration();
 
         if (targetConfig.TryGet(useHttpPathKey, false, out string currentValue) && currentValue.IsTruthy())
         {
@@ -47,7 +48,8 @@ public partial class AzureReposHostProvider
             ? GitConfigurationLevel.System
             : GitConfigurationLevel.Global;
 
-        IGitConfiguration targetConfig = _context.Git.GetConfiguration();
+        IGit git = target.GetGit(_context);
+        IGitConfiguration targetConfig = git.GetConfiguration();
 
         // On Windows, if there is a "manager" or "manager-core" entry remaining in the system config then we must
         // not clear the useHttpPath option otherwise this would break the bundled version of GCM in Git for Windows.

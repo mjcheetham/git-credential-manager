@@ -13,7 +13,7 @@ public partial class Application
     {
         string helperKey =
             $"{Constants.GitConfiguration.Credential.SectionName}.{Constants.GitConfiguration.Credential.Helper}";
-        string appPath = GetGitConfigAppPath();
+        string appPath = GetGitConfigAppPath(target);
 
         GitConfigurationLevel configLevel = target.Scope == ConfigurationScope.System
             ? GitConfigurationLevel.System
@@ -21,7 +21,8 @@ public partial class Application
 
         Context.Trace.WriteLine($"Configuring for config level '{configLevel}'.");
 
-        IGitConfiguration config = Context.Git.GetConfiguration();
+        IGit git = target.GetGit(Context);
+        IGitConfiguration config = git.GetConfiguration();
 
         // We are looking for the following to be set in the config:
         //
@@ -68,7 +69,7 @@ public partial class Application
     {
         string helperKey =
             $"{Constants.GitConfiguration.Credential.SectionName}.{Constants.GitConfiguration.Credential.Helper}";
-        string appPath = GetGitConfigAppPath();
+        string appPath = GetGitConfigAppPath(target);
 
         GitConfigurationLevel configLevel = target.Scope == ConfigurationScope.System
             ? GitConfigurationLevel.System
@@ -76,7 +77,8 @@ public partial class Application
 
         Context.Trace.WriteLine($"Unconfiguring for config level '{configLevel}'.");
 
-        IGitConfiguration config = Context.Git.GetConfiguration();
+        IGit git = target.GetGit(Context);
+        IGitConfiguration config = git.GetConfiguration();
 
         // We are looking for the following to be set in the config:
         //
@@ -111,17 +113,21 @@ public partial class Application
         return Task.CompletedTask;
     }
 
-    private string GetGitConfigAppPath()
+    private string GetGitConfigAppPath(ConfigurationTarget target)
     {
         string path = Context.ApplicationPath;
 
-        // On Windows we must use UNIX style path separators
-        if (PlatformUtils.IsWindows())
+        if (!string.IsNullOrWhiteSpace(target.Host.WslDistribution))
         {
+            path = WslUtils.ConvertToUnixPath(Context.FileSystem, path);
+        }
+        else if (PlatformUtils.IsWindows())
+        {
+            // On Windows we must use UNIX style path separators
             path = path.Replace('\\', '/');
         }
 
-        // We must escape escape characters like ' ', '(', and ')'
+        // We must escape characters like ' ', '(', and ')'
         return path
             .Replace(" ", "\\ ")
             .Replace("(", "\\(")
