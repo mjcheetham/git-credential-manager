@@ -82,6 +82,23 @@ public record PublicClientConfig
     /// </para>
     /// </remarks>
     public bool SerializeInteractiveRequests { get; init; }
+
+    /// <summary>
+    /// Approximate time to wait for requests to be serialized.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This property is only used if <see cref="SerializeInteractiveRequests"/> is <see langword="true"/>.
+    /// </para>
+    /// <para>
+    /// Use <see cref="Timeout.InfiniteTimeSpan"/> to wait indefinitely for the lock to be acquired.
+    /// </para>
+    /// <para>
+    /// To avoid thundering-herd issues, the configured timeout is varied randomly
+    /// by up to 5% in either direction, giving a total jitter window of 10%.
+    /// </para>
+    /// </remarks>
+    public TimeSpan SerializedRequestsTimeout { get; set; }
 }
 
 public partial class EntraAuthentication
@@ -212,6 +229,9 @@ public partial class EntraAuthentication
 
         string lockName = GetInteractiveLockName(authority, account);
 
+        // Spread the timeout over a 10% window (+/-5%) to avoid thundering-herds.
+        TimeSpan lockTimeout = PublicClientConfig.SerializedRequestsTimeout.AddJitter(0.1);
+
         // Lock will always be disposed (and released if held) at the end of this method
         using ILock interactiveLock = Context.LockFactory.CreateLock(LockScope.CurrentUser, lockName);
         Trace2.WriteData(Trace2Category, "serialized_interaction/enabled",
@@ -278,6 +298,18 @@ public partial class EntraAuthentication
                 Trace2.WriteData(Trace2Category, "serialized_interaction/lock_acquired", "ok");
                 Context.Trace.WriteLine("Interactive lock acquired!");
                 isRetry = true;
+            }
+            catch (TimeoutException)
+            {
+                Trace2.WriteData(Trace2Category, "serialized_interaction/lock_acquired", "timeout");
+                Context.Trace.WriteLine("Interactive lock acquisition timed out.");
+                Context.Console.WriteWarning(
+                    $"timed out waiting for lock; " +
+                    $"see more at {Constants.HelpUrls.GcmEntraLocks} - " +
+                    $"continuing...");
+
+                // Timeout waiting for the lock is not fatal, we can still proceed with interactive auth.
+                break;
             }
             catch (Exception ex)
             {
