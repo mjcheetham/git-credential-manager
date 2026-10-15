@@ -457,6 +457,11 @@ namespace Microsoft.AzureRepos
                 // Only the new client ID supports broker on Mac and Linux
                 SupportsMacBroker = !isLegacy,
                 SupportsLinuxBroker = !isLegacy,
+
+                // TODO: make these configurable
+                SerializeInteractiveRequests = Environment.GetEnvironmentVariable("ENTRA_SERIALIZED").IsTruthy(),
+                SerializedRequestsTimeout = TimeSpan.FromSeconds(int.TryParse(
+                    Environment.GetEnvironmentVariable("ENTRA_TIMEOUT"), out int t) ? t : 60)
             };
         }
 
