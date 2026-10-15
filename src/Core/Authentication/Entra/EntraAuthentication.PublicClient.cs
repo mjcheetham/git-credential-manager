@@ -2,9 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using GitCredentialManager.Concurrency;
 using GitCredentialManager.Tty;
 using GitCredentialManager.UI;
 using GitCredentialManager.UI.ViewModels;
@@ -63,6 +65,23 @@ public record PublicClientConfig
     /// <code>https://login.microsoftonline.com/common/oauth2/nativeclient</code>
     /// </remarks>
     public bool SupportsLinuxBroker { get; init; }
+
+    /// <summary>
+    /// If <see langword="true"/> then interactive requests with the configured <see cref="ClientId"/> will
+    /// be serialized across all process on the local machine, for the current user.
+    /// If <see langword="false"/> interactive requests will be allowed to run concurrently.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Requests that require interactive authentication will be serialized using a lock, for the current user,
+    /// and for the configured public <see cref="ClientId"/>.
+    /// </para>
+    /// <para>
+    /// This is useful for preventing multiple interactive requests from being made at the same time,
+    /// which can cause issues with some authentication flows and/or with concurrent callers.
+    /// </para>
+    /// </remarks>
+    public bool SerializeInteractiveRequests { get; init; }
 }
 
 public partial class EntraAuthentication
@@ -191,6 +210,14 @@ public partial class EntraAuthentication
             builder.WithAuthority(authority);
         }
 
+        string lockName = GetInteractiveLockName(authority, account);
+
+        // Lock will always be disposed (and released if held) at the end of this method
+        using ILock interactiveLock = Context.LockFactory.CreateLock(LockScope.CurrentUser, lockName);
+        Trace2.WriteData(Trace2Category, "serialized_interaction/enabled",
+            PublicClientConfig.SerializeInteractiveRequests.ToString().ToLowerInvariant());
+        Trace2.WriteData(Trace2Category, "serialized_interaction/lock_name", lockName);
+
         // The Windows broker always requires a parent window
         bool parentWindowRequired = useBroker && PlatformUtils.IsWindows();
 
@@ -201,19 +228,72 @@ public partial class EntraAuthentication
         IPublicClientApplication app = builder.Build();
         await RegisterCacheAsync(app);
 
-        // If we've been given an account, try to resolve it to one in the cache
         IAccount msalAccount = null;
-        if (account is not null)
+        AuthenticationResult result;
+        bool isRetry = false;
+        while (true)
         {
-            msalAccount = await ResolveAccountAsync(app, account);
-        }
+            if (isRetry)
+            {
+                Context.Trace.WriteLine("Retrying account resolution and silent authentication...");
+            }
 
-        // Try silent authentication first if we have a cached account
-        AuthenticationResult result = await GetTokenForUserSilentAsync(app, scopes, msalAccount, ct);
-        if (result is not null)
-        {
-            Trace2.WriteData(Trace2Category, "flow", "silent");
-            return AuthResult.FromMsalResult(result);
+            // If we've been given an account, try to resolve it to one in the cache
+            if (account is not null)
+            {
+                msalAccount = await ResolveAccountAsync(app, account);
+            }
+
+            // Try silent authentication first if we have a cached account
+            result = await GetTokenForUserSilentAsync(app, scopes, msalAccount, ct);
+            if (result is not null)
+            {
+                Trace2.WriteData(Trace2Category, "flow", "silent");
+                return AuthResult.FromMsalResult(result);
+            }
+
+            if (isRetry)
+            {
+                // We only retry once, so if we still don't have a cached account then we need to go interactive
+                break;
+            }
+
+            // If we are asked to serialize interactive requests then acquire a lock now
+            // and then check again if silent authentication can succeed after waiting
+            // for the lock. If so we may be able to skip the interactive flow!
+            if (!PublicClientConfig.SerializeInteractiveRequests)
+            {
+                // No serialization requested, so we can skip the lock & retry
+                // and go straight to interactive auth.
+                break;
+            }
+
+            try
+            {
+                Context.Trace.WriteLine("Attempting to acquire interactive lock...");
+                Context.Console.WriteInfo(
+                    $"waiting ~{PublicClientConfig.SerializedRequestsTimeout.TotalSeconds}s for interactive authentication lock...");
+
+                await interactiveLock.AcquireAsync(lockTimeout, ct);
+                Trace2.WriteData(Trace2Category, "serialized_interaction/lock_acquired", "ok");
+                Context.Trace.WriteLine("Interactive lock acquired!");
+                isRetry = true;
+            }
+            catch (Exception ex)
+            {
+                Trace2.WriteData(Trace2Category, "serialized_interaction/lock_acquired", "error");
+                Trace2.WriteError(ex);
+                Context.Trace.WriteLine("Interactive lock acquisition failed!");
+                Context.Trace.WriteException(ex);
+                Context.Console.WriteError(
+                    $"encountered an error while acquiring lock; " +
+                    $"see more at {Constants.HelpUrls.GcmEntraLocks} - " +
+                    $"continuing...");
+
+                // Serialising interactive requests is an optimisation and failure to acquire
+                // locks should never prevent an interactive authentication flow from proceeding.
+                break;
+            }
         }
 
         ThrowIfUserInteractionDisabled();
@@ -734,4 +814,35 @@ public partial class EntraAuthentication
             Constants.DefaultUiHelper,
             out command,
             out args);
+
+    internal string GetInteractiveLockName(string authority, IEntraAccount account)
+    {
+        if (string.IsNullOrWhiteSpace(PublicClientConfig?.ClientId))
+        {
+            throw new InvalidOperationException("Public client ID required for interactive locks.");
+        }
+
+        const string prefix = "entra_interactive";
+        string clientId = PublicClientConfig.ClientId.ToLowerInvariant();
+
+        var sb = new StringBuilder(clientId);
+        if (!string.IsNullOrWhiteSpace(authority))
+        {
+            sb.Append(authority.ToLowerInvariant());
+        }
+
+        if (account is not null)
+        {
+            sb.Append(account.HomeAccountId?.ToLowerInvariant());
+        }
+
+        // Creating a hash of the lock name ensures that it is a valid file name on all platforms,
+        // and avoids overly long names which may have issues on some platforms.
+        // The hash is deterministic and will always be the same for the same inputs.
+        byte[] bytes = Encoding.UTF8.GetBytes(sb.ToString());
+        byte[] hashBytes = SHA256.HashData(bytes);
+        string hash = Convert.ToHexStringLower(hashBytes);
+
+        return $"{prefix}_{hash}";
+    }
 }

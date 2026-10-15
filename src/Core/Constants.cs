@@ -310,6 +310,7 @@ namespace GitCredentialManager
             public const string GcmMultipleUsers       = "https://aka.ms/gcm/multipleusers";
             public const string GcmUnsafeRemotes       = "https://aka.ms/gcm/unsaferemotes";
             public const string GcmNtlm                = "https://aka.ms/gcm/ntlm";
+            public const string GcmEntraLocks          = "https://aka.ms/gcm/entralocks";
         }
 
         private static Version _gcmVersion;
