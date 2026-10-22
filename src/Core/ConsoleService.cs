@@ -33,6 +33,13 @@ public interface IConsoleService
     /// Prompt the user for a selection on the controlling terminal.
     /// </summary>
     Task<T> ShowPromptAsync<T>(IPrompt<T> prompt, CancellationToken ct = default);
+
+    /// <summary>
+    /// When any key is pressed on the controlling terminal, run the provided action.
+    /// </summary>
+    /// <param name="action">Action to invoke when any key is pressed.</param>
+    /// <returns>Disposable object that can be used to stop the pending action.</returns>
+    IDisposable RunOnKeyPress(Action action);
 }
 
 public class ConsoleService : IConsoleService
@@ -65,4 +72,55 @@ public class ConsoleService : IConsoleService
 
     public Task<T> ShowPromptAsync<T>(IPrompt<T> prompt, CancellationToken ct = default) =>
         prompt.ShowAsync(_ttyConsole.Value, ct);
+
+    public IDisposable RunOnKeyPress(Action action)
+    {
+        return new OnAnyKeyTask(_ttyConsole.Value, action);
+    }
+}
+
+public class OnAnyKeyTask : IDisposable
+{
+    private readonly CancellationTokenSource _cts = new();
+    private readonly IAnsiConsole _console;
+    private readonly Action _action;
+
+    public OnAnyKeyTask(IAnsiConsole console, Action action)
+    {
+        _console = console;
+        _action = action;
+
+        Task.Run(Intercept, _cts.Token);
+    }
+
+    private void Intercept()
+    {
+        _console.ExclusivityMode.Run<object>(() =>
+        {
+            while (!_cts.IsCancellationRequested)
+            {
+                // We spin here until we know that a key is available because calling ReadKey or ReadKeyAsync will
+                // block the thread until a key is pressed, which would prevent cancellation from being observed.
+                while (!_console.Input.IsKeyAvailable())
+                {
+                    Thread.Sleep(250);
+                }
+
+                // This blocks until a key is pressed, but we know a key is available so it should return immediately.
+                _console.Input.ReadKey(intercept: true);
+
+                // We don't care what key was pressed, we just want to run the action.
+                _action();
+                break;
+            }
+
+            return null;
+        });
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
 }

@@ -35,6 +35,11 @@ public class TestConsoleService : IConsoleService
     public Task<T> ShowPromptAsync<T>(IPrompt<T> prompt, CancellationToken ct = default) =>
         prompt.ShowAsync(TtyConsole, ct);
 
+    public IDisposable RunOnKeyPress(Action action)
+    {
+        throw new NotImplementedException();
+    }
+
     /// <summary>
     /// Queue the answer for the next text (or secret) prompt shown on <see cref="TtyConsole"/>.
     /// </summary>

@@ -288,16 +288,32 @@ public partial class EntraAuthentication
                 break;
             }
 
+            var lockCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+
             try
             {
                 Context.Trace.WriteLine("Attempting to acquire interactive lock...");
                 Context.Console.WriteInfo(
                     $"waiting ~{PublicClientConfig.SerializedRequestsTimeout.TotalSeconds}s for interactive authentication lock...");
+                Context.Console.WriteInfo("press any key to proceed immediately");
 
-                await interactiveLock.AcquireAsync(lockTimeout, ct);
+                using (Context.Console.RunOnKeyPress(lockCts.Cancel))
+                {
+                    await interactiveLock.AcquireAsync(lockTimeout, lockCts.Token);
+                }
+
                 Trace2.WriteData(Trace2Category, "serialized_interaction/lock_acquired", "ok");
                 Context.Trace.WriteLine("Interactive lock acquired!");
                 isRetry = true;
+            }
+            catch (OperationCanceledException)
+            {
+                Trace2.WriteData(Trace2Category, "serialized_interaction/lock_acquired", "bypassed");
+                Context.Trace.WriteLine("Interactive lock acquisition bypassed.");
+                Context.Console.WriteInfo("bypassing interactive authentication lock...");
+
+                // User requested to bypass the lock, we can still proceed with interactive auth.
+                break;
             }
             catch (TimeoutException)
             {
