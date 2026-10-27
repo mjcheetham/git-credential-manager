@@ -23,9 +23,16 @@ namespace GitCredentialManager.Interop.MacOS
             a = ResolveSymbolicLinks(a);
             b = ResolveSymbolicLinks(b);
 
-            // TODO: determine if file system is case-sensitive
-            // By default HFS+/APFS is NOT case-sensitive...
-            return StringComparer.OrdinalIgnoreCase.Equals(a, b);
+            // By default, HFS+/APFS is NOT case-sensitive...
+            var comparer = StringComparer.OrdinalIgnoreCase;
+            if (IsCaseSensitivePath(a) || IsCaseSensitivePath(b))
+            {
+                // ...but if either path is on a case-sensitive file system,
+                // then we need to use a case-sensitive comparison.
+                comparer = StringComparer.Ordinal;
+            }
+
+            return comparer.Equals(a, b);
         }
     }
 }

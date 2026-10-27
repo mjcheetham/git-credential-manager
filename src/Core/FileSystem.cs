@@ -28,6 +28,18 @@ namespace GitCredentialManager
         bool IsSamePath(string a, string b);
 
         /// <summary>
+        /// Check if the file system is case-sensitive for the given path.
+        /// </summary>
+        /// <param name="path">The path to check.</param>
+        /// <returns>
+        /// True if the file system is case-sensitive for the given path, false otherwise.
+        /// </returns>
+        /// <remarks>
+        /// If the path does not exist, the result is undefined. The implementation may return true or false.
+        /// </remarks>
+        bool IsCaseSensitivePath(string path);
+
+        /// <summary>
         /// Check if a file exists at the specified path.
         /// </summary>
         /// <param name="path">Full path to file to test.</param>
@@ -127,6 +139,8 @@ namespace GitCredentialManager
         public string UserDataDirectoryPath => Path.Combine(UserHomePath, Constants.GcmDataDirectoryName);
 
         public abstract bool IsSamePath(string a, string b);
+
+        public abstract bool IsCaseSensitivePath(string path);
 
         public bool FileExists(string path) => File.Exists(path);
 

@@ -1,10 +1,23 @@
 using System;
 using System.IO;
+using GitCredentialManager.Interop.Posix.Native;
 
 namespace GitCredentialManager.Interop.Posix
 {
     public abstract class PosixFileSystem : FileSystem
     {
+        public override bool IsCaseSensitivePath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new ArgumentException("Path cannot be null or whitespace.", nameof(path));
+            }
+
+            // Use pathconf to determine if the file system is case-sensitive for the given path
+            long result = Unistd.pathconf(path, PathConfName._PC_CASE_SENSITIVE);
+            return result == 1;
+        }
+
         /// <summary>
         /// Recursively resolve a symbolic link.
         /// </summary>

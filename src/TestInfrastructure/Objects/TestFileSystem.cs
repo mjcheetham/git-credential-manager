@@ -32,6 +32,11 @@ namespace GitCredentialManager.Tests.Objects
                 : StringComparer.OrdinalIgnoreCase.Equals(a, b);
         }
 
+        bool IFileSystem.IsCaseSensitivePath(string path)
+        {
+            return IsCaseSensitive;
+        }
+
         bool IFileSystem.FileExists(string path)
         {
             return Files.ContainsKey(path);

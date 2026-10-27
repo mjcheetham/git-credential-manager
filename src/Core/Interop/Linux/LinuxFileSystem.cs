@@ -23,7 +23,16 @@ namespace GitCredentialManager.Interop.Linux
             a = ResolveSymbolicLinks(a);
             b = ResolveSymbolicLinks(b);
 
-            return StringComparer.Ordinal.Equals(a, b);
+            // By default, assume paths ARE case-sensitive...
+            var comparer = StringComparer.Ordinal;
+            if (!IsCaseSensitivePath(a) && !IsCaseSensitivePath(b))
+            {
+                // ...but if both paths are on a case-sensitive file system,
+                // then we need to use a case-insensitive comparison.
+                comparer = StringComparer.OrdinalIgnoreCase;
+            }
+
+            return comparer.Equals(a, b);
         }
     }
 }

@@ -10,6 +10,13 @@ namespace GitCredentialManager.Interop.Windows.Native
     {
         private const string LibraryName = "kernel32.dll";
 
+        public const int FileCaseSensitiveInfo = 23;
+        public const uint FILE_CS_FLAG_CASE_SENSITIVE_DIR = 0x1;
+        public const uint FILE_READ_ATTRIBUTES = 0x80;
+        public const uint FILE_FLAG_BACKUP_SEMANTICS = 0x02000000; // required to open directories
+        public const uint OPEN_EXISTING = 3;
+        public const uint FILE_SHARE_ALL = 7;
+
         /// <summary>
         /// Creates or opens a file or I/O device.
         /// <para/>
@@ -284,7 +291,32 @@ namespace GitCredentialManager.Interop.Windows.Native
         /// </returns>
         [DllImport("kernel32.dll", SetLastError = true)]
         public static extern IntPtr GetConsoleWindow();
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        public static extern bool GetFileInformationByHandleEx(SafeFileHandle h, int infoClass,
+            out FILE_CASE_SENSITIVE_INFO info, uint size);
+
+        public static bool IsDirectoryCaseSensitive(string dir)
+        {
+            using var handle = CreateFile(dir, FileAccess.GenericRead, FileShare.All,
+                IntPtr.Zero, FileCreationDisposition.OpenExisting, FileAttributes.BackupSemantics, IntPtr.Zero);
+            if (handle.IsInvalid)
+            {
+                throw new System.IO.IOException("Open failed", Marshal.GetLastWin32Error());
+            }
+
+            if (!GetFileInformationByHandleEx(handle, FileCaseSensitiveInfo,
+                    info: out FILE_CASE_SENSITIVE_INFO info, (uint)Marshal.SizeOf<FILE_CASE_SENSITIVE_INFO>()))
+            {
+                return false; // unsupported (e.g. FAT/exFAT/ReFS/network share, older Windows)
+            }
+
+            return (info.Flags & FILE_CS_FLAG_CASE_SENSITIVE_DIR) != 0;
+        }
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct FILE_CASE_SENSITIVE_INFO { public uint Flags; }
 
     [Flags]
     public enum FileAccess : uint
@@ -572,7 +604,9 @@ namespace GitCredentialManager.Interop.Windows.Native
         /// <para/>
         /// If this flag is not specified, but the object has been opened for delete access, the function fails.
         /// </summary>
-        Delete = 0x00000004
+        Delete = 0x00000004,
+
+        All = Read | Write | Delete
     }
 
     [Flags]
