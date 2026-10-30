@@ -92,7 +92,7 @@ namespace GitLab
             return response.Headers.Contains("X-Gitlab-Feature-Category");
         }
 
-        public override async Task<ICredential> GenerateCredentialAsync(GitRequest request)
+        public override async Task<ICredential> GenerateCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             ThrowIfDisposed();
 
@@ -212,7 +212,7 @@ namespace GitLab
                 }
             }
 
-            credential ??= await GenerateCredentialAsync(request);
+            credential ??= await GenerateCredentialAsync(request, ct);
 
             if (credential is OAuthCredential oAuthCredential)
             {

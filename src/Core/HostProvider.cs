@@ -118,8 +118,9 @@ namespace GitCredentialManager
         /// Create a new credential used for accessing the remote Git repository on this hosting service.
         /// </summary>
         /// <param name="request">Git credential request.</param>
+        /// <param name="ct">Cancellation token to cancel the in-progress credential operation.</param>
         /// <returns>A credential Git can use to authenticate to the remote repository.</returns>
-        public abstract Task<ICredential> GenerateCredentialAsync(GitRequest request);
+        public abstract Task<ICredential> GenerateCredentialAsync(GitRequest request, CancellationToken ct = default);
 
         public virtual async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
@@ -134,7 +135,7 @@ namespace GitCredentialManager
 
                 // No existing credential was found, create a new one
                 Context.Trace.WriteLine("Creating new credential...");
-                credential = await GenerateCredentialAsync(request);
+                credential = await GenerateCredentialAsync(request, ct);
                 Context.Trace.WriteLine("Credential created.");
             }
             else

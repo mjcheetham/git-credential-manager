@@ -28,7 +28,7 @@ namespace GitCredentialManager.Tests
             var provider = new TestHostProvider(context)
             {
                 IsSupportedFunc = _ => true,
-                GenerateCredentialFunc = _ =>
+                GenerateCredentialFunc = (_, _) =>
                 {
                     Assert.Fail("Should never be called");
                     return null;
@@ -60,7 +60,7 @@ namespace GitCredentialManager.Tests
             var provider = new TestHostProvider(context)
             {
                 IsSupportedFunc = _ => true,
-                GenerateCredentialFunc = _ =>
+                GenerateCredentialFunc = (_, _) =>
                 {
                     generateWasCalled = true;
                     return new GitCredential(userName, password);
