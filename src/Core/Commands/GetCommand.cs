@@ -23,7 +23,7 @@ namespace GitCredentialManager.Commands
             {
                 using (Trace2.StartRegion("git_cmd_get", "provider_get"))
                 {
-                    response = await provider.GetCredentialAsync(request);
+                    response = await provider.GetCredentialAsync(request, ct);
                 }
             }
             catch (Exception ex) when (ex is OperationCanceledException || ex is InterruptedException)

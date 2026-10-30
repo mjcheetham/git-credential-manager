@@ -5,6 +5,7 @@ using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager;
 using GitCredentialManager.Authentication.Entra;
@@ -83,7 +84,7 @@ namespace Microsoft.AzureRepos
             return false;
         }
 
-        public async Task<GitResponse> GetCredentialAsync(GitRequest request)
+        public async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             if (UseManagedIdentity(out ManagedIdentity mid))
             {

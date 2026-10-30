@@ -5,6 +5,7 @@ using GitCredentialManager;
 using GitCredentialManager.Authentication.OAuth;
 using System.Net.Http.Headers;
 using System.Linq;
+using System.Threading;
 using GitCredentialManager.Tty;
 
 namespace GitLab
@@ -180,7 +181,7 @@ namespace GitLab
         }
 
         // <remarks>Stores OAuth tokens as a side effect</remarks>
-        public override async Task<GitResponse> GetCredentialAsync(GitRequest request)
+        public override async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
             ICredential credential = Context.CredentialStore.Get(service, request.UserName);

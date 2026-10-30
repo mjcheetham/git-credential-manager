@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GitCredentialManager
@@ -44,8 +45,9 @@ namespace GitCredentialManager
         /// Get a credential for accessing the remote Git repository on this hosting service.
         /// </summary>
         /// <param name="request">Git credential request.</param>
+        /// <param name="ct">Cancellation token to cancel the in-progress credential request.</param>
         /// <returns>A response containing the credential Git can use to authenticate to the remote repository.</returns>
-        Task<GitResponse> GetCredentialAsync(GitRequest request);
+        Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default);
 
         /// <summary>
         /// Store a credential for accessing the remote Git repository on this hosting service.
@@ -119,7 +121,7 @@ namespace GitCredentialManager
         /// <returns>A credential Git can use to authenticate to the remote repository.</returns>
         public abstract Task<ICredential> GenerateCredentialAsync(GitRequest request);
 
-        public virtual async Task<GitResponse> GetCredentialAsync(GitRequest request)
+        public virtual async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             // Try and locate an existing credential in the OS credential store
             string service = GetServiceName(request);

@@ -65,7 +65,7 @@ namespace GitCredentialManager
             return request.GetRemoteUri(includeUser: false).AbsoluteUri.TrimEnd('/');
         }
 
-        public async Task<GitResponse> GetCredentialAsync(GitRequest request)
+        public async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             // Try and locate an existing credential in the OS credential store
             string service = GetServiceName(request);

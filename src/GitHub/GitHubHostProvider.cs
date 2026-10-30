@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
 using GitHub.Diagnostics;
 using GitCredentialManager;
@@ -126,7 +127,7 @@ namespace GitHub
             return url.TrimEnd('/');
         }
 
-        public async Task<GitResponse> GetCredentialAsync(GitRequest request)
+        public async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
             Uri remoteUri = request.GetRemoteUri();

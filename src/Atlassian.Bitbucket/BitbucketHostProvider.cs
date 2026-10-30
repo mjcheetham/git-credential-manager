@@ -8,6 +8,7 @@ using Atlassian.Bitbucket.Cloud;
 using GitCredentialManager;
 using GitCredentialManager.Authentication.OAuth;
 using System.Text.RegularExpressions;
+using System.Threading;
 
 namespace Atlassian.Bitbucket
 {
@@ -84,7 +85,7 @@ namespace Atlassian.Bitbucket
             return supported;
         }
 
-        public async Task<GitResponse> GetCredentialAsync(GitRequest request)
+        public async Task<GitResponse> GetCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             // We should not allow unencrypted communication and should inform the user
             if (!_context.Settings.AllowUnsafeRemotes &&
