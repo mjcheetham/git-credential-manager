@@ -327,7 +327,7 @@ namespace Atlassian.Bitbucket
             }
         }
 
-        public Task StoreCredentialAsync(GitRequest request)
+        public Task StoreCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             // It doesn't matter if this is an OAuth access token, or the literal username & password
             // because we store them the same way, against the same credential key in the store.
@@ -341,7 +341,7 @@ namespace Atlassian.Bitbucket
             return Task.CompletedTask;
         }
 
-        public Task EraseCredentialAsync(GitRequest request)
+        public Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             // Erase the stored credential (which may be either the literal username & password, or
             // the OAuth access token). We don't need to erase the OAuth refresh token because on the

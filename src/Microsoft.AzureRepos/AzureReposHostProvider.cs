@@ -192,7 +192,7 @@ namespace Microsoft.AzureRepos
             return new GitResponse(entraCredential);
         }
 
-        public Task StoreCredentialAsync(GitRequest request)
+        public Task StoreCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             Uri remoteUri = request.GetRemoteUri();
 
@@ -231,7 +231,7 @@ namespace Microsoft.AzureRepos
             return Task.CompletedTask;
         }
 
-        public Task EraseCredentialAsync(GitRequest request)
+        public Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             Uri remoteUri = request.GetRemoteUri();
 

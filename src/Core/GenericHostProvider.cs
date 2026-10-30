@@ -88,7 +88,7 @@ namespace GitCredentialManager
             return new GitResponse(credential);
         }
 
-        public Task StoreCredentialAsync(GitRequest request)
+        public Task StoreCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
 
@@ -110,7 +110,7 @@ namespace GitCredentialManager
             return Task.CompletedTask;
         }
 
-        public Task EraseCredentialAsync(GitRequest request)
+        public Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
 

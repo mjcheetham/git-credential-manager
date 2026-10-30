@@ -288,7 +288,7 @@ namespace GitLab
             return builder.Uri.ToString();
         }
 
-        public override Task EraseCredentialAsync(GitRequest request)
+        public override Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             // delete any refresh token too
             Context.CredentialStore.Remove(GetRefreshTokenServiceName(request), "oauth2");

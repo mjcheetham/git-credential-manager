@@ -243,7 +243,7 @@ namespace GitHub
             return false;
         }
 
-        public virtual Task StoreCredentialAsync(GitRequest request)
+        public virtual Task StoreCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
 
@@ -265,7 +265,7 @@ namespace GitHub
             return Task.CompletedTask;
         }
 
-        public virtual Task EraseCredentialAsync(GitRequest request)
+        public virtual Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
 

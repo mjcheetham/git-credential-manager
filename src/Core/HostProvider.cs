@@ -53,13 +53,15 @@ namespace GitCredentialManager
         /// Store a credential for accessing the remote Git repository on this hosting service.
         /// </summary>
         /// <param name="request">Git credential request.</param>
-        Task StoreCredentialAsync(GitRequest request);
+        /// <param name="ct">Cancellation token to cancel the in-progress credential request.</param>
+        Task StoreCredentialAsync(GitRequest request, CancellationToken ct = default);
 
         /// <summary>
         /// Erase a stored credential for accessing the remote Git repository on this hosting service.
         /// </summary>
         /// <param name="request">Git credential request.</param>
-        Task EraseCredentialAsync(GitRequest request);
+        /// <param name="ct">Cancellation token to cancel the in-progress credential request.</param>
+        Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default);
     }
 
     /// <summary>
@@ -146,7 +148,7 @@ namespace GitCredentialManager
             return new GitResponse(credential);
         }
 
-        public virtual Task StoreCredentialAsync(GitRequest request)
+        public virtual Task StoreCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
 
@@ -168,7 +170,7 @@ namespace GitCredentialManager
             return Task.CompletedTask;
         }
 
-        public virtual Task EraseCredentialAsync(GitRequest request)
+        public virtual Task EraseCredentialAsync(GitRequest request, CancellationToken ct = default)
         {
             string service = GetServiceName(request);
 
