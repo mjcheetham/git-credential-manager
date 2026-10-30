@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -12,23 +13,21 @@ namespace GitCredentialManager;
 /// The only major operating system that uses a lone carriage-return as a new-line character
 /// is the classic Macintosh OS (before OS X), which is not supported by Git.
 /// </summary>
-public class GitStreamReader : StreamReader
+public class GitStreamReader(Stream stream, Encoding encoding) : AsyncTextReader(new StreamReader(stream, encoding))
 {
-    public GitStreamReader(Stream stream, Encoding encoding) : base(stream, encoding) { }
-
     public override string ReadLine()
     {
         return ReadLineAsync(CancellationToken.None).ConfigureAwait(false).GetAwaiter().GetResult();
     }
 
-    public override async ValueTask<string> ReadLineAsync(CancellationToken cancellationToken)
+    public override async ValueTask<string> ReadLineAsync(CancellationToken ct)
     {
         int nr;
         var sb = new StringBuilder();
         var buffer = new char[1];
         bool lastWasCR = false;
 
-        while ((nr = await base.ReadAsync(buffer, 0, 1).ConfigureAwait(false)) > 0)
+        while ((nr = await base.ReadAsync(buffer.AsMemory(), ct).ConfigureAwait(false)) > 0)
         {
             char c = buffer[0];
 
