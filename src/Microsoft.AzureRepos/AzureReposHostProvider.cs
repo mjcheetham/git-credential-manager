@@ -90,7 +90,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine($"Getting Entra access token for managed identity {mid}...");
                 var entraResult = await _entraAuth.Value.GetTokenForManagedIdentityAsync(
-                    AzureDevOpsConstants.AzureDevOpsResourceId, mid);
+                    AzureDevOpsConstants.AzureDevOpsResourceId, mid, ct);
                 return new GitResponse(
                     new GitCredential(mid.Id, entraResult.AccessToken)
                 );
@@ -100,7 +100,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine($"Getting Entra access token using WIF (scenario: {fedOpts.Scenario})...");
                 var entraResult = await _entraAuth.Value.GetTokenUsingWorkloadFederationAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes, fedOpts);
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes, fedOpts, ct);
                 return new GitResponse(
                     new GitCredential(fedOpts.ClientId, entraResult.AccessToken)
                 );
@@ -110,7 +110,7 @@ namespace Microsoft.AzureRepos
             {
                 _context.Trace.WriteLine($"Getting Entra access token for service principal {sp.TenantId}/{sp.Id}...");
                 var entraResult = await _entraAuth.Value.GetTokenForServicePrincipalAsync(
-                    AzureDevOpsConstants.AzureDevOpsDefaultScopes, sp);
+                    AzureDevOpsConstants.AzureDevOpsDefaultScopes, sp, ct);
                 return new GitResponse(
                     new GitCredential(sp.Id, entraResult.AccessToken)
                 );
@@ -118,7 +118,7 @@ namespace Microsoft.AzureRepos
 
             try
             {
-                return await GetUserCredentialAsync(request);
+                return await GetUserCredentialAsync(request, ct);
             }
             catch (MsalException msalEx) when (IsClientConfigException(msalEx) &&
                                                _entraAuth.Value.PublicClientConfig.ClientId ==
@@ -157,7 +157,7 @@ namespace Microsoft.AzureRepos
             return false;
         }
 
-        private async Task<GitResponse> GetUserCredentialAsync(GitRequest request)
+        private async Task<GitResponse> GetUserCredentialAsync(GitRequest request, CancellationToken ct)
         {
             if (UsePersonalAccessTokens())
             {
@@ -174,7 +174,7 @@ namespace Microsoft.AzureRepos
 
                     // No existing credential was found, create a new one
                     _context.Trace.WriteLine("Creating new credential...");
-                    credential = await GeneratePersonalAccessTokenAsync(request);
+                    credential = await GeneratePersonalAccessTokenAsync(request, ct);
                     _context.Trace.WriteLine("Credential created.");
                 }
                 else
@@ -187,7 +187,7 @@ namespace Microsoft.AzureRepos
 
             // Include the username request here so that we may use it as an override
             // for user account lookups when getting Entra access tokens.
-            var entraResult = await GetEntraAccessTokenAsync(request);
+            var entraResult = await GetEntraAccessTokenAsync(request, ct);
             var entraCredential = new GitCredential(entraResult.Account.UserName, entraResult.AccessToken);
             return new GitResponse(entraCredential);
         }
@@ -296,7 +296,7 @@ namespace Microsoft.AzureRepos
             }
         }
 
-        private async Task<ICredential> GeneratePersonalAccessTokenAsync(GitRequest request)
+        private async Task<ICredential> GeneratePersonalAccessTokenAsync(GitRequest request, CancellationToken ct)
         {
             ThrowIfDisposed();
             ThrowIfUnsafeRemote(request);
@@ -306,14 +306,14 @@ namespace Microsoft.AzureRepos
 
             // Determine the Entra authentication authority for this organization
             _context.Trace.WriteLine("Determining Entra authentication authority...");
-            string authAuthority = await _azDevOps.GetAuthorityAsync(orgUri);
+            string authAuthority = await _azDevOps.GetAuthorityAsync(orgUri, ct);
             _context.Trace.WriteLine($"Authority is '{authAuthority}'.");
 
             // Get an Entra access token for the Azure DevOps SPS
             _context.Trace.WriteLine("Getting Entra access token...");
             IEntraAuthenticationResult result = await _entraAuth.Value.GetTokenForUserAsync(
                 AzureDevOpsConstants.AzureDevOpsDefaultScopes,
-                authAuthority);
+                authAuthority, ct: ct);
             _context.Trace.WriteLineSecrets(
                 $"Acquired Entra access token. Account='{result.Account.UserName}' Token='{{0}}'", new object[] {result.AccessToken});
 
@@ -327,13 +327,14 @@ namespace Microsoft.AzureRepos
             string pat = await _azDevOps.CreatePersonalAccessTokenAsync(
                 orgUri,
                 result.AccessToken,
-                patScopes);
+                patScopes,
+                ct);
             _context.Trace.WriteLineSecrets("PAT created. PAT='{0}'", new object[] {pat});
 
             return new GitCredential(result.Account.UserName, pat);
         }
 
-        private async Task<IEntraAuthenticationResult> GetEntraAccessTokenAsync(GitRequest request)
+        private async Task<IEntraAuthenticationResult> GetEntraAccessTokenAsync(GitRequest request, CancellationToken ct)
         {
             ThrowIfUnsafeRemote(request);
 
@@ -355,7 +356,7 @@ namespace Microsoft.AzureRepos
                 {
                     // If there is no cached value we must query for it and cache it for future use
                     _context.Trace.WriteLine($"No cached authority value - querying {orgUri} for authority...");
-                    authAuthority = await _azDevOps.GetAuthorityAsync(orgUri);
+                    authAuthority = await _azDevOps.GetAuthorityAsync(orgUri, ct);
                     _authorityCache.UpdateAuthority(orgName, authAuthority);
                 }
                 else
@@ -398,7 +399,7 @@ namespace Microsoft.AzureRepos
             else
             {
                 _context.Trace.WriteLine($"Looking for cached Entra account matching username '{userName}'...");
-                IReadOnlyList<IEntraAccount> cached = await _entraAuth.Value.GetUserAccountsAsync();
+                IReadOnlyList<IEntraAccount> cached = await _entraAuth.Value.GetUserAccountsAsync(ct);
                 account = cached.FirstOrDefault(a => icmp.Equals(a.UserName, userName));
                 _context.Trace.WriteLine(account is null
                     ? "No cached account found."
@@ -410,7 +411,7 @@ namespace Microsoft.AzureRepos
             IEntraAuthenticationResult result = await _entraAuth.Value.GetTokenForUserAsync(
                 AzureDevOpsConstants.AzureDevOpsDefaultScopes,
                 authAuthority,
-                account);
+                account, ct: ct);
             _context.Trace.WriteLineSecrets(
                 $"Acquired Entra access token. Account='{result.Account.UserName}' Token='{{0}}'", new object[] {result.AccessToken});
 

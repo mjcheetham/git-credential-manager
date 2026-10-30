@@ -5,6 +5,7 @@ using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager;
 
@@ -12,8 +13,9 @@ namespace Microsoft.AzureRepos
 {
     public interface IAzureDevOpsRestApi : IDisposable
     {
-        Task<string> GetAuthorityAsync(Uri organizationUri);
-        Task<string> CreatePersonalAccessTokenAsync(Uri organizationUri, string accessToken, IEnumerable<string> scopes);
+        Task<string> GetAuthorityAsync(Uri organizationUri, CancellationToken ct = default);
+        Task<string> CreatePersonalAccessTokenAsync(Uri organizationUri, string accessToken, IEnumerable<string> scopes,
+            CancellationToken ct = default);
     }
 
     public class AzureDevOpsRestApi : IAzureDevOpsRestApi
@@ -27,7 +29,7 @@ namespace Microsoft.AzureRepos
             _context = context;
         }
 
-        public async Task<string> GetAuthorityAsync(Uri organizationUri)
+        public async Task<string> GetAuthorityAsync(Uri organizationUri, CancellationToken ct = default)
         {
             EnsureArgument.AbsoluteUri(organizationUri, nameof(organizationUri));
 
@@ -41,7 +43,7 @@ namespace Microsoft.AzureRepos
             var msaAuthority = new Uri(authorityBase, "organizations");
 
             _context.Trace.WriteLine($"HTTP: HEAD {organizationUri}");
-            using (HttpResponseMessage response = await HttpClient.HeadAsync(organizationUri))
+            using (HttpResponseMessage response = await HttpClient.HeadAsync(organizationUri, ct))
             {
                 _context.Trace.WriteLine("HTTP: Response code ignored.");
                 _context.Trace.WriteLine("Inspecting headers...");
@@ -88,7 +90,8 @@ namespace Microsoft.AzureRepos
             return commonAuthority.ToString();
         }
 
-        public async Task<string> CreatePersonalAccessTokenAsync(Uri organizationUri, string accessToken, IEnumerable<string> scopes)
+        public async Task<string> CreatePersonalAccessTokenAsync(Uri organizationUri, string accessToken, IEnumerable<string> scopes,
+            CancellationToken ct = default)
         {
             const string sessionTokenUrl = "_apis/token/sessiontokens?api-version=1.0&tokentype=compact";
 
@@ -108,11 +111,11 @@ namespace Microsoft.AzureRepos
             _context.Trace.WriteLine($"HTTP: POST {requestUri}");
             using (StringContent content = CreateAccessTokenRequestJson(organizationUri, scopes))
             using (HttpRequestMessage request = CreateRequestMessage(HttpMethod.Post, requestUri, content, accessToken))
-            using (HttpResponseMessage response = await HttpClient.SendAsync(request))
+            using (HttpResponseMessage response = await HttpClient.SendAsync(request, ct))
             {
                 _context.Trace.WriteLine($"HTTP: Response {(int)response.StatusCode} [{response.StatusCode}]");
 
-                string responseText = await response.Content.ReadAsStringAsync();
+                string responseText = await response.Content.ReadAsStringAsync(ct);
 
                 if (!string.IsNullOrWhiteSpace(responseText))
                 {
