@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GitCredentialManager
@@ -82,8 +83,8 @@ namespace GitCredentialManager
             /// Also accepts dictionary lines terminated using \r\n (CR LF) as well as \n (LF).
             /// </remarks>
             /// <returns>Dictionary read from the text reader.</returns>
-            public Task<IDictionary<string, string>> ReadDictionaryAsync() =>
-                ReadDictionaryAsync(reader, StringComparer.Ordinal);
+            public Task<IDictionary<string, string>> ReadDictionaryAsync(CancellationToken ct = default) =>
+                ReadDictionaryAsync(reader, StringComparer.Ordinal, ct);
 
             /// <summary>
             /// Asynchronously read a multi-dictionary in the form `key1=value\nkey2=value\n\n` from the specified <see cref="TextReader"/>.
@@ -94,8 +95,8 @@ namespace GitCredentialManager
             /// Also accepts dictionary lines terminated using \r\n (CR LF) as well as \n (LF).
             /// </remarks>
             /// <returns>Dictionary read from the text reader.</returns>
-            public Task<IDictionary<string, IList<string>>> ReadMultiDictionaryAsync() =>
-                ReadMultiDictionaryAsync(reader, StringComparer.Ordinal);
+            public Task<IDictionary<string, IList<string>>> ReadMultiDictionaryAsync(CancellationToken ct = default) =>
+                ReadMultiDictionaryAsync(reader, StringComparer.Ordinal, ct);
 
             /// <summary>
             /// Asynchronously read a dictionary in the form `key1=value\nkey2=value\n\n` from the specified <see cref="TextReader"/>,
@@ -103,13 +104,14 @@ namespace GitCredentialManager
             /// </summary>
             /// <remarks>Also accepts dictionary lines terminated using \r\n (CR LF) as well as \n (LF).</remarks>
             /// <param name="comparer">Comparer to use when comparing dictionary keys.</param>
+            /// <param name="ct">Cancellation token to cancel the in-progress read operation.</param>
             /// <returns>Dictionary read from the text reader.</returns>
-            public async Task<IDictionary<string, string>> ReadDictionaryAsync(StringComparer comparer)
+            public async Task<IDictionary<string, string>> ReadDictionaryAsync(StringComparer comparer, CancellationToken ct = default)
             {
                 var dict = new Dictionary<string, string>(comparer);
 
                 string line;
-                while ((line = await reader.ReadLineAsync()) != null && !string.IsNullOrWhiteSpace(line))
+                while ((line = await reader.ReadLineAsync(ct)) != null && !string.IsNullOrWhiteSpace(line))
                 {
                     ParseLine(dict, line);
                 }
@@ -123,13 +125,15 @@ namespace GitCredentialManager
             /// </summary>
             /// <remarks>Also accepts dictionary lines terminated using \r\n (CR LF) as well as \n (LF).</remarks>
             /// <param name="comparer">Comparer to use when comparing dictionary keys.</param>
+            /// <param name="ct">Cancellation token to cancel the in-progress read operation.</param>
             /// <returns>Dictionary read from the text reader.</returns>
-            public async Task<IDictionary<string, IList<string>>> ReadMultiDictionaryAsync(StringComparer comparer)
+            public async Task<IDictionary<string, IList<string>>> ReadMultiDictionaryAsync(StringComparer comparer,
+                CancellationToken ct = default)
             {
                 var dict = new Dictionary<string, IList<string>>(comparer);
 
                 string line;
-                while ((line = await reader.ReadLineAsync()) != null && !string.IsNullOrWhiteSpace(line))
+                while ((line = await reader.ReadLineAsync(ct)) != null && !string.IsNullOrWhiteSpace(line))
                 {
                     ParseMultiLine(dict, line);
                 }
