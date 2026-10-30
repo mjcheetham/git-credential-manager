@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.CommandLine;
+using System.CommandLine.Invocation;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GitCredentialManager.Commands
@@ -27,8 +29,10 @@ namespace GitCredentialManager.Commands
 
         protected ICommandContext Context { get; }
 
-        internal async Task ExecuteAsync()
+        internal async Task ExecuteAsync(InvocationContext ctx = null)
         {
+            CancellationToken ct = ctx?.GetCancellationToken() ?? CancellationToken.None;
+
             using var _ = Trace2.StartRegion("git_cmd", "run");
             Trace2.WriteData("git_cmd", "name", Name);
 
@@ -39,7 +43,7 @@ namespace GitCredentialManager.Commands
             using (Trace2.StartRegion("git_cmd", "parse_input"))
             {
                 // git-credential treats the keys as case-sensitive; so should we.
-                inputDict = await Context.Streams.In.ReadMultiDictionaryAsync(StringComparer.Ordinal);
+                inputDict = await Context.Streams.In.ReadMultiDictionaryAsync(StringComparer.Ordinal, ct);
             }
             var request = new GitRequest(inputDict);
 
@@ -62,7 +66,7 @@ namespace GitCredentialManager.Commands
             }
             Context.Trace.WriteLine($"Host provider '{provider.Name}' was selected.");
 
-            await ExecuteInternalAsync(request, provider);
+            await ExecuteInternalAsync(request, provider, ct);
 
             Context.Trace.WriteLine($"End '{Name}' command...");
         }
@@ -97,7 +101,8 @@ namespace GitCredentialManager.Commands
         /// </summary>
         /// <param name="request">Input arguments of the current Git credential query.</param>
         /// <param name="provider">Host provider for the current <see cref="GitRequest"/>.</param>
+        /// <param name="ct">Cancellation token to cancel the in-progress command execution.</param>
         /// <returns>Awaitable task for the command execution.</returns>
-        protected abstract Task ExecuteInternalAsync(GitRequest request, IHostProvider provider);
+        protected abstract Task ExecuteInternalAsync(GitRequest request, IHostProvider provider, CancellationToken ct);
     }
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.CommandLine.Invocation;
 using System.Threading.Tasks;
 using GitCredentialManager.Commands;
 using GitCredentialManager.Tests.Objects;

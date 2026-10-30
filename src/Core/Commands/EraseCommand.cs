@@ -1,3 +1,4 @@
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace GitCredentialManager.Commands
@@ -13,7 +14,7 @@ namespace GitCredentialManager.Commands
             IsHidden = true;
         }
 
-        protected override async Task ExecuteInternalAsync(GitRequest request, IHostProvider provider)
+        protected override async Task ExecuteInternalAsync(GitRequest request, IHostProvider provider, CancellationToken ct)
         {
             using var _ = Trace2.StartRegion("git_cmd_erase", "provider_erase");
             await provider.EraseCredentialAsync(request);

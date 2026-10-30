@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager.Commands;
 using Moq;
@@ -84,7 +85,7 @@ namespace GitCredentialManager.Tests.Commands
             {
             }
 
-            protected override Task ExecuteInternalAsync(GitRequest request, IHostProvider provider)
+            protected override Task ExecuteInternalAsync(GitRequest request, IHostProvider provider, CancellationToken ct)
             {
                 VerifyExecuteInternalAsync?.Invoke(request, provider);
                 return Task.CompletedTask;
