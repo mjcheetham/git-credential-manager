@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace GitCredentialManager.Authentication.OAuth
 {
-    public class OAuth2WebBrowserOptions
+    public class OAuth2SystemWebBrowserOptions
     {
         internal const string DefaultSuccessHtml = @"<!DOCTYPE html><html><head>
 <meta name=""color-scheme"" content=""light dark"">
@@ -67,9 +67,9 @@ namespace GitCredentialManager.Authentication.OAuth
 </script></body></html>";
 
         private readonly ISessionManager _sessionManager;
-        private readonly OAuth2WebBrowserOptions _options;
+        private readonly OAuth2SystemWebBrowserOptions _options;
 
-        public OAuth2SystemWebBrowser(ISessionManager sessionManager, OAuth2WebBrowserOptions options)
+        public OAuth2SystemWebBrowser(ISessionManager sessionManager, OAuth2SystemWebBrowserOptions options)
         {
             EnsureArgument.NotNull(sessionManager, nameof(sessionManager));
             EnsureArgument.NotNull(options, nameof(options));
@@ -227,7 +227,7 @@ namespace GitCredentialManager.Authentication.OAuth
                 }
                 else
                 {
-                    string failureHtml = FormatError(_options.FailureResponseHtmlFormat ?? OAuth2WebBrowserOptions.DefaultFailureHtmlFormat);
+                    string failureHtml = FormatError(_options.FailureResponseHtmlFormat ?? OAuth2SystemWebBrowserOptions.DefaultFailureHtmlFormat);
                     await response.WriteResponseAsync(failureHtml);
                     response.Close();
                 }
@@ -243,7 +243,7 @@ namespace GitCredentialManager.Authentication.OAuth
                 }
                 else
                 {
-                    string successHtml = _options.SuccessResponseHtml ?? OAuth2WebBrowserOptions.DefaultSuccessHtml;
+                    string successHtml = _options.SuccessResponseHtml ?? OAuth2SystemWebBrowserOptions.DefaultSuccessHtml;
                     await response.WriteResponseAsync(successHtml);
                     response.Close();
                 }

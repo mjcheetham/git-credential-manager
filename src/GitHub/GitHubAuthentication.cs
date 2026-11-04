@@ -429,7 +429,7 @@ namespace GitHub
                     "Browser authentication requires a desktop session");
             }
 
-            var browserOptions = new OAuth2WebBrowserOptions
+            var browserOptions = new OAuth2SystemWebBrowserOptions
             {
                 SuccessResponseHtml = GitHubResources.AuthenticationResponseSuccessHtml,
                 FailureResponseHtmlFormat = GitHubResources.AuthenticationResponseFailureHtmlFormat

@@ -185,7 +185,7 @@ namespace GitCredentialManager.Authentication
                     "Browser authentication requires a desktop session");
             }
 
-            var browserOptions = new OAuth2WebBrowserOptions();
+            var browserOptions = new OAuth2SystemWebBrowserOptions();
             var browser = new OAuth2SystemWebBrowser(Context.SessionManager, browserOptions);
             var authCode = await client.GetAuthorizationCodeAsync(scopes, browser, CancellationToken.None);
             return await client.GetTokenByAuthorizationCodeAsync(authCode, CancellationToken.None);
