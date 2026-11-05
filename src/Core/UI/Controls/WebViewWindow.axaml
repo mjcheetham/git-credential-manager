@@ -79,7 +79,8 @@
                               IsVisible="False"
                               NavigationCompleted="OnNavigationCompleted"
                               NavigationStarted="OnNavigationStarted"
-                              EnvironmentRequested="OnEnvironmentRequested"/>
+                              EnvironmentRequested="OnEnvironmentRequested"
+                              WebResourceRequested="OnWebResourceRequested"/>
         </Panel>
     </DockPanel>
 </Window>

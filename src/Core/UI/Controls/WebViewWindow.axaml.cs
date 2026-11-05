@@ -31,6 +31,8 @@ public partial class WebViewWindow : Window
 
     public event EventHandler<WebViewOpenInBrowserEventArgs> OpenInBrowserRequested;
 
+    public event EventHandler<WebResourceRequestedEventArgs> WebResourceRequested;
+
     public Uri Source
     {
         get => WebView.Source;
@@ -76,6 +78,11 @@ public partial class WebViewWindow : Window
     private void OnEnvironmentRequested(object sender, WebViewEnvironmentRequestedEventArgs e)
     {
         EnvironmentRequested?.Invoke(this, e);
+    }
+
+    private void OnWebResourceRequested(object sender, WebResourceRequestedEventArgs e)
+    {
+        WebResourceRequested?.Invoke(this, e);
     }
 
     private void OnBackClicked(object sender, RoutedEventArgs e)

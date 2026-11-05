@@ -93,6 +93,10 @@ internal class MsalAvaloniaCustomWebUi : ICustomWebUi
         Uri finalUri = null;
         bool useSystemBrowser = false;
 
+        // Force response_mode=form_post to ensure the authorization code is returned
+        // in a POST request body instead of a query string.
+        authorizationUri = new(authorizationUri + "&response_mode=form_post");
+
         WebViewWindow CreateDialog()
         {
             // Windows WebView1 allows for device authentication which is often required
@@ -109,6 +113,7 @@ internal class MsalAvaloniaCustomWebUi : ICustomWebUi
             webView.EnvironmentRequested += OnEnvironmentRequested;
             webView.NavigationStarted += OnNavigationStarted;
             webView.OpenInBrowserRequested += OnOpenInBrowser;
+            webView.WebResourceRequested += OnWebResourceRequested;
             webView.Resize(550, 750);
             return webView;
         }
@@ -160,6 +165,15 @@ internal class MsalAvaloniaCustomWebUi : ICustomWebUi
         {
             e.ShouldCloseWindow = true;
             useSystemBrowser = true;
+        }
+
+        void OnWebResourceRequested(object sender, WebResourceRequestedEventArgs e)
+        {
+            // Intercept the POST request
+            if (e.Request.Method == HttpMethod.Post)
+            {
+                ;
+            }
         }
 
         await AvaloniaUi.ShowWindowAsync(CreateDialog, _parent, ct);
