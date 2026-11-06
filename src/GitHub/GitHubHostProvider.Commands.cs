@@ -5,8 +5,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using GitCredentialManager;
 using GitCredentialManager.Commands;
-using GitCredentialManager.Tty;
-using Spectre.Console;
 
 namespace GitHub;
 
@@ -34,12 +32,13 @@ public partial class GitHubHostProvider : ICommandProvider
         var deviceOpt = new Option<bool>("--device", "Use device flow to authenticate");
         var browserOpt = new Option<bool>(new[]{"--web", "--browser"}, "Use a web browser to authenticate");
         var tokenOpt = new Option<string>(new[] {"--pat", "--token"}, "Use personal access token to authenticate");
+        var entraOpt = new Option<bool>("--entra", "Use Microsoft Entra to authenticate");
         var forceOpt = new Option<bool>("--force", "Force re-authentication even if a credential already exists for the account");
         loginCmd.AddOption(urlOpt);
         loginCmd.AddOption(userNameOpt);
-        loginCmd.AddOptionSet(OptionArity.ZeroOrOne, deviceOpt, browserOpt, tokenOpt);
+        loginCmd.AddOptionSet(OptionArity.ZeroOrOne, deviceOpt, browserOpt, tokenOpt, entraOpt);
         loginCmd.AddOption(forceOpt);
-        loginCmd.SetHandler(AddAccountAsync, urlOpt, userNameOpt, deviceOpt, browserOpt, tokenOpt, forceOpt);
+        loginCmd.SetHandler(AddAccountAsync, urlOpt, userNameOpt, deviceOpt, browserOpt, tokenOpt, forceOpt, entraOpt);
 
         //
         // logout <account> [--url <url>]
@@ -74,7 +73,7 @@ public partial class GitHubHostProvider : ICommandProvider
         }
     }
 
-    private async Task<int> AddAccountAsync(Uri url, string userName, bool device, bool browser, string token, bool force)
+    private async Task<int> AddAccountAsync(Uri url, string userName, bool device, bool browser, string token, bool force, bool useEntra)
     {
         // Default to GitHub.com
         url ??= new Uri($"https://{GitHubConstants.GitHubBaseUrlHost}");
@@ -114,6 +113,10 @@ public partial class GitHubHostProvider : ICommandProvider
         else if (device || browser)
         {
             credential = await GenerateOAuthCredentialAsync(url, loginHint: userName, useBrowser: browser);
+        }
+        else if (useEntra)
+        {
+            credential = await GenerateEntraCredentialAsync(url);
         }
         else
         {

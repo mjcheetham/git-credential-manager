@@ -322,6 +322,9 @@ namespace GitHub
                 case AuthenticationModes.Device:
                     return await GenerateOAuthCredentialAsync(remoteUri, loginHint: userName, useBrowser: false);
 
+                case AuthenticationModes.Entra:
+                    return await GenerateEntraCredentialAsync(remoteUri);
+
                 case AuthenticationModes.Pat:
                     // The token returned by the user should be good to use directly as the password for Git
                     string token = promptResult.Credential.Password;
@@ -348,6 +351,16 @@ namespace GitHub
             OAuth2TokenResult result = useBrowser
                 ? await _gitHubAuth.GetOAuthTokenViaBrowserAsync(targetUri, GitHubOAuthScopes, loginHint)
                 : await _gitHubAuth.GetOAuthTokenViaDeviceCodeAsync(targetUri, GitHubOAuthScopes);
+
+            // Resolve the GitHub user handle
+            GitHubUserInfo userInfo = await _gitHubApi.GetUserInfoAsync(targetUri, result.AccessToken);
+
+            return new GitCredential(userInfo.Login, result.AccessToken);
+        }
+
+        private async Task<GitCredential> GenerateEntraCredentialAsync(Uri targetUri)
+        {
+            OAuth2TokenResult result = await _gitHubAuth.GetOAuthTokenViaEntraAsync(targetUri, GitHubOAuthScopes);
 
             // Resolve the GitHub user handle
             GitHubUserInfo userInfo = await _gitHubApi.GetUserInfoAsync(targetUri, result.AccessToken);
@@ -469,8 +482,9 @@ namespace GitHub
 
                 _context.Console.WriteWarning(message);
 
-                // Fall-back to offering all modes so the user is never blocked from authenticating by at least one mode
-                return AuthenticationModes.All;
+                // Fall-back to offering all modes (except Entra, which is DotCom EMU only) so the user is never
+                // blocked from authenticating by at least one mode.
+                return AuthenticationModes.All & ~AuthenticationModes.Entra;
             }
         }
 

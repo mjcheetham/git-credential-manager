@@ -15,6 +15,7 @@ The following are links to user support documentation:
 - [Azure Repos OAuth tokens][gcm-azure-tokens]
 - [Azure Managed Identities and Service Principals][gcm-misp]
 - [Azure Workload Identity Federation Workflows][gcm-azure-wif]
+- [GitHub sign-in with Microsoft Entra][gcm-github-entra]
 - [GitLab support][gcm-gitlab]
 - [Bitbucket authentication][gcm-bitbucket]
 - [Generic OAuth support][gcm-oauth]
@@ -43,6 +44,7 @@ These are links helpful for developers of Git Credential Manager:
 [gcm-enterprise-config]: enterprise-config.md
 [gcm-env]: environment.md
 [gcm-faq]: faq.md
+[gcm-github-entra]: github-entra.md
 [gcm-gitlab]: gitlab.md
 [gcm-host-provider]: hostprovider.md
 [gcm-misp]: azrepos-misp.md
