@@ -19,11 +19,13 @@ namespace GitHub.UI.ViewModels
         private bool _showDeviceLogin;
         private bool _showTokenLogin;
         private bool _showBasicLogin;
+        private bool _showIdpLogin;
         private ICommand _signUpCommand;
         private ICommand _signInBrowserCommand;
         private ICommand _signInDeviceCommand;
         private RelayCommand _signInBasicCommand;
         private RelayCommand _signInTokenCommand;
+        private RelayCommand _signInEntraCommand;
 
         public CredentialsViewModel()
         {
@@ -44,6 +46,7 @@ namespace GitHub.UI.ViewModels
             SignInDeviceCommand = new RelayCommand(SignInDevice);
             SignInTokenCommand = new RelayCommand(SignInToken, CanSignInToken);
             SignInBasicCommand = new RelayCommand(SignInBasic, CanSignInBasic);
+            SignInEntraCommand = new RelayCommand(SignInEntra);
 
             PropertyChanged += OnPropertyChanged;
         }
@@ -77,6 +80,13 @@ namespace GitHub.UI.ViewModels
         private void SignInDevice()
         {
             SelectedMode = AuthenticationModes.Device;
+            Accept();
+        }
+
+        private void SignInEntra()
+        {
+            SelectedMode = AuthenticationModes.Idp;
+            SelectedIdp = EnterpriseIdentityProvider.Entra;
             Accept();
         }
 
@@ -170,6 +180,12 @@ namespace GitHub.UI.ViewModels
             set => SetAndRaisePropertyChanged(ref _showBasicLogin, value);
         }
 
+        public bool ShowIdpLogin
+        {
+            get => _showIdpLogin;
+            set => SetAndRaisePropertyChanged(ref _showIdpLogin, value);
+        }
+
         public ICommand SignUpCommand
         {
             get => _signUpCommand;
@@ -188,6 +204,12 @@ namespace GitHub.UI.ViewModels
             set => SetAndRaisePropertyChanged(ref _signInDeviceCommand, value);
         }
 
+        public RelayCommand SignInEntraCommand
+        {
+            get => _signInEntraCommand;
+            set => SetAndRaisePropertyChanged(ref _signInEntraCommand, value);
+        }
+
         public RelayCommand SignInTokenCommand
         {
             get => _signInTokenCommand;
@@ -201,5 +223,6 @@ namespace GitHub.UI.ViewModels
         }
 
         public AuthenticationModes SelectedMode { get; private set; }
+        public EnterpriseIdentityProvider? SelectedIdp { get; private set; }
     }
 }

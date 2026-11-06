@@ -2,11 +2,13 @@ using System;
 using System.Threading.Tasks;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
 using GitCredentialManager;
 using GitCredentialManager.Authentication;
+using GitCredentialManager.Authentication.Entra;
 using GitCredentialManager.Authentication.OAuth;
 using GitCredentialManager.Tty;
 using GitCredentialManager.UI;
@@ -27,6 +29,8 @@ namespace GitHub
         Task<OAuth2TokenResult> GetOAuthTokenViaBrowserAsync(Uri targetUri, IEnumerable<string> scopes, string loginHint);
 
         Task<OAuth2TokenResult> GetOAuthTokenViaDeviceCodeAsync(Uri targetUri, IEnumerable<string> scopes);
+
+        Task<OAuth2TokenResult> GetOAuthTokenViaIdpAsync(Uri targetUri, EnterpriseIdentityProvider idp, IEnumerable<string> scopes);
     }
 
     public class AuthenticationPromptResult
@@ -44,6 +48,8 @@ namespace GitHub
 
         public AuthenticationModes AuthenticationMode { get; }
 
+        public EnterpriseIdentityProvider EnterpriseIdp { get; init; }
+        
         public ICredential Credential { get; set; }
     }
 
@@ -55,9 +61,10 @@ namespace GitHub
         Browser = 1 << 1,
         Pat     = 1 << 2,
         Device  = 1 << 3,
+        Idp   = 1 << 4,
 
         OAuth = Browser | Device,
-        All   = Basic | OAuth | Pat
+        All   = Basic | OAuth | Pat | Idp
     }
 
     public class GitHubAuthentication : AuthenticationBase, IGitHubAuthentication
@@ -154,7 +161,8 @@ namespace GitHub
             }
 
             // If there is no mode choice to be made and no interaction required,
-            // just return that result.
+            // just return that result. Note that the IdP mode still requires the
+            // user select the specific IdP for their org so we cannot short circuit here.
             if (modes == AuthenticationModes.Browser ||
                 modes == AuthenticationModes.Device)
             {
@@ -185,6 +193,7 @@ namespace GitHub
                 ShowDeviceLogin  = (modes & AuthenticationModes.Device) != 0,
                 ShowTokenLogin   = (modes & AuthenticationModes.Pat) != 0,
                 ShowBasicLogin   = (modes & AuthenticationModes.Basic) != 0,
+                ShowIdpLogin     = (modes & AuthenticationModes.Idp) != 0,
             };
 
             if (!GitHubHostProvider.IsGitHubDotCom(targetUri))
@@ -221,6 +230,12 @@ namespace GitHub
                         new GitCredential(userName, viewModel.Token)
                     );
 
+                case AuthenticationModes.Idp when viewModel.SelectedIdp.HasValue:
+                    return new AuthenticationPromptResult(AuthenticationModes.Idp)
+                    {
+                        EnterpriseIdp = viewModel.SelectedIdp.Value
+                    };
+
                 default:
                     throw new ArgumentOutOfRangeException();
             }
@@ -255,6 +270,17 @@ namespace GitHub
                 case AuthenticationModes.Device:
                     return new AuthenticationPromptResult(AuthenticationModes.Device);
 
+                case AuthenticationModes.Idp:
+                    var idpTitle = $"Select an identity provider for '{targetUri}'";
+                    var idpPrompt = TerminalPrompts.CreateSelection<EnterpriseIdentityProvider>()
+                        .Title(idpTitle);
+                    idpPrompt.AddChoice("Microsoft Entra", EnterpriseIdentityProvider.Entra);
+                    var idpChoice = await idpPrompt.ShowAsync(Context.Console, CancellationToken.None);
+                    return new AuthenticationPromptResult(AuthenticationModes.Idp)
+                    {
+                        EnterpriseIdp = idpChoice
+                    };
+
                 case AuthenticationModes.Pat:
                     Context.Console.WriteLine($"Enter GitHub personal access token for '{targetUri}'...");
                     string pat = await TerminalPrompts.CreateSecret("Token").ShowAsync(Context.Console);
@@ -267,21 +293,38 @@ namespace GitHub
 
                 default:
                     var promptTitle = $"Select an authentication method for '{targetUri}'";
-                    var prompt = TerminalPrompts.CreateSelection<AuthenticationModes>()
+                    var prompt = TerminalPrompts.CreateSelection<(AuthenticationModes, EnterpriseIdentityProvider?)>()
                         .Title(promptTitle);
 
-                    if ((modes & AuthenticationModes.Browser) != 0) prompt.AddChoice("Web browser", AuthenticationModes.Browser);
-                    if ((modes & AuthenticationModes.Device) != 0) prompt.AddChoice("Device code", AuthenticationModes.Device);
-                    if ((modes & AuthenticationModes.Pat) != 0) prompt.AddChoice("Personal access token", AuthenticationModes.Pat);
-                    if ((modes & AuthenticationModes.Basic) != 0) prompt.AddChoice("Username/password", AuthenticationModes.Basic);
+                    if ((modes & AuthenticationModes.Browser) != 0)
+                        prompt.AddChoice("Web browser", (AuthenticationModes.Browser, null));
+                    if ((modes & AuthenticationModes.Device) != 0)
+                        prompt.AddChoice("Device code", (AuthenticationModes.Device, null));
+                    if ((modes & AuthenticationModes.Pat) != 0)
+                        prompt.AddChoice("Personal access token", (AuthenticationModes.Pat, null));
+                    if ((modes & AuthenticationModes.Basic) != 0)
+                        prompt.AddChoice("Username/password", (AuthenticationModes.Basic, null));
+                    if ((modes & AuthenticationModes.Idp) != 0)
+                    {
+                        prompt.AddChoiceGroup("Enterprise identity provider",
+                            ("Microsoft Entra", (AuthenticationModes.Idp, EnterpriseIdentityProvider.Entra))
+                        );
+                    }
 
                     // Default to the 'first' choice in the menu
-                    AuthenticationModes choice = await prompt.ShowAsync(Context.Console, CancellationToken.None);
+                    (AuthenticationModes mode, EnterpriseIdentityProvider? idp) = await prompt.ShowAsync(Context.Console, CancellationToken.None);
 
-                    if (choice == AuthenticationModes.Browser) goto case AuthenticationModes.Browser;
-                    if (choice == AuthenticationModes.Device) goto case AuthenticationModes.Device;
-                    if (choice == AuthenticationModes.Basic) goto case AuthenticationModes.Basic;
-                    if (choice == AuthenticationModes.Pat) goto case AuthenticationModes.Pat;
+                    if (mode == AuthenticationModes.Browser) goto case AuthenticationModes.Browser;
+                    if (mode == AuthenticationModes.Device) goto case AuthenticationModes.Device;
+                    if (mode == AuthenticationModes.Basic) goto case AuthenticationModes.Basic;
+                    if (mode == AuthenticationModes.Pat) goto case AuthenticationModes.Pat;
+                    if (mode == AuthenticationModes.Idp && idp.HasValue)
+                    {
+                        return new AuthenticationPromptResult(AuthenticationModes.Idp)
+                        {
+                            EnterpriseIdp = idp.Value
+                        };
+                    }
 
                     throw new Exception();
             }
@@ -302,6 +345,7 @@ namespace GitHub
                 if ((modes & AuthenticationModes.Browser) != 0) promptArgs.Append(" --browser");
                 if ((modes & AuthenticationModes.Device) != 0) promptArgs.Append(" --device");
                 if ((modes & AuthenticationModes.Pat) != 0) promptArgs.Append(" --pat");
+                if ((modes & AuthenticationModes.Idp) != 0) promptArgs.Append(" --idp");
             }
 
             if (!GitHubHostProvider.IsGitHubDotCom(targetUri))
@@ -331,6 +375,20 @@ namespace GitHub
 
                 case "device":
                     return new AuthenticationPromptResult(AuthenticationModes.Device);
+
+                case "idp":
+                    if (!resultDict.TryGetValue("idp", out string idpStr))
+                    {
+                        throw new Exception("Missing 'idp' in response");
+                    }
+                    if (!Enum.TryParse(idpStr, out EnterpriseIdentityProvider idp))
+                    {
+                        throw new Exception($"Unknown 'idp' value '{idpStr}' in response");
+                    }
+                    return new AuthenticationPromptResult(AuthenticationModes.Idp)
+                    {
+                        EnterpriseIdp = idp
+                    };
 
                 case "basic":
                     if (!resultDict.TryGetValue("username", out userName))
@@ -504,6 +562,47 @@ namespace GitHub
             }
 
             return await GetOAuthTokenViaDeviceCodeViaTtyAsync(oauthClient, dcr);
+        }
+
+        public async Task<OAuth2TokenResult> GetOAuthTokenViaIdpAsync(
+            Uri targetUri, EnterpriseIdentityProvider idp, IEnumerable<string> scopes)
+        {
+            using var _ = Trace2.StartRegion("github", "oauth_idp");
+
+            string idpToken;
+            OAuth2TokenType idpTokenType;
+            switch (idp)
+            {
+                case EnterpriseIdentityProvider.Entra:
+                    Trace2.WriteData("github", "idp", "entra");
+                    string[] entraScopes = ["12f6db80-0741-4a7e-b9c5-b85d737b3a31/.default"];
+                    PublicClientConfig GetEntraConfig()
+                    {
+                        return new()
+                        {
+                            ClientId = "aebc6443-996d-45c2-90f0-388ff96faa56",
+                            SupportsWindowsBroker = true,
+                            SupportsMacBroker = true,
+                            SupportsLinuxBroker = true,
+                            UseSharedCache = true,
+                        };
+                    }
+
+                    var entra = new EntraAuthentication(Context, GetEntraConfig());
+                    IEntraAuthenticationResult entraResult = await entra.GetTokenForUserAsync(entraScopes);
+                    Trace2.WriteData("github", "entra/account_id", entraResult.Account.HomeAccountId);
+
+                    idpTokenType = OAuth2TokenType.AccessToken;
+                    idpToken = entraResult.AccessToken;
+                    break;
+                
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(idp), idp, "Unknown enterprise identity provider");
+            }
+
+            var oauthClient = new GitHubOAuth2Client(HttpClient, Context.Settings, targetUri);
+            return await oauthClient.GetTokenByTokenExchangeAsync(
+                scopes, idpTokenType, idpToken, CancellationToken.None);
         }
 
         private Task ShowDeviceCodeViaUiAsync(OAuth2DeviceCodeResult dcr, CancellationToken ct)

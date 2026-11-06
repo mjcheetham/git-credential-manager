@@ -42,10 +42,16 @@ namespace GitHub
         /// Supported authentication modes for GitHub.com.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// As of 13th November 2020, GitHub.com does not support username/password (basic) authentication to the APIs.
         /// See https://developer.github.com/changes/2020-02-14-deprecating-oauth-auth-endpoint for more information.
+        /// </para>
+        /// <para>
+        /// GitHub.com Enterprise Managed Users supports multiple external identity providers, including Microsoft
+        /// Entra, Okta, and PingFederate.
+        /// </para>
         /// </remarks>
-        public const AuthenticationModes DotComAuthenticationModes = AuthenticationModes.OAuth | AuthenticationModes.Pat;
+        public const AuthenticationModes DotComAuthenticationModes = AuthenticationModes.OAuth | AuthenticationModes.Pat | AuthenticationModes.Idp;
 
         /// <summary>
         /// Supported authentication modes for GitHub Enterprise with Data Residency, aka Proxima.
