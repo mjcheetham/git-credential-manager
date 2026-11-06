@@ -149,7 +149,7 @@ namespace GitHub.Tests
         [InlineData("https://example.com", null, "0.1", false, AuthenticationModes.Pat)]
         [InlineData("https://example.com", null, "0.1", true, AuthenticationModes.Basic | AuthenticationModes.Pat)]
         [InlineData("https://example.com", null, "100.0", false, AuthenticationModes.OAuth | AuthenticationModes.Pat)]
-        [InlineData("https://example.com", null, "100.0", true, AuthenticationModes.All)]
+        [InlineData("https://example.com", null, "100.0", true, AuthenticationModes.OAuth | AuthenticationModes.Pat | AuthenticationModes.Basic)]
         [InlineData("https://example.com", null, null, false, AuthenticationModes.OAuth | AuthenticationModes.Pat)]
         [InlineData("https://example.com", null, "", false, AuthenticationModes.OAuth | AuthenticationModes.Pat)]
         [InlineData("https://example.com", null, " ", false, AuthenticationModes.OAuth | AuthenticationModes.Pat)]

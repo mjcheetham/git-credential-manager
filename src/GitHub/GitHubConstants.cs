@@ -42,15 +42,27 @@ namespace GitHub
         /// Supported authentication modes for GitHub.com.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// As of 13th November 2020, GitHub.com does not support username/password (basic) authentication to the APIs.
         /// See https://developer.github.com/changes/2020-02-14-deprecating-oauth-auth-endpoint for more information.
+        /// </para>
+        /// <para>
+        /// GitHub.com Enterprise Managed Users supports multiple external identity providers, including Microsoft
+        /// Entra. It is now possible to obtain credentials for GitHub directly, using Microsoft Entra credentials,
+        /// without using SAML/SSO or a browser.
+        /// </para>
         /// </remarks>
-        public const AuthenticationModes DotComAuthenticationModes = AuthenticationModes.OAuth | AuthenticationModes.Pat;
+        public const AuthenticationModes DotComAuthenticationModes = AuthenticationModes.OAuth | AuthenticationModes.Pat | AuthenticationModes.Entra;
 
         /// <summary>
         /// Supported authentication modes for GitHub Enterprise with Data Residency, aka Proxima.
         /// </summary>
         public const AuthenticationModes ProximaAuthenticationModes = AuthenticationModes.OAuth | AuthenticationModes.Pat;
+
+        public static class HelpUrls
+        {
+            public const string EntraSignIn = "https://aka.ms/gcm/github-entra";
+        }
 
         public static class TokenScopes
         {

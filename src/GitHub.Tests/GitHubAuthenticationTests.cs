@@ -26,6 +26,7 @@ namespace GitHub.Tests
         [Theory]
         [InlineData(AuthenticationModes.Browser)]
         [InlineData(AuthenticationModes.Device)]
+        [InlineData(AuthenticationModes.Entra)]
         public async Task GitHubAuthentication_GetAuthenticationAsync_SingleChoice_TerminalAndInteractionNotRequired(GitHub.AuthenticationModes modes)
         {
             var context = new TestCommandContext();

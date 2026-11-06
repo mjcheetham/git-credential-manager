@@ -69,4 +69,30 @@
             </DrawingGroup>
         </DrawingImage.Drawing>
     </DrawingImage>
+    <DrawingImage x:Key="MicrosoftLogo">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.Children>
+                    <GeometryDrawing Brush="Transparent" Geometry="M0,0 H21 V21 H0 Z"/>
+                    <GeometryDrawing Brush="#F25022" Geometry="M1,1 H10 V10 H1 Z"/>
+                    <GeometryDrawing Brush="#7FBA00" Geometry="M11,1 H20 V10 H11 Z"/>
+                    <GeometryDrawing Brush="#00A4EF" Geometry="M1,11 H10 V20 H1 Z"/>
+                    <GeometryDrawing Brush="#FFB900" Geometry="M11,11 H20 V20 H11 Z"/>
+                </DrawingGroup.Children>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
+    <DrawingImage x:Key="MicrosoftLogoGray">
+        <DrawingImage.Drawing>
+            <DrawingGroup>
+                <DrawingGroup.Children>
+                    <GeometryDrawing Brush="Transparent" Geometry="M0,0 H21 V21 H0 Z"/>
+                    <GeometryDrawing Brush="#AAAAAA" Geometry="M1,1 H10 V10 H1 Z"/>
+                    <GeometryDrawing Brush="#AAAAAA" Geometry="M11,1 H20 V10 H11 Z"/>
+                    <GeometryDrawing Brush="#AAAAAA" Geometry="M1,11 H10 V20 H1 Z"/>
+                    <GeometryDrawing Brush="#AAAAAA" Geometry="M11,11 H20 V20 H11 Z"/>
+                </DrawingGroup.Children>
+            </DrawingGroup>
+        </DrawingImage.Drawing>
+    </DrawingImage>
 </ResourceDictionary>
