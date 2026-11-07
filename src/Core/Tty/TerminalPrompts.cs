@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
@@ -41,6 +42,10 @@ public static class TerminalPrompts
     {
         public ISelectionItem<SelectionPromptItem<T>> AddChoice(string label, T item) =>
             prompt.AddChoice(new SelectionPromptItem<T>(label, item));
+
+        public SelectionPrompt<SelectionPromptItem<T>> AddChoiceGroup(string label, params (string Label, T Item)[] items) =>
+            prompt.AddChoiceGroup(new SelectionPromptItem<T>(label, default),
+                items.Select(x => new SelectionPromptItem<T>(x.Label, x.Item)));
 
         public SelectionPrompt<SelectionPromptItem<T>> AddChoices(IEnumerable<T> items, Func<T, string> labelFunc)
         {
