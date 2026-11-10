@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -17,6 +18,7 @@ namespace GitCredentialManager.Interop.Linux
         private const string SchemaName = "com.microsoft.GitCredentialManager";
         private const string ServiceAttributeName = "service";
         private const string AccountAttributeName = "account";
+        private const string ExpiresAtAttributeName = "expires_at";
         private const string PlainTextContentType = "text/plain";
 
         private readonly string _namespace;
@@ -135,18 +137,19 @@ namespace GitCredentialManager.Interop.Linux
             }
         }
 
-        public unsafe void AddOrUpdate(string service, string account, string secret)
+        public unsafe void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null)
         {
             GHashTable* attributes = null;
+            GList* results = null;
             SecretValue* secretValue = null;
             GError *error = null;
 
-            // If there is an existing credential that matches the same account and password
-            // then don't bother writing out anything because they're the same!
             ICredential existingCred = Get(service, account);
-            if (existingCred != null &&
-                StringComparer.Ordinal.Equals(existingCred.Account, account) &&
-                StringComparer.Ordinal.Equals(existingCred.Password, secret))
+            bool sameCredential = existingCred != null &&
+                                  StringComparer.Ordinal.Equals(existingCred.Account, account) &&
+                                  StringComparer.Ordinal.Equals(existingCred.Password, secret);
+            metadata ??= sameCredential ? existingCred.Metadata : CredentialMetadata.Empty;
+            if (sameCredential && metadata == existingCred.Metadata)
             {
                 return;
             }
@@ -177,16 +180,40 @@ namespace GitCredentialManager.Interop.Linux
 
                 SecretSchema schema = GetSchema();
 
-                // Store the secret with the associated attributes
-                bool result = secret_service_store_sync(
-                    secService,
-                    ref schema,
-                    attributes,
-                    null,
-                    fullServiceName, // Use full service name as label
-                    secretValue,
-                    IntPtr.Zero,
-                    out error);
+                // Match identity before adding metadata, so changing expiry does not create another item.
+                results = secret_service_search_sync(secService, ref schema, attributes,
+                    SecretSearchFlags.SECRET_SEARCH_UNLOCK, IntPtr.Zero, out error);
+                if (error != null)
+                {
+                    throw CreateException(Operation.Store, error);
+                }
+
+                // Add metadata attributes to the attributes hash table that we're going to write.
+                if (metadata.ExpiresAt is { } expiry)
+                {
+                    IntPtr keyPtr = Marshal.StringToHGlobalAnsi(ExpiresAtAttributeName);
+                    IntPtr valuePtr = Marshal.StringToHGlobalAnsi(
+                        expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+                    g_hash_table_insert(attributes, keyPtr, valuePtr);
+                }
+
+                bool result;
+                if (results != null && results->data != IntPtr.Zero)
+                {
+                    var item = (SecretItem*)results->data;
+                    result = secret_item_set_secret_sync(item, secretValue, IntPtr.Zero, out error);
+                    if (error != null || !result)
+                    {
+                        throw CreateException(Operation.Store, error);
+                    }
+
+                    result = secret_item_set_attributes_sync(item, ref schema, attributes, IntPtr.Zero, out error);
+                }
+                else
+                {
+                    result = secret_service_store_sync(secService, ref schema, attributes,
+                        null, fullServiceName, secretValue, IntPtr.Zero, out error);
+                }
 
                 if (error != null)
                 {
@@ -200,6 +227,7 @@ namespace GitCredentialManager.Interop.Linux
             }
             finally
             {
+                if (results != null) g_list_free_full(results, g_object_unref);
                 if (attributes != null) g_hash_table_destroy(attributes);
                 if (secretValue != null) secret_value_unref(secretValue);
                 if (error != null) g_error_free(error);
@@ -251,7 +279,7 @@ namespace GitCredentialManager.Interop.Linux
                 g_str_hash, g_str_equal,
                 Marshal.FreeHGlobal, Marshal.FreeHGlobal);
 
-            // If we've be given a service then filter on the service attribute
+            // If we've been given a service then filter on the service attribute
             if (!string.IsNullOrWhiteSpace(service))
             {
                 string fullServiceName = CreateServiceName(service);
@@ -276,8 +304,8 @@ namespace GitCredentialManager.Interop.Linux
             GHashTable* secretAttrs = null;
             IntPtr serviceKeyPtr = IntPtr.Zero;
             IntPtr accountKeyPtr = IntPtr.Zero;
+            IntPtr expiryKeyPtr = IntPtr.Zero;
             SecretValue* value = null;
-            IntPtr passwordPtr = IntPtr.Zero;
             GError* error = null;
 
             try
@@ -294,6 +322,19 @@ namespace GitCredentialManager.Interop.Linux
                 IntPtr accountValuePtr = g_hash_table_lookup(secretAttrs, accountKeyPtr);
                 string account = Marshal.PtrToStringAuto(accountValuePtr);
 
+                // Extract metadata attributes
+                var metadata = CredentialMetadata.Empty;
+                expiryKeyPtr = Marshal.StringToHGlobalAnsi(ExpiresAtAttributeName);
+                IntPtr expiryValuePtr = g_hash_table_lookup(secretAttrs, expiryKeyPtr);
+                if (expiryValuePtr != IntPtr.Zero)
+                {
+                    string expiryValue = Marshal.PtrToStringAuto(expiryValuePtr);
+                    if (DateTimeOffsetEx.TryParseUnixTimeSeconds(expiryValue, out DateTimeOffset expiry))
+                    {
+                        metadata = metadata with { ExpiresAt = expiry };
+                    }
+                }
+
                 // Load the secret value
                 bool loaded = secret_item_load_secret_sync(item, IntPtr.Zero, out error);
                 if (error != null || !loaded)
@@ -308,15 +349,16 @@ namespace GitCredentialManager.Interop.Linux
                 }
 
                 // Extract the secret/password
-                passwordPtr = secret_value_get(value, out int passwordLength);
+                IntPtr passwordPtr = secret_value_get(value, out int passwordLength); // borrowed pointer - don't free!
                 string password = Marshal.PtrToStringAuto(passwordPtr, passwordLength);
 
-                return new SecretServiceCredential(service, account, password);
+                return new SecretServiceCredential(service, account, password, metadata);
             }
             finally
             {
                 if (secretAttrs != null) g_hash_table_unref(secretAttrs);
                 if (accountKeyPtr != IntPtr.Zero) Marshal.FreeHGlobal(accountKeyPtr);
+                if (expiryKeyPtr != IntPtr.Zero) Marshal.FreeHGlobal(expiryKeyPtr);
                 if (serviceKeyPtr != IntPtr.Zero) Marshal.FreeHGlobal(serviceKeyPtr);
                 if (value != null) secret_value_unref(value);
                 if (error != null) g_error_free(error);
@@ -467,6 +509,12 @@ namespace GitCredentialManager.Interop.Linux
             {
                 name = AccountAttributeName,
                 type = SECRET_SCHEMA_ATTRIBUTE_STRING
+            };
+
+            schema.attributes[2] = new SecretSchemaAttribute
+            {
+                name = ExpiresAtAttributeName,
+                type = SECRET_SCHEMA_ATTRIBUTE_INTEGER
             };
 
             return schema;

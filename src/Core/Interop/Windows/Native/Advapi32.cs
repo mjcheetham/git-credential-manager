@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using System.Text;
 using FILETIME = System.Runtime.InteropServices.ComTypes.FILETIME;
@@ -76,6 +77,15 @@ namespace GitCredentialManager.Interop.Windows.Native
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct Win32CredentialAttribute
+    {
+        public IntPtr Keyword;
+        public int Flags;
+        public int ValueSize;
+        public IntPtr Value;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
     public struct Win32Credential
     {
         public int Flags;
@@ -104,6 +114,30 @@ namespace GitCredentialManager.Interop.Windows.Native
             }
 
             return null;
+        }
+
+        public IReadOnlyDictionary<string, string> GetAttributesAsDictionary()
+        {
+            var dict = new Dictionary<string, string>();
+
+            for (int i = 0; i < AttributeCount && Attributes != IntPtr.Zero; i++)
+            {
+                IntPtr ptr = IntPtr.Add(Attributes, i * Marshal.SizeOf<Win32CredentialAttribute>());
+                var attribute = Marshal.PtrToStructure<Win32CredentialAttribute>(ptr);
+                if (attribute.Keyword == IntPtr.Zero || attribute.Value == IntPtr.Zero )
+                {
+                    continue;
+                }
+
+                string key = Marshal.PtrToStringUni(attribute.Keyword) ?? string.Empty;
+
+                // ValueSize is in bytes, but we want the number of unicode chars
+                string value = Marshal.PtrToStringUni(attribute.Value, attribute.ValueSize / 2);
+
+                dict[key] = value;
+            }
+
+            return dict;
         }
     }
 }

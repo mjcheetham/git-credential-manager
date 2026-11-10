@@ -5,9 +5,15 @@ using GitCredentialManager.Interop.Windows.Native;
 
 namespace GitCredentialManager.Tests.Interop.Windows
 {
-    public class WindowsCredentialManagerTests
+    public class WindowsCredentialManagerTests : CredentialStoreTests
     {
         private const string TestNamespace = "git-test";
+
+        [WindowsFact]
+        public void WindowsCredentialManager_MetadataLifecycle()
+        {
+            MetadataLifecycle(new WindowsCredentialManager(TestNamespace));
+        }
 
         [WindowsFact]
         public void WindowsCredentialManager_ReadWriteDelete()
@@ -84,25 +90,13 @@ namespace GitCredentialManager.Tests.Interop.Windows
         [WindowsFact]
         public void WindowsCredentialManager_Get_KeyNotFound_ReturnsNull()
         {
-            var credManager = new WindowsCredentialManager(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            ICredential credential = credManager.Get(service, account: null);
-            Assert.Null(credential);
+            Get_NotFound_ReturnsNull(new WindowsCredentialManager(TestNamespace));
         }
 
         [WindowsFact]
         public void WindowsCredentialManager_Remove_KeyNotFound_ReturnsFalse()
         {
-            var credManager = new WindowsCredentialManager(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            bool result = credManager.Remove(service, account: null);
-            Assert.False(result);
+            Remove_NotFound_ReturnsFalse(new WindowsCredentialManager(TestNamespace));
         }
 
         [WindowsFact]
@@ -373,8 +367,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
         [WindowsFact]
         public void WindowsCredentialManager_MaxCredentialSize_Returns_1280()
         {
-            ICredentialStore credentialStore = new WindowsCredentialManager(TestNamespace);
-            Assert.Equal(1_280, credentialStore.MaxCredentialSize);
+            MaxCredentialSize(new WindowsCredentialManager(TestNamespace), 1_280);
         }
     }
 }

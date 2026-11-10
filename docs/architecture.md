@@ -228,6 +228,31 @@ when writing tests. Do not use Git's protocol streams for user-facing prompts
 or diagnostics. Authentication components check the interaction, GUI, and
 terminal-prompt settings before requesting user input.
 
+### Credential metadata
+
+`ICredential.Metadata` exposes an immutable `CredentialMetadata` object. Its
+optional `ExpiresAt` property identifies the expiry instant using
+`DateTimeOffset`; null means the expiry is unknown. Credentials without metadata
+return `CredentialMetadata.Empty`.
+
+Pass metadata to `ICredentialStore.AddOrUpdate` when storing a credential:
+
+```csharp
+context.CredentialStore.AddOrUpdate(service, account, secret,
+    new CredentialMetadata { ExpiresAt = expiresAt });
+```
+
+Omitting metadata preserves it only when the stored account and secret are
+unchanged. Replacing the secret without supplying metadata clears the old
+metadata. Pass `CredentialMetadata.Empty` to clear it explicitly without
+changing the secret.
+
+The metadata object contains no storage-format details. Each backend owns its
+attribute names and serialization, as described in [credential stores][credential-stores].
+Metadata must not contain secrets. Store operations persist expiry information
+but do not filter expired credentials, trigger refresh, or change Git protocol
+output; providers remain responsible for deciding whether a credential is usable.
+
 ## Error handling and tracing
 
 GCM operates a 'fail fast' approach to unrecoverable errors. This usually

@@ -1,12 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using GitCredentialManager.Authentication;
 using GitCredentialManager.Authentication.OAuth;
-using GitCredentialManager.Tty;
 
 namespace GitCredentialManager
 {
@@ -294,28 +292,35 @@ namespace GitCredentialManager
 
             // Try to use a refresh token if we have one
             ICredential refreshToken = _context.CredentialStore.Get(refreshService, userName);
-            if (refreshToken != null)
+            if (refreshToken is not null)
             {
-                try
+                if (!refreshToken.Metadata.IsExpired)
                 {
-                    var refreshResult = await client.GetTokenByRefreshTokenAsync(refreshToken.Password, CancellationToken.None);
+                    _context.Trace.WriteLine("Found refresh token in store, using it to get a new access token...");
 
-                    // Store new refresh token if we have been given one
-                    if (!string.IsNullOrWhiteSpace(refreshResult.RefreshToken))
+                    try
                     {
-                        _context.CredentialStore.AddOrUpdate(refreshService, refreshToken.Account, refreshResult.RefreshToken);
-                    }
+                        var refreshResult = await client.GetTokenByRefreshTokenAsync(refreshToken.Password, CancellationToken.None);
 
-                    // Return the new access token
-                    return new GitCredential(oauthUser,refreshResult.AccessToken);
+                        // Store new refresh token if we have been given one
+                        if (!string.IsNullOrWhiteSpace(refreshResult.RefreshToken))
+                        {
+                            _context.CredentialStore.AddOrUpdate(refreshService, refreshToken.Account, refreshResult.RefreshToken);
+                        }
+
+                        // Return the new access token
+                        return new GitCredential(oauthUser,refreshResult.AccessToken);
+                    }
+                    catch (OAuth2Exception ex)
+                    {
+                        // Failed to use refresh token. It may have expired or been revoked.
+                        // Fall through to an interactive OAuth flow.
+                        _context.Trace.WriteLine("Failed to use refresh token.");
+                        _context.Trace.WriteException(ex);
+                    }
                 }
-                catch (OAuth2Exception ex)
-                {
-                    // Failed to use refresh token. It may have expired or been revoked.
-                    // Fall through to an interactive OAuth flow.
-                    _context.Trace.WriteLine("Failed to use refresh token.");
-                    _context.Trace.WriteException(ex);
-                }
+
+                _context.Trace.WriteLine("Refresh token has expired!");
             }
 
             // Determine which interactive OAuth mode to use. Start by checking for mode preference in config

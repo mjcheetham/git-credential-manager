@@ -117,6 +117,21 @@ namespace GitCredentialManager.Interop.Linux.Native
         public static extern unsafe Glib.GHashTable* secret_item_get_attributes(SecretItem* item);
 
         [DllImport(LibraryName, CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
+        public static extern unsafe bool secret_item_set_attributes_sync(
+            SecretItem* item,
+            ref SecretSchema schema,
+            Glib.GHashTable* attributes,
+            IntPtr cancellable,
+            out Glib.GError* error);
+
+        [DllImport(LibraryName, CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
+        public static extern unsafe bool secret_item_set_secret_sync(
+            SecretItem* item,
+            SecretValue* value,
+            IntPtr cancellable,
+            out Glib.GError* error);
+
+        [DllImport(LibraryName, CharSet = CharSet.Ansi, CallingConvention = CallingConvention.Cdecl)]
         public static extern unsafe bool secret_item_load_secret_sync(
             SecretItem* self,
             IntPtr cancellable,

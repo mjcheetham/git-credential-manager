@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -8,6 +9,10 @@ namespace GitCredentialManager
 {
     public class PlaintextCredentialStore : ICredentialStore
     {
+        protected const string ServiceAttribute = "service";
+        protected const string AccountAttribute = "account";
+        protected const string ExpiresAtAttribute = "expires_at";
+
         public PlaintextCredentialStore(IFileSystem fileSystem, string storeRoot, string @namespace = null)
         {
             EnsureArgument.NotNull(fileSystem, nameof(fileSystem));
@@ -35,17 +40,19 @@ namespace GitCredentialManager
             return Enumerate(service, account).FirstOrDefault();
         }
 
-        public void AddOrUpdate(string service, string account, string secret)
+        public void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null)
         {
             // Ensure the store root exists and permissions are set
             EnsureStoreRoot();
 
             FileCredential existingCredential = Enumerate(service, account).FirstOrDefault();
+            bool sameCredential = existingCredential != null &&
+                                  StringComparer.Ordinal.Equals(account, existingCredential.Account) &&
+                                  StringComparer.Ordinal.Equals(secret, existingCredential.Password);
+            metadata ??= sameCredential ? existingCredential.Metadata : CredentialMetadata.Empty;
 
             // No need to update existing credential if nothing has changed
-            if (existingCredential != null &&
-                StringComparer.Ordinal.Equals(account, existingCredential.Account) &&
-                StringComparer.Ordinal.Equals(secret, existingCredential.Password))
+            if (sameCredential && metadata == existingCredential.Metadata)
             {
                 return;
             }
@@ -59,7 +66,7 @@ namespace GitCredentialManager
             }
 
             string fullPath = Path.Combine(servicePath, $"{account}{CredentialFileExtension}");
-            var credential = new FileCredential(fullPath, service, account, secret);
+            var credential = new FileCredential(fullPath, service, account, secret, metadata);
             SerializeCredential(credential);
         }
 
@@ -96,12 +103,20 @@ namespace GitCredentialManager
                 IDictionary<string, string> attrs = attrReader.ReadDictionary(StringComparer.OrdinalIgnoreCase);
 
                 // Account is optional
-                attrs.TryGetValue("account", out string account);
+                attrs.TryGetValue(AccountAttribute, out string account);
+
+                // Metadata is optional
+                var metadata = CredentialMetadata.Empty;
+                if (attrs.TryGetValue(ExpiresAtAttribute, out string value) &&
+                    DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
+                {
+                    metadata = metadata with { ExpiresAt = expiry };
+                }
 
                 // Service is required
-                if (attrs.TryGetValue("service", out string service))
+                if (attrs.TryGetValue(ServiceAttribute, out string service))
                 {
-                    credential = new FileCredential(path, service, account, password);
+                    credential = new FileCredential(path, service, account, password, metadata);
                     return true;
                 }
             }
@@ -123,8 +138,13 @@ namespace GitCredentialManager
             using (var writer = new StreamWriter(stream))
             {
                 writer.WriteLine(credential.Password);
-                writer.WriteLine("service={0}", credential.Service);
-                writer.WriteLine("account={0}", credential.Account);
+                writer.WriteLine("{0}={1}", ServiceAttribute, credential.Service);
+                writer.WriteLine("{0}={1}", AccountAttribute, credential.Account);
+                if (credential.Metadata.ExpiresAt is { } expiry)
+                {
+                    string value = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                    writer.WriteLine("{0}={1}", ExpiresAtAttribute, value);
+                }
                 writer.Flush();
             }
         }

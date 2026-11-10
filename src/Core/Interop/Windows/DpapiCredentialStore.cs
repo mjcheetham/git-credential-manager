@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Security.Cryptography;
 using System.Text;
@@ -43,10 +44,18 @@ namespace GitCredentialManager.Interop.Windows
                 // Account is optional
                 attrs.TryGetValue("account", out string account);
 
+                // Metadata is optional
+                var metadata = CredentialMetadata.Empty;
+                if (attrs.TryGetValue(ExpiresAtAttribute, out string value) &&
+                    DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
+                {
+                    metadata = metadata with { ExpiresAt = expiry };
+                }
+
                 // Service is required
                 if (attrs.TryGetValue("service", out string service))
                 {
-                    credential = new FileCredential(path, service, account, password);
+                    credential = new FileCredential(path, service, account, password, metadata);
                     return true;
                 }
             }
@@ -74,8 +83,13 @@ namespace GitCredentialManager.Interop.Windows
             using (var writer = new StreamWriter(stream))
             {
                 writer.WriteLine(cryptoBase64);
-                writer.WriteLine("service={0}", credential.Service);
-                writer.WriteLine("account={0}", credential.Account);
+                writer.WriteLine("{0}={1}", ServiceAttribute, credential.Service);
+                writer.WriteLine("{0}={1}", AccountAttribute, credential.Account);
+                if (credential.Metadata.ExpiresAt is { } expiry)
+                {
+                    string value = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                    writer.WriteLine("{0}={1}", ExpiresAtAttribute, value);
+                }
                 writer.Flush();
             }
         }

@@ -2,12 +2,13 @@ namespace GitCredentialManager
 {
     public class FileCredential : ICredential
     {
-        public FileCredential(string fullPath, string service, string account, string password)
+        public FileCredential(string fullPath, string service, string account, string password, CredentialMetadata metadata = null)
         {
             FullPath = fullPath;
             Service = service;
             Account = account;
             Password = password;
+            Metadata = metadata ?? CredentialMetadata.Empty;
         }
 
         public string FullPath { get; }
@@ -17,5 +18,7 @@ namespace GitCredentialManager
         public string Account { get; }
 
         public string Password { get; }
+
+        public CredentialMetadata Metadata { get; }
     }
 }

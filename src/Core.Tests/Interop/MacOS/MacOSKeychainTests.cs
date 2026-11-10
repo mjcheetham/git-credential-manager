@@ -1,36 +1,32 @@
-using System;
-using Xunit;
 using GitCredentialManager.Interop;
 using GitCredentialManager.Interop.MacOS;
 using GitCredentialManager.Interop.MacOS.Native;
 
 namespace GitCredentialManager.Tests.Interop.MacOS
 {
-    public class MacOSKeychainTests
+    public class MacOSKeychainTests : CredentialStoreTests
     {
         private const string TestNamespace = "git-test";
 
         [MacOSFact]
-        public void MacOSKeychain_ReadWriteDelete()
+        public void MacOSKeychain_MetadataLifecycle()
         {
-            var keychain = new MacOSKeychain(TestNamespace);
-
-            // Create a service that is guaranteed to be unique
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-            const string account = "john.doe";
-            const string password = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
-
             try
             {
-                // Write
-                keychain.AddOrUpdate(service, account, password);
+                MetadataLifecycle(new MacOSKeychain(TestNamespace));
+            }
+            catch (InteropException iex) when (iex.ErrorCode == SecurityFramework.ErrorSecAuthFailed)
+            {
+                AssertEx.Skip("macOS Keychain is in an invalid state (errSecAuthFailed)");
+            }
+        }
 
-                // Read
-                ICredential outCredential = keychain.Get(service, account);
-
-                Assert.NotNull(outCredential);
-                Assert.Equal(account, outCredential.Account);
-                Assert.Equal(password, outCredential.Password);
+        [MacOSFact]
+        public void MacOSKeychain_ReadWriteDelete()
+        {
+            try
+            {
+                ReadWriteDelete(new MacOSKeychain(TestNamespace));
             }
             // There is an unknown issue that the keychain can sometimes get itself in where all API calls
             // result in an errSecAuthFailed error. The only solution seems to be a machine restart, which
@@ -40,47 +36,29 @@ namespace GitCredentialManager.Tests.Interop.MacOS
             // signature of the binary (our collective best theory).
             // It's probably only diagnosable at this point by Apple, but we don't have a reliable way to
             // reproduce the problem.
-            // For now we will just mark the test as "skipped" when we hit this problem.
+            // For now, we will just mark the test as "skipped" when we hit this problem.
             catch (InteropException iex) when (iex.ErrorCode == SecurityFramework.ErrorSecAuthFailed)
             {
                 AssertEx.Skip("macOS Keychain is in an invalid state (errSecAuthFailed)");
-            }
-            finally
-            {
-                // Ensure we clean up after ourselves even in case of 'get' failures
-                keychain.Remove(service, account);
             }
         }
 
         [MacOSFact]
         public void MacOSKeychain_Get_NotFound_ReturnsNull()
         {
-            var keychain = new MacOSKeychain(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            ICredential credential = keychain.Get(service, account: null);
-            Assert.Null(credential);
+            Get_NotFound_ReturnsNull(new MacOSKeychain(TestNamespace));
         }
 
         [MacOSFact]
         public void MacOSKeychain_Remove_NotFound_ReturnsFalse()
         {
-            var keychain = new MacOSKeychain(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            bool result = keychain.Remove(service, account: null);
-            Assert.False(result);
+            Remove_NotFound_ReturnsFalse(new MacOSKeychain(TestNamespace));
         }
-        
+
         [MacOSFact]
         public void MacOSKeychain_MaxCredentialSize_ReturnsZero()
         {
-            ICredentialStore credentialStore = new MacOSKeychain(TestNamespace);
-            Assert.Equal(0, credentialStore.MaxCredentialSize);
+            MaxCredentialSize(new MacOSKeychain(TestNamespace), 0);
         }
     }
 }

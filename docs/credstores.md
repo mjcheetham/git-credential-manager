@@ -28,6 +28,31 @@ Some credential stores have limitations, or further configuration required
 depending on your particular setup. See more detailed information below for each
 credential store.
 
+## Credential metadata
+
+Credentials can carry optional expiry metadata alongside the secret. Existing
+credentials without expiry metadata remain readable. Expiry metadata is
+informational: reading from a store does not automatically reject an expired
+credential or refresh it.
+
+Store | Expiry representation
+--- | ---
+Windows Credential Manager | A native credential attribute containing a 64-bit Unix timestamp in seconds.
+macOS Keychain | A decimal Unix timestamp in the item's generic attribute.
+Secret Service | An integer `gcm-expires-at` attribute containing a Unix timestamp.
+Plaintext, DPAPI, GPG/pass | An optional `expiresAt` line containing a decimal Unix timestamp.
+Git credential cache | Git's `password_expiry_utc` field, in Unix seconds.
+No-op | No metadata is persisted.
+
+All expiry timestamps use UTC Unix seconds and whole-second precision. Expiry
+is not confidential metadata; in particular, DPAPI encrypts the secret but not
+the expiry attribute. GPG/pass encrypts the entire credential file.
+
+Git's cache eviction timeout is separate from the credential's expiry. Direct
+cache reads can return an expired credential with its expiry timestamp; the
+caller must decide whether to use it. Updating credentials with older GCM
+versions or other tools may discard expiry metadata.
+
 ## Windows Credential Manager
 
 **Available on:** _Windows_

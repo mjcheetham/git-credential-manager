@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,6 +14,8 @@ namespace GitCredentialManager.Interop.MacOS
 {
     public class MacOSKeychain : ICredentialStore
     {
+        private const string ExpiresAtAttribute = "expires_at";
+
         private readonly string _namespace;
 
         #region Constructors
@@ -161,9 +165,19 @@ namespace GitCredentialManager.Interop.MacOS
             }
         }
 
-        public void AddOrUpdate(string service, string account, string secret)
+        public void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null)
         {
             EnsureArgument.NotNullOrWhiteSpace(service, nameof(service));
+
+            ICredential existing = Get(service, account);
+            bool sameCredential = existing != null &&
+                                  StringComparer.Ordinal.Equals(existing.Account, account) &&
+                                  StringComparer.Ordinal.Equals(existing.Password, secret);
+            metadata ??= sameCredential ? existing.Metadata : CredentialMetadata.Empty;
+            if (sameCredential && metadata == existing.Metadata)
+            {
+                return;
+            }
 
             byte[] secretBytes = Encoding.UTF8.GetBytes(secret);
 
@@ -184,12 +198,8 @@ namespace GitCredentialManager.Interop.MacOS
 
                 switch (findResult)
                 {
-                    // Update existing entry only if the password/secret is different
-                    case OK when !InteropUtils.AreEqual(secretBytes, passwordData, passwordDataLength):
-                        ThrowIfError(
-                            SecKeychainItemModifyAttributesAndData(itemRef, IntPtr.Zero, (uint) secretBytes.Length, secretBytes),
-                            "Could not update existing item"
-                        );
+                    case OK:
+                        UpdateCredential(itemRef, secretBytes, metadata);
                         break;
 
                     // Create new entry
@@ -199,6 +209,12 @@ namespace GitCredentialManager.Interop.MacOS
                                 account, (uint) secretBytes.Length, secretBytes, out itemRef),
                             "Could not create new item"
                         );
+
+                        // If we have metadata, set the metadata on the newly created item.
+                        if (metadata != CredentialMetadata.Empty)
+                        {
+                            UpdateCredential(itemRef, secretBytes, metadata);
+                        }
                         break;
 
                     default:
@@ -281,6 +297,48 @@ namespace GitCredentialManager.Interop.MacOS
 
         #endregion
 
+        private static unsafe void UpdateCredential(IntPtr itemRef, byte[] secret, CredentialMetadata metadata)
+        {
+            var attrs = new Dictionary<string, string>();
+
+            if (metadata.ExpiresAt is { } expiry)
+            {
+                attrs[ExpiresAtAttribute] = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            }
+
+            // Convert the metadata dictionary into a (key=value\n)* string to store in the generic attribute.
+            // Always write the attribute, even when empty, so that any existing metadata is cleared.
+            string value = string.Empty;
+            if (attrs.Count > 0)
+            {
+                using var writer = new StringWriter();
+                writer.WriteDictionary(attrs);
+                writer.Flush();
+                value = writer.ToString();
+            }
+
+            byte[] bytes = Encoding.UTF8.GetBytes(value);
+            fixed (byte* data = bytes)
+            {
+                var attribute = new SecKeychainAttribute
+                {
+                    Tag = SecKeychainAttrType.GenericItem,
+                    Length = (uint)bytes.Length,
+                    Data = (IntPtr)data
+                };
+                var attributes = new SecKeychainAttributeList
+                {
+                    Count = 1,
+                    Attributes = (IntPtr)(&attribute)
+                };
+
+                // Update the item with the new password and metadata.
+                ThrowIfError(
+                    SecKeychainItemModifyAttributesAndData(itemRef, (IntPtr)(&attributes), (uint)secret.Length, secret),
+                    "Could not update existing item");
+            }
+        }
+
         private static IntPtr CreateCFStringUtf8(string str)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(str);
@@ -294,7 +352,25 @@ namespace GitCredentialManager.Interop.MacOS
             string account = GetStringAttribute(attributes, kSecAttrAccount);
             string password = GetStringAttribute(attributes, kSecValueData);
             string label = GetStringAttribute(attributes, kSecAttrLabel);
-            return new MacOSKeychainCredential(service, account, password, label);
+
+            var metadata = CredentialMetadata.Empty;
+            string generic = GetStringAttribute(attributes, kSecAttrGeneric);
+
+            // Generic attribute is used to store the metadata in (key=value\n)* format.
+            if (!string.IsNullOrEmpty(generic))
+            {
+                using var reader = new StringReader(generic);
+                IDictionary<string, string> attrs = reader.ReadDictionary();
+
+                // Currently, we only store the expiry time as a unix timestamp.
+                if (attrs.TryGetValue(ExpiresAtAttribute, out string value) &&
+                    DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
+                {
+                    metadata = metadata with { ExpiresAt = expiry };
+                }
+            }
+
+            return new MacOSKeychainCredential(service, account, password, label, metadata);
         }
 
         private static string GetStringAttribute(IntPtr dict, IntPtr key)

@@ -15,7 +15,7 @@ public class NullCredentialStore : ICredentialStore
 
     public ICredential Get(string service, string account) => null;
 
-    public void AddOrUpdate(string service, string account, string secret) { }
+    public void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null) { }
 
     public bool Remove(string service, string account) => false;
 }

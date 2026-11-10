@@ -28,9 +28,12 @@ namespace GitCredentialManager.Tests.Objects
             return TryGet(service, account, out TestCredential credential) ? credential : null;
         }
 
-        void ICredentialStore.AddOrUpdate(string service, string account, string secret)
+        void ICredentialStore.AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata)
         {
-            Add(service, account, secret);
+            TryGet(service, account, out TestCredential existing);
+            bool sameCredential = existing != null && existing.Account == account && existing.Password == secret;
+            metadata ??= sameCredential ? existing.Metadata : CredentialMetadata.Empty;
+            Add(service, new TestCredential(service, account, secret, metadata));
         }
 
         bool ICredentialStore.Remove(string service, string account)
@@ -99,11 +102,12 @@ namespace GitCredentialManager.Tests.Objects
 
     public class TestCredential : ICredential
     {
-        public TestCredential(string service, string account, string password)
+        public TestCredential(string service, string account, string password, CredentialMetadata metadata = null)
         {
             Service = service;
             Account = account;
             Password = password;
+            Metadata = metadata ?? CredentialMetadata.Empty;
         }
 
         public string Service { get; }
@@ -111,5 +115,7 @@ namespace GitCredentialManager.Tests.Objects
         public string Account { get; }
 
         public string Password { get; }
+
+        public CredentialMetadata Metadata { get; }
     }
 }

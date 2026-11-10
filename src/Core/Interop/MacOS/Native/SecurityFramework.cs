@@ -22,6 +22,7 @@ namespace GitCredentialManager.Interop.MacOS.Native
         public static readonly IntPtr kSecAttrLabel;
         public static readonly IntPtr kSecAttrAccount;
         public static readonly IntPtr kSecAttrService;
+        public static readonly IntPtr kSecAttrGeneric;
         public static readonly IntPtr kSecValueRef;
         public static readonly IntPtr kSecValueData;
         public static readonly IntPtr kSecReturnData;
@@ -42,6 +43,7 @@ namespace GitCredentialManager.Interop.MacOS.Native
             kSecAttrLabel            = GetGlobal(Handle, "kSecAttrLabel");
             kSecAttrAccount          = GetGlobal(Handle, "kSecAttrAccount");
             kSecAttrService          = GetGlobal(Handle, "kSecAttrService");
+            kSecAttrGeneric          = GetGlobal(Handle, "kSecAttrGeneric");
             kSecValueRef             = GetGlobal(Handle, "kSecValueRef");
             kSecValueData            = GetGlobal(Handle, "kSecValueData");
             kSecReturnData           = GetGlobal(Handle, "kSecReturnData");
@@ -209,5 +211,6 @@ namespace GitCredentialManager.Interop.MacOS.Native
     {
         // https://developer.apple.com/documentation/security/secitemattr/accountitemattr
         AccountItem = 1633903476,
+        GenericItem = 0x67656e61,
     }
 }

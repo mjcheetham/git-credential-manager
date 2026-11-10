@@ -184,11 +184,15 @@ namespace GitLab
         {
             string service = GetServiceName(request);
             ICredential credential = Context.CredentialStore.Get(service, request.UserName);
-            if (credential?.Account == "oauth2" && await IsOAuthTokenExpired(request.GetRemoteUri(), credential.Password))
+            if (credential?.Account == "oauth2")
             {
-                Context.Trace.WriteLine("Removing expired OAuth access token...");
-                Context.CredentialStore.Remove(service, credential.Account);
-                credential = null;
+                if (credential.Metadata.IsExpired ||
+                    await IsOAuthTokenExpired(request.GetRemoteUri(), credential.Password))
+                {
+                    Context.Trace.WriteLine("Removing expired OAuth access token...");
+                    Context.CredentialStore.Remove(service, credential.Account);
+                    credential = null;
+                }
             }
 
             if (credential != null)
@@ -197,17 +201,24 @@ namespace GitLab
             }
 
             string refreshService = GetRefreshTokenServiceName(request);
-            string refreshToken = Context.CredentialStore.Get(refreshService, request.UserName)?.Password;
-            if (refreshToken != null)
+            ICredential refreshToken = Context.CredentialStore.Get(refreshService, request.UserName);
+            if (refreshToken is not null)
             {
-                Context.Trace.WriteLine("Refreshing OAuth token...");
-                try
+                if (refreshToken.Metadata.IsExpired)
                 {
-                    credential = await RefreshOAuthCredentialAsync(request, refreshToken);
+                    Context.Trace.WriteLine("OAuth refresh token is expired!");
                 }
-                catch (Exception e)
+                else
                 {
-                    Context.Console.WriteError($"OAuth token refresh failed: {e.Message}");
+                    Context.Trace.WriteLine("Refreshing OAuth token...");
+                    try
+                    {
+                        credential = await RefreshOAuthCredentialAsync(request, refreshToken.Password);
+                    }
+                    catch (Exception e)
+                    {
+                        Context.Console.WriteError($"OAuth token refresh failed: {e.Message}");
+                    }
                 }
             }
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace GitCredentialManager
 {
@@ -53,18 +54,38 @@ namespace GitCredentialManager
                 input
             ).GetAwaiter().GetResult();
 
-            if (result.ContainsKey("username") && result.ContainsKey("password"))
+            if (result.TryGetValue("username", out string outUser) && result.TryGetValue("password", out string outPwd))
             {
-                return new GitCredential(result["username"], result["password"]);
+                var metadata = CredentialMetadata.Empty;
+                if (result.TryGetValue("password_expiry_utc", out string value) &&
+                    DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
+                {
+                    metadata = metadata with { ExpiresAt = expiry };
+                }
+
+                return new GitCredential(outUser, outPwd, metadata);
             }
 
             return null;
         }
 
-        public void AddOrUpdate(string service, string account, string secret)
+        public void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null)
         {
+            if (metadata is null)
+            {
+                ICredential existing = Get(service, account);
+                bool sameCredential = existing != null &&
+                                      StringComparer.Ordinal.Equals(existing.Account, account) &&
+                                      StringComparer.Ordinal.Equals(existing.Password, secret);
+                metadata = sameCredential ? existing.Metadata : CredentialMetadata.Empty;
+            }
+
             var input = MakeGitCredentialsEntry(service, account);
             input["password"] = secret;
+            if (metadata.ExpiresAt is { } expiry)
+            {
+                input["password_expiry_utc"] = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+            }
 
             // per https://git-scm.com/docs/gitcredentials :
             // For a store or erase operation, the helper’s output is ignored.

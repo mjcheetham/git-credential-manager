@@ -8,10 +8,17 @@ using System.Security.Cryptography;
 
 namespace GitCredentialManager.Tests.Interop.Windows
 {
-    public class DpapiCredentialStoreTests
+    public class DpapiCredentialStoreTests : CredentialStoreTests
     {
         private const string TestStoreRoot = @"C:\dpapi_store";
         private const string TestNamespace = "git-test";
+
+        [WindowsFact]
+        public void DpapiCredentialStore_MetadataLifecycle()
+        {
+            var store = new DpapiCredentialStore(new TestFileSystem(), TestStoreRoot, TestNamespace);
+            MetadataLifecycle(store);
+        }
 
         [WindowsFact]
         public void DpapiCredentialStore_AddOrUpdate_CreatesUTF8ProtectedFile()
@@ -54,12 +61,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
         {
             var fs = new TestFileSystem();
             var store = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            ICredential credential = store.Get(service, account: null);
-            Assert.Null(credential);
+            Get_NotFound_ReturnsNull(store);
         }
 
         [WindowsFact]
@@ -102,12 +104,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
         {
             var fs = new TestFileSystem();
             var store = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            bool result = store.Remove(service, account: null);
-            Assert.False(result);
+            Remove_NotFound_ReturnsFalse(store);
         }
         
         [WindowsFact]
@@ -115,7 +112,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
         {
             var fs = new TestFileSystem();
             ICredentialStore credentialStore = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
-            Assert.Equal(0, credentialStore.MaxCredentialSize);
+            MaxCredentialSize(credentialStore, 0);
         }
     }
 }

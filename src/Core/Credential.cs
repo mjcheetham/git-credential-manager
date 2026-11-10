@@ -15,6 +15,11 @@ namespace GitCredentialManager
         /// Password.
         /// </summary>
         string Password { get; }
+
+        /// <summary>
+        /// Optional metadata. Its presence does not change credential retrieval.
+        /// </summary>
+        CredentialMetadata Metadata => CredentialMetadata.Empty;
     }
 
     /// <summary>
@@ -22,14 +27,17 @@ namespace GitCredentialManager
     /// </summary>
     public class GitCredential : ICredential
     {
-        public GitCredential(string userName, string password)
+        public GitCredential(string userName, string password, CredentialMetadata metadata = null)
         {
             Account = userName;
             Password = password;
+            Metadata = metadata ?? CredentialMetadata.Empty;
         }
 
         public string Account { get; }
 
         public string Password { get; }
+
+        public CredentialMetadata Metadata { get; }
     }
 }

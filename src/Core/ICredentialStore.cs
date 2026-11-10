@@ -44,7 +44,11 @@ namespace GitCredentialManager
         /// <param name="service">Name of the service this credential is for. Use null to match all values.</param>
         /// <param name="account">Account associated with this credential. Use null to match all values.</param>
         /// <param name="secret">Secret value to store.</param>
-        void AddOrUpdate(string service, string account, string secret);
+        /// <param name="metadata">
+        /// Metadata to replace. If null, preserve metadata only when the account and secret are unchanged.
+        /// Pass <see cref="CredentialMetadata.Empty"/> to clear metadata explicitly.
+        /// </param>
+        void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null);
 
         /// <summary>
         /// Delete credential from the store that matches the given query.

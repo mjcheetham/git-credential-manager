@@ -6,9 +6,15 @@ using Operation = GitCredentialManager.Interop.Linux.SecretServiceCollection.Ope
 
 namespace GitCredentialManager.Tests.Interop.Linux
 {
-    public class SecretServiceCollectionTests
+    public class SecretServiceCollectionTests : CredentialStoreTests
     {
         private const string TestNamespace = "git-test";
+
+        [LinuxFact(Skip = "Requires a configured Secret Service provider")]
+        public void SecretServiceCollection_MetadataLifecycle()
+        {
+            MetadataLifecycle(new SecretServiceCollection(TestNamespace));
+        }
 
         [LinuxFact]
         public void CredentialStore_SecretService_HeadlessSession_SelectsStore()
@@ -76,61 +82,25 @@ namespace GitCredentialManager.Tests.Interop.Linux
         [LinuxFact(Skip = "Requires a configured Secret Service provider")]
         public void SecretServiceCollection_ReadWriteDelete()
         {
-            var collection = new SecretServiceCollection(TestNamespace);
-
-            // Create a service that is guaranteed to be unique
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-            const string userName = "john.doe";
-            const string password = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
-
-            try
-            {
-                // Write
-                collection.AddOrUpdate(service, userName, password);
-
-                // Read
-                ICredential outCredential = collection.Get(service, userName);
-
-                Assert.NotNull(outCredential);
-                Assert.Equal(userName, userName);
-                Assert.Equal(password, outCredential.Password);
-            }
-            finally
-            {
-                // Ensure we clean up after ourselves even in case of 'get' failures
-                collection.Remove(service, userName);
-            }
+            ReadWriteDelete(new SecretServiceCollection(TestNamespace));
         }
 
         [LinuxFact(Skip = "Requires a configured Secret Service provider")]
         public void SecretServiceCollection_Get_NotFound_ReturnsNull()
         {
-            var collection = new SecretServiceCollection(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            ICredential credential = collection.Get(service, null);
-            Assert.Null(credential);
+            Get_NotFound_ReturnsNull(new SecretServiceCollection(TestNamespace));
         }
 
         [LinuxFact(Skip = "Requires a configured Secret Service provider")]
         public void SecretServiceCollection_Remove_NotFound_ReturnsFalse()
         {
-            var collection = new SecretServiceCollection(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            bool result = collection.Remove(service, account: null);
-            Assert.False(result);
+            Remove_NotFound_ReturnsFalse(new SecretServiceCollection(TestNamespace));
         }
         
         [LinuxFact]
         public void SecretServiceCollection_MaxCredentialSize_ReturnsZero()
         {
-            ICredentialStore credentialStore = new SecretServiceCollection(TestNamespace);
-            Assert.Equal(0, credentialStore.MaxCredentialSize);
+            MaxCredentialSize(new SecretServiceCollection(TestNamespace), 0);
         }
     }
 }

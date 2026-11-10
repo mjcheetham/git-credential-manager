@@ -56,11 +56,11 @@ namespace GitCredentialManager
             return _backingStore.Get(service, account);
         }
 
-        public void AddOrUpdate(string service, string account, string secret)
+        public void AddOrUpdate(string service, string account, string secret, CredentialMetadata metadata = null)
         {
             using var _  = Trace2.StartRegion("cred_store", "add");
             EnsureBackingStore();
-            _backingStore.AddOrUpdate(service, account, secret);
+            _backingStore.AddOrUpdate(service, account, secret, metadata);
         }
 
         public bool Remove(string service, string account)
