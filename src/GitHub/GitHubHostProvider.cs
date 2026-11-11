@@ -138,7 +138,7 @@ namespace GitHub
             bool filtered = false;
             if (string.IsNullOrWhiteSpace(userName))
             {
-                IList<string> accounts = _context.CredentialStore.GetAccounts(service);
+                IList<string> accounts = _context.CredentialStore.Find(service).Select(x => x.Account).ToList();
                 _context.Trace.WriteLine($"Found {accounts.Count} accounts in the store for service={service}{(accounts.Count > 0 ? ":" : ".")}");
                 foreach (string account in accounts)
                 {
@@ -173,7 +173,11 @@ namespace GitHub
             else if (!string.IsNullOrWhiteSpace(userName) || !filtered)
             {
                 _context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={userName}...");
-                credential = _context.CredentialStore.Get(service, userName);
+                StoredCredential storedCredential = _context.CredentialStore.FindFirst(service, userName);
+                if (storedCredential is not null)
+                {
+                    credential = new GitCredential(storedCredential.Key.Account, storedCredential.Secret);
+                }
             }
 
             if (credential == null)
@@ -256,7 +260,7 @@ namespace GitHub
             {
                 // Add or update the credential in the store.
                 _context.Trace.WriteLine($"Storing credential with service={service} account={request.UserName}...");
-                _context.CredentialStore.AddOrUpdate(service, request.UserName, request.Password);
+                _context.CredentialStore.SetPreservingMetadata(new CredentialKey(service, request.UserName), request.Password);
                 _context.Trace.WriteLine("Credential was successfully stored.");
             }
 
@@ -269,7 +273,9 @@ namespace GitHub
 
             // Try to locate an existing credential
             _context.Trace.WriteLine($"Erasing stored credential in store with service={service} account={request.UserName}...");
-            if (_context.CredentialStore.Remove(service, request.UserName))
+            // Without a user name, erase whichever credential is stored for the service
+            IReadOnlyList<CredentialKey> keys = _context.CredentialStore.Find(service, request.UserName);
+            if (keys.Count > 0 && _context.CredentialStore.Remove(keys[0]))
             {
                 _context.Trace.WriteLine("Credential was successfully erased.");
             }
@@ -313,7 +319,8 @@ namespace GitHub
                     // We must store the PAT now so they can resume/repeat the operation with the same,
                     // now SSO authorized, PAT.
                     // See: https://github.com/git-ecosystem/git-credential-manager/issues/133
-                    _context.CredentialStore.AddOrUpdate(service, patCredential.Account, patCredential.Password);
+                    _context.CredentialStore.Set(
+                        new StoredCredential(new CredentialKey(service, patCredential.Account), patCredential.Password));
                     return patCredential;
 
                 case AuthenticationModes.Browser:

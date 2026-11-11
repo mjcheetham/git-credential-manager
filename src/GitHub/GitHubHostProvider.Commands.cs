@@ -66,7 +66,7 @@ public partial class GitHubHostProvider : ICommandProvider
             ? $"https://{GitHubConstants.GitHubBaseUrlHost}"
             : GetServiceName(url);
 
-        IList<string> accounts = _context.CredentialStore.GetAccounts(service);
+        IEnumerable<string> accounts = _context.CredentialStore.Find(service).Select(x => x.Account);
 
         foreach (string account in accounts)
         {
@@ -88,7 +88,7 @@ public partial class GitHubHostProvider : ICommandProvider
         // (so long as the user isn't explicitly forcing a re-authentication).
         if (!string.IsNullOrWhiteSpace(userName) && !force)
         {
-            IList<string> existingAccounts = _context.CredentialStore.GetAccounts(service);
+            IEnumerable<string> existingAccounts = _context.CredentialStore.Find(service).Select(x => x.Account);
             if (existingAccounts.Any(x => StringComparer.OrdinalIgnoreCase.Equals(x, userName)))
             {
                 string prettyUrl = url.AbsoluteUri.TrimEnd('/');
@@ -120,7 +120,7 @@ public partial class GitHubHostProvider : ICommandProvider
             credential = await GenerateCredentialAsync(url, userName);
         }
 
-        _context.CredentialStore.AddOrUpdate(service, credential.Account, credential.Password);
+        _context.CredentialStore.Set(new StoredCredential(new CredentialKey(service, credential.Account), credential.Password));
 
         return 0;
     }
@@ -131,7 +131,7 @@ public partial class GitHubHostProvider : ICommandProvider
             ? $"https://{GitHubConstants.GitHubBaseUrlHost}"
             : GetServiceName(url);
 
-        bool result = _context.CredentialStore.Remove(service, account);
+        bool result = _context.CredentialStore.Remove(new CredentialKey(service, account));
 
         if (!result)
         {
