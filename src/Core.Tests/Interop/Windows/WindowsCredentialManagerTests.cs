@@ -5,12 +5,66 @@ using GitCredentialManager.Interop.Windows.Native;
 
 namespace GitCredentialManager.Tests.Interop.Windows
 {
-    public class WindowsCredentialManagerTests
+    public class WindowsCredentialManagerTests : CredentialStoreTests
     {
         private const string TestNamespace = "git-test";
 
         [WindowsFact]
         public void WindowsCredentialManager_ReadWriteDelete()
+        {
+            ReadWriteDelete(new WindowsCredentialManager(TestNamespace));
+        }
+
+        [WindowsFact]
+        public void WindowsCredentialManager_AccountMatching()
+        {
+            AccountMatching(new WindowsCredentialManager(TestNamespace));
+        }
+
+        [WindowsFact]
+        public void WindowsCredentialManager_MetadataLifecycle()
+        {
+            MetadataLifecycle(new WindowsCredentialManager(TestNamespace));
+        }
+
+        [WindowsFact]
+        public void WindowsCredentialManager_Set_NoAccount_TargetNameUsedByAccount_MovesExistingCredential()
+        {
+            var credManager = new WindowsCredentialManager(TestNamespace);
+
+            // Create a service that is guaranteed to be unique
+            string uniqueGuid = Guid.NewGuid().ToString("N");
+            string service = $"https://example.com/{uniqueGuid}";
+            var accountKey = new CredentialKey(service, "john.doe");
+            var noAccountKey = new CredentialKey(service, null);
+            const string password1 = "letmein123";  // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            const string password2 = "password123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+
+            try
+            {
+                // The first credential for a service takes the account-less target name
+                credManager.Set(new StoredCredential(accountKey, password1));
+                credManager.Set(new StoredCredential(noAccountKey, password2));
+
+                WindowsCredential accountCred = credManager.GetWindowsCredential(accountKey);
+                Assert.NotNull(accountCred);
+                Assert.Equal(password1, accountCred.Password);
+                Assert.Equal($"{TestNamespace}:https://john.doe@example.com/{uniqueGuid}", accountCred.TargetName);
+
+                WindowsCredential noAccountCred = credManager.GetWindowsCredential(noAccountKey);
+                Assert.NotNull(noAccountCred);
+                Assert.Equal(password2, noAccountCred.Password);
+                Assert.Equal($"{TestNamespace}:https://example.com/{uniqueGuid}", noAccountCred.TargetName);
+            }
+            finally
+            {
+                credManager.Remove(accountKey);
+                credManager.Remove(noAccountKey);
+            }
+        }
+
+        [WindowsFact]
+        public void WindowsCredentialManager_Set_UsesAccountlessTargetName()
         {
             var credManager = new WindowsCredentialManager(TestNamespace);
 
@@ -25,13 +79,11 @@ namespace GitCredentialManager.Tests.Interop.Windows
             try
             {
                 // Write
-                credManager.AddOrUpdate(service, userName, password);
+                credManager.Set(new StoredCredential(new CredentialKey(service, userName), password));
 
                 // Read
-                ICredential cred = credManager.Get(service, userName);
+                WindowsCredential winCred = credManager.GetWindowsCredential(new CredentialKey(service, userName));
 
-                // Valdiate
-                var winCred = cred as WindowsCredential;
                 Assert.NotNull(winCred);
                 Assert.Equal(userName, winCred.UserName);
                 Assert.Equal(password, winCred.Password);
@@ -41,12 +93,12 @@ namespace GitCredentialManager.Tests.Interop.Windows
             finally
             {
                 // Ensure we clean up after ourselves even in case of 'get' failures
-                credManager.Remove(service, userName);
+                credManager.Remove(new CredentialKey(service, userName));
             }
         }
 
         [WindowsFact]
-        public void WindowsCredentialManager_AddOrUpdate_UsernameWithAtCharacter()
+        public void WindowsCredentialManager_Set_UsernameWithAtCharacter()
         {
             var credManager = new WindowsCredentialManager(TestNamespace);
 
@@ -61,13 +113,11 @@ namespace GitCredentialManager.Tests.Interop.Windows
             try
             {
                 // Write
-                credManager.AddOrUpdate(service, userName, password);
+                credManager.Set(new StoredCredential(new CredentialKey(service, userName), password));
 
                 // Read
-                ICredential cred = credManager.Get(service, userName);
+                WindowsCredential winCred = credManager.GetWindowsCredential(new CredentialKey(service, userName));
 
-                // Validate
-                var winCred = cred as WindowsCredential;
                 Assert.NotNull(winCred);
                 Assert.Equal(userName, winCred.UserName);
                 Assert.Equal(password, winCred.Password);
@@ -77,36 +127,12 @@ namespace GitCredentialManager.Tests.Interop.Windows
             finally
             {
                 // Ensure we clean up after ourselves even in case of 'get' failures
-                credManager.Remove(service, userName);
+                credManager.Remove(new CredentialKey(service, userName));
             }
         }
 
         [WindowsFact]
-        public void WindowsCredentialManager_Get_KeyNotFound_ReturnsNull()
-        {
-            var credManager = new WindowsCredentialManager(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            ICredential credential = credManager.Get(service, account: null);
-            Assert.Null(credential);
-        }
-
-        [WindowsFact]
-        public void WindowsCredentialManager_Remove_KeyNotFound_ReturnsFalse()
-        {
-            var credManager = new WindowsCredentialManager(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            bool result = credManager.Remove(service, account: null);
-            Assert.False(result);
-        }
-
-        [WindowsFact]
-        public void WindowsCredentialManager_AddOrUpdate_TargetNameAlreadyExists_CreatesWithUserInTargetName()
+        public void WindowsCredentialManager_Set_TargetNameAlreadyExists_CreatesWithUserInTargetName()
         {
             var credManager = new WindowsCredentialManager(TestNamespace);
 
@@ -124,14 +150,13 @@ namespace GitCredentialManager.Tests.Interop.Windows
             try
             {
                 // Add first credential
-                credManager.AddOrUpdate(service, userName1, password1);
+                credManager.Set(new StoredCredential(new CredentialKey(service, userName1), password1));
 
                 // Add second credential
-                credManager.AddOrUpdate(service, userName2, password2);
+                credManager.Set(new StoredCredential(new CredentialKey(service, userName2), password2));
 
                 // Validate first credential properties
-                ICredential cred1 = credManager.Get(service, userName1);
-                var winCred1 = cred1 as WindowsCredential;
+                WindowsCredential winCred1 = credManager.GetWindowsCredential(new CredentialKey(service, userName1));
                 Assert.NotNull(winCred1);
                 Assert.Equal(userName1, winCred1.UserName);
                 Assert.Equal(password1, winCred1.Password);
@@ -139,8 +164,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
                 Assert.Equal(expectedTargetName1, winCred1.TargetName);
 
                 // Validate second credential properties
-                ICredential cred2 = credManager.Get(service, userName2);
-                var winCred2 = cred2 as WindowsCredential;
+                WindowsCredential winCred2 = credManager.GetWindowsCredential(new CredentialKey(service, userName2));
                 Assert.NotNull(winCred2);
                 Assert.Equal(userName2, winCred2.UserName);
                 Assert.Equal(password2, winCred2.Password);
@@ -150,13 +174,13 @@ namespace GitCredentialManager.Tests.Interop.Windows
             finally
             {
                 // Ensure we clean up after ourselves in case of failures
-                credManager.Remove(service, userName1);
-                credManager.Remove(service, userName2);
+                credManager.Remove(new CredentialKey(service, userName1));
+                credManager.Remove(new CredentialKey(service, userName2));
             }
         }
 
         [WindowsFact]
-        public void WindowsCredentialManager_AddOrUpdate_TargetNameAlreadyExistsAndUserWithAtCharacter_CreatesWithEscapedUserInTargetName()
+        public void WindowsCredentialManager_Set_TargetNameAlreadyExistsAndUserWithAtCharacter_CreatesWithEscapedUserInTargetName()
         {
             var credManager = new WindowsCredentialManager(TestNamespace);
 
@@ -175,14 +199,13 @@ namespace GitCredentialManager.Tests.Interop.Windows
             try
             {
                 // Add first credential
-                credManager.AddOrUpdate(service, userName1, password1);
+                credManager.Set(new StoredCredential(new CredentialKey(service, userName1), password1));
 
                 // Add second credential
-                credManager.AddOrUpdate(service, userName2, password2);
+                credManager.Set(new StoredCredential(new CredentialKey(service, userName2), password2));
 
                 // Validate first credential properties
-                ICredential cred1 = credManager.Get(service, userName1);
-                var winCred1 = cred1 as WindowsCredential;
+                WindowsCredential winCred1 = credManager.GetWindowsCredential(new CredentialKey(service, userName1));
                 Assert.NotNull(winCred1);
                 Assert.Equal(userName1, winCred1.UserName);
                 Assert.Equal(password1, winCred1.Password);
@@ -190,8 +213,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
                 Assert.Equal(expectedTargetName1, winCred1.TargetName);
 
                 // Validate second credential properties
-                ICredential cred2 = credManager.Get(service, userName2);
-                var winCred2 = cred2 as WindowsCredential;
+                WindowsCredential winCred2 = credManager.GetWindowsCredential(new CredentialKey(service, userName2));
                 Assert.NotNull(winCred2);
                 Assert.Equal(userName2, winCred2.UserName);
                 Assert.Equal(password2, winCred2.Password);
@@ -201,8 +223,8 @@ namespace GitCredentialManager.Tests.Interop.Windows
             finally
             {
                 // Ensure we clean up after ourselves in case of failures
-                credManager.Remove(service, userName1);
-                credManager.Remove(service, userName2);
+                credManager.Remove(new CredentialKey(service, userName1));
+                credManager.Remove(new CredentialKey(service, userName2));
             }
         }
 
@@ -373,7 +395,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
         [WindowsFact]
         public void WindowsCredentialManager_MaxCredentialSize_Returns_1280()
         {
-            ICredentialStore credentialStore = new WindowsCredentialManager(TestNamespace);
+            ICredentialStore2 credentialStore = new WindowsCredentialManager(TestNamespace);
             Assert.Equal(1_280, credentialStore.MaxCredentialSize);
         }
     }

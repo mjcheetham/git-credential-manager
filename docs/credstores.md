@@ -38,6 +38,7 @@ refresh expired credentials themselves.
 
 Store | Expiry representation
 --- | ---
+Windows Credential Manager | A `GitCredentialManager_ExpiresAt` credential attribute containing a Unix timestamp as a UTF-16 string.
 DPAPI protected files | An `expires_at` line containing a Unix timestamp. Only the secret is encrypted, not the expiry.
 GPG/`pass` compatible files | An `expires_at` line inside the encrypted file containing a Unix timestamp.
 Plaintext files | An `expires_at` line containing a Unix timestamp.

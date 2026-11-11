@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -7,9 +8,10 @@ using GitCredentialManager.Interop.Windows.Native;
 
 namespace GitCredentialManager.Interop.Windows
 {
-    public class WindowsCredentialManager : ICredentialStore
+    public class WindowsCredentialManager : ICredentialStore2
     {
         internal const string TargetNameLegacyGenericPrefix = "LegacyGeneric:target=";
+        private const string ExpiresAtAttribute = "GitCredentialManager_ExpiresAt";
 
         private readonly string _namespace;
 
@@ -30,22 +32,32 @@ namespace GitCredentialManager.Interop.Windows
         // Unicode encoding.
         public int MaxCredentialSize => 1_280;
 
-        public IList<string> GetAccounts(string service)
+        public StoredCredential Get(CredentialKey key)
         {
-            return Enumerate(service, null).Select(x => x.UserName).Distinct().ToList();
+            return GetWindowsCredential(key)?.ToStoredCredential();
         }
 
-        public ICredential Get(string service, string account)
-        {
-            return Enumerate(service, account).FirstOrDefault();
-        }
-
-        public void AddOrUpdate(string service, string account, string secret)
+        public IReadOnlyList<CredentialKey> Find(string service, string account = null)
         {
             EnsureArgument.NotNullOrWhiteSpace(service, nameof(service));
 
+            return Enumerate(service, account).Select(x => x.Key).Distinct().ToList();
+        }
+
+        public void Set(StoredCredential credential)
+        {
+            EnsureArgument.NotNull(credential, nameof(credential));
+
+            string service = credential.Key.Service;
+            string account = credential.Key.Account;
+            string secret = credential.Secret;
+            CredentialMetadata metadata = credential.Metadata;
+
             IntPtr existingCredPtr = IntPtr.Zero;
             IntPtr credBlob = IntPtr.Zero;
+            IntPtr attributePtr = IntPtr.Zero;
+            IntPtr attributeKeyword = IntPtr.Zero;
+            IntPtr attributeValue = IntPtr.Zero;
 
             try
             {
@@ -66,16 +78,30 @@ namespace GitCredentialManager.Interop.Windows
                 if (Advapi32.CredRead(targetName, CredentialType.Generic, 0, out existingCredPtr))
                 {
                     var existingCred = Marshal.PtrToStructure<Win32Credential>(existingCredPtr);
-                    if (!StringComparer.Ordinal.Equals(existingCred.UserName, account))
+                    string existingAccount = string.IsNullOrWhiteSpace(existingCred.UserName) ? null : existingCred.UserName;
+                    if (!StringComparer.Ordinal.Equals(existingAccount, account))
                     {
-                        // Create new entry with the account in the target name
-                        targetName = CreateTargetName(service, account);
+                        if (account is null)
+                        {
+                            // A credential without an account can only use the account-less target name,
+                            // so first move the other account's credential to a target name of its own.
+                            existingCred.TargetName = CreateTargetName(service, existingAccount);
+                            Win32Error.ThrowIfError(
+                                Win32Error.GetLastError(Advapi32.CredWrite(ref existingCred, 0)),
+                                "Failed to move existing item in store.");
+                        }
+                        else
+                        {
+                            // Create new entry with the account in the target name
+                            targetName = CreateTargetName(service, account);
+                        }
                     }
                     else
                     {
-                        // No need to write out credential if the account and secret/password are the same
+                        // No need to write out credential if the account, secret/password, and metadata are the same
                         string existingSecret = existingCred.GetCredentialBlobAsString();
-                        if (StringComparer.Ordinal.Equals(existingSecret, secret))
+                        if (StringComparer.Ordinal.Equals(existingSecret, secret) &&
+                            metadata == ReadMetadata(existingCred))
                         {
                             return;
                         }
@@ -86,6 +112,24 @@ namespace GitCredentialManager.Interop.Windows
                 credBlob = Marshal.AllocHGlobal(secretBytes.Length);
                 Marshal.Copy(secretBytes, 0, credBlob, secretBytes.Length);
 
+                // Writing a credential replaces all of its attributes, so omitting the
+                // attribute clears any existing expiry.
+                if (metadata.ExpiresAt is { } expiry)
+                {
+                    string value = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                    attributeKeyword = Marshal.StringToHGlobalUni(ExpiresAtAttribute);
+                    attributeValue = Marshal.StringToHGlobalUni(value);
+
+                    var attribute = new Win32CredentialAttribute
+                    {
+                        Keyword = attributeKeyword,
+                        ValueSize = value.Length * sizeof(char),
+                        Value = attributeValue
+                    };
+                    attributePtr = Marshal.AllocHGlobal(Marshal.SizeOf<Win32CredentialAttribute>());
+                    Marshal.StructureToPtr(attribute, attributePtr, false);
+                }
+
                 var newCred = new Win32Credential
                 {
                     Type = CredentialType.Generic,
@@ -94,6 +138,8 @@ namespace GitCredentialManager.Interop.Windows
                     CredentialBlob = credBlob,
                     Persist = CredentialPersist.LocalMachine,
                     UserName = account,
+                    AttributeCount = attributePtr == IntPtr.Zero ? 0 : 1,
+                    Attributes = attributePtr,
                 };
 
                 int result = Win32Error.GetLastError(
@@ -104,6 +150,21 @@ namespace GitCredentialManager.Interop.Windows
             }
             finally
             {
+                if (attributePtr != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(attributePtr);
+                }
+
+                if (attributeKeyword != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(attributeKeyword);
+                }
+
+                if (attributeValue != IntPtr.Zero)
+                {
+                    Marshal.FreeHGlobal(attributeValue);
+                }
+
                 if (credBlob != IntPtr.Zero)
                 {
                     Marshal.FreeHGlobal(credBlob);
@@ -116,9 +177,9 @@ namespace GitCredentialManager.Interop.Windows
             }
         }
 
-        public bool Remove(string service, string account)
+        public bool Remove(CredentialKey key)
         {
-            WindowsCredential credential = Enumerate(service, account).FirstOrDefault();
+            WindowsCredential credential = GetWindowsCredential(key);
 
             if (credential != null)
             {
@@ -164,6 +225,13 @@ namespace GitCredentialManager.Interop.Windows
 
             // If the maximum allowed is anything less than "local machine" then cannot persist credentials.
             return persist >= CredentialPersist.LocalMachine;
+        }
+
+        internal /* for testing */ WindowsCredential GetWindowsCredential(CredentialKey key)
+        {
+            // Without an account, only match a credential that was stored without one
+            return Enumerate(key.Service, key.Account)
+                .FirstOrDefault(x => key.Account is not null || string.IsNullOrWhiteSpace(x.UserName));
         }
 
         private IEnumerable<WindowsCredential> Enumerate(string service, string account)
@@ -232,7 +300,23 @@ namespace GitCredentialManager.Interop.Windows
             // Strip any userinfo component from the service name
             serviceName = RemoveUriUserInfo(serviceName);
 
-            return new WindowsCredential(serviceName, credential.UserName, password, targetName);
+            CredentialMetadata metadata = ReadMetadata(credential);
+
+            return new WindowsCredential(serviceName, credential.UserName, password, targetName, metadata);
+        }
+
+        private static CredentialMetadata ReadMetadata(Win32Credential credential)
+        {
+            IReadOnlyDictionary<string, string> attrs = credential.GetAttributesAsDictionary();
+
+            var metadata = CredentialMetadata.Empty;
+            if (attrs.TryGetValue(ExpiresAtAttribute, out string value) &&
+                DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
+            {
+                metadata = metadata with { ExpiresAt = expiry };
+            }
+
+            return metadata;
         }
 
         public /* for testing */ static string RemoveUriUserInfo(string url)

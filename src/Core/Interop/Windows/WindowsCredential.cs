@@ -1,14 +1,19 @@
 
 namespace GitCredentialManager.Interop.Windows
 {
-    public class WindowsCredential : ICredential
+    /// <summary>
+    /// A credential stored in the Windows Credential Manager.
+    /// </summary>
+    public class WindowsCredential
     {
-        public WindowsCredential(string service, string userName, string password, string targetName)
+        public WindowsCredential(string service, string userName, string password, string targetName,
+            CredentialMetadata metadata = null)
         {
             Service = service;
             UserName = userName;
             Password = password;
             TargetName = targetName;
+            Metadata = metadata ?? CredentialMetadata.Empty;
         }
 
         public string Service { get; }
@@ -19,6 +24,10 @@ namespace GitCredentialManager.Interop.Windows
 
         public string TargetName { get; }
 
-        string ICredential.Account => UserName;
+        public CredentialMetadata Metadata { get; }
+
+        public CredentialKey Key => new(Service, UserName);
+
+        public StoredCredential ToStoredCredential() => new(Key, Password, Metadata);
     }
 }
