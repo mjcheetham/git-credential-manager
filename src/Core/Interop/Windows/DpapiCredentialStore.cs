@@ -41,12 +41,15 @@ namespace GitCredentialManager.Interop.Windows
                 IDictionary<string, string> attrs = attrReader.ReadDictionary(StringComparer.OrdinalIgnoreCase);
 
                 // Account is optional
-                attrs.TryGetValue("account", out string account);
+                attrs.TryGetValue(AccountAttribute, out string account);
+
+                // Metadata is optional
+                CredentialMetadata metadata = ReadMetadata(attrs);
 
                 // Service is required
-                if (attrs.TryGetValue("service", out string service))
+                if (attrs.TryGetValue(ServiceAttribute, out string service))
                 {
-                    credential = new FileCredential(path, service, account, password);
+                    credential = new FileCredential(path, service, account, password, metadata);
                     return true;
                 }
             }
@@ -74,8 +77,7 @@ namespace GitCredentialManager.Interop.Windows
             using (var writer = new StreamWriter(stream))
             {
                 writer.WriteLine(cryptoBase64);
-                writer.WriteLine("service={0}", credential.Service);
-                writer.WriteLine("account={0}", credential.Account);
+                WriteAttributes(writer, credential);
                 writer.Flush();
             }
         }

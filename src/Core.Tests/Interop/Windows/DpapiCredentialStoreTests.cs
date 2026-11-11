@@ -8,13 +8,31 @@ using System.Security.Cryptography;
 
 namespace GitCredentialManager.Tests.Interop.Windows
 {
-    public class DpapiCredentialStoreTests
+    public class DpapiCredentialStoreTests : CredentialStoreTests
     {
         private const string TestStoreRoot = @"C:\dpapi_store";
         private const string TestNamespace = "git-test";
 
         [WindowsFact]
-        public void DpapiCredentialStore_AddOrUpdate_CreatesUTF8ProtectedFile()
+        public void DpapiCredentialStore_ReadWriteDelete()
+        {
+            ReadWriteDelete(new DpapiCredentialStore(new TestFileSystem(), TestStoreRoot, TestNamespace));
+        }
+
+        [WindowsFact]
+        public void DpapiCredentialStore_AccountMatching()
+        {
+            AccountMatching(new DpapiCredentialStore(new TestFileSystem(), TestStoreRoot, TestNamespace));
+        }
+
+        [WindowsFact]
+        public void DpapiCredentialStore_MetadataLifecycle()
+        {
+            MetadataLifecycle(new DpapiCredentialStore(new TestFileSystem(), TestStoreRoot, TestNamespace));
+        }
+
+        [WindowsFact]
+        public void DpapiCredentialStore_Set_CreatesUTF8ProtectedFile()
         {
             var fs = new TestFileSystem();
             var store = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
@@ -27,7 +45,7 @@ namespace GitCredentialManager.Tests.Interop.Windows
             string expectedFileName = $"{userName}.credential";
             string expectedFilePath = Path.Combine(TestStoreRoot, expectedServiceSlug, expectedFileName);
 
-            store.AddOrUpdate(service, userName, password);
+            store.Set(new StoredCredential(new CredentialKey(service, userName), password));
 
             Assert.True(fs.Directories.Contains(Path.Combine(TestStoreRoot, expectedServiceSlug)));
             Assert.True(fs.Files.TryGetValue(expectedFilePath, out byte[] data));
@@ -47,19 +65,6 @@ namespace GitCredentialManager.Tests.Interop.Windows
             Assert.Equal($"service={service}", lines[1]);
             Assert.Equal($"account={userName}", lines[2]);
             Assert.True(string.IsNullOrWhiteSpace(lines[3]));
-        }
-
-        [WindowsFact]
-        public void DpapiCredentialStore_Get_KeyNotFound_ReturnsNull()
-        {
-            var fs = new TestFileSystem();
-            var store = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            ICredential credential = store.Get(service, account: null);
-            Assert.Null(credential);
         }
 
         [WindowsFact]
@@ -91,30 +96,17 @@ namespace GitCredentialManager.Tests.Interop.Windows
             fs.Directories.Add(Path.Combine(TestStoreRoot, serviceSlug));
             fs.Files[filePath] = data;
 
-            ICredential credential = store.Get(service, userName);
+            StoredCredential credential = store.Get(new CredentialKey(service, userName));
 
-            Assert.Equal(password, credential.Password);
-            Assert.Equal(userName, credential.Account);
+            Assert.Equal(password, credential.Secret);
+            Assert.Equal(userName, credential.Key.Account);
         }
 
-        [WindowsFact]
-        public void DpapiCredentialStore_Remove_KeyNotFound_ReturnsFalse()
-        {
-            var fs = new TestFileSystem();
-            var store = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = Guid.NewGuid().ToString("N");
-
-            bool result = store.Remove(service, account: null);
-            Assert.False(result);
-        }
-        
         [WindowsFact]
         public void DpapiCredentialStore_MaxCredentialSize_ReturnsZero()
         {
             var fs = new TestFileSystem();
-            ICredentialStore credentialStore = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
+            ICredentialStore2 credentialStore = new DpapiCredentialStore(fs, TestStoreRoot, TestNamespace);
             Assert.Equal(0, credentialStore.MaxCredentialSize);
         }
     }
