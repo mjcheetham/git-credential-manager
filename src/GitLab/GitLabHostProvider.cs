@@ -183,27 +183,30 @@ namespace GitLab
         public override async Task<GitResponse> GetCredentialAsync(GitRequest request)
         {
             string service = GetServiceName(request);
-            ICredential credential = Context.CredentialStore.Get(service, request.UserName);
-            if (credential?.Account == "oauth2" && await IsOAuthTokenExpired(request.GetRemoteUri(), credential.Password))
+            StoredCredential storedCredential = Context.CredentialStore.FindFirst(service, request.UserName);
+            if (storedCredential?.Key.Account == "oauth2" &&
+                await IsOAuthTokenExpired(request.GetRemoteUri(), storedCredential.Secret))
             {
                 Context.Trace.WriteLine("Removing expired OAuth access token...");
-                Context.CredentialStore.Remove(service, credential.Account);
-                credential = null;
+                Context.CredentialStore.Remove(storedCredential.Key);
+                storedCredential = null;
             }
 
-            if (credential != null)
+            if (storedCredential != null)
             {
-                return new GitResponse(credential);
+                return new GitResponse(new GitCredential(storedCredential.Key.Account, storedCredential.Secret));
             }
+
+            ICredential credential = null;
 
             string refreshService = GetRefreshTokenServiceName(request);
-            string refreshToken = Context.CredentialStore.Get(refreshService, request.UserName)?.Password;
+            StoredCredential refreshToken = Context.CredentialStore.FindFirst(refreshService, request.UserName);
             if (refreshToken != null)
             {
                 Context.Trace.WriteLine("Refreshing OAuth token...");
                 try
                 {
-                    credential = await RefreshOAuthCredentialAsync(request, refreshToken);
+                    credential = await RefreshOAuthCredentialAsync(request, refreshToken.Secret);
                 }
                 catch (Exception e)
                 {
@@ -218,9 +221,11 @@ namespace GitLab
                 Context.Trace.WriteLine("Pre-emptively storing OAuth access and refresh tokens...");
                 // freshly-generated OAuth credential
                 // store credential, since we know it to be valid (whereas Git will only store credential if git push succeeds)
-                Context.CredentialStore.AddOrUpdate(service, oAuthCredential.Account, oAuthCredential.AccessToken);
+                Context.CredentialStore.Set(
+                    new StoredCredential(new CredentialKey(service, oAuthCredential.Account), oAuthCredential.AccessToken));
                 // store refresh token under a separate service
-                Context.CredentialStore.AddOrUpdate(refreshService, oAuthCredential.Account, oAuthCredential.RefreshToken);
+                Context.CredentialStore.Set(
+                    new StoredCredential(new CredentialKey(refreshService, oAuthCredential.Account), oAuthCredential.RefreshToken));
             }
             return new GitResponse(credential);
         }
@@ -290,7 +295,7 @@ namespace GitLab
         public override Task EraseCredentialAsync(GitRequest request)
         {
             // delete any refresh token too
-            Context.CredentialStore.Remove(GetRefreshTokenServiceName(request), "oauth2");
+            Context.CredentialStore.Remove(new CredentialKey(GetRefreshTokenServiceName(request), "oauth2"));
             return base.EraseCredentialAsync(request);
         }
     }
