@@ -386,6 +386,53 @@ namespace Atlassian.Bitbucket.Tests
             VerifyOAuthRefreshRan(request, refreshToken);
             VerifyInteractiveAuthNeverRan();
         }
+
+        [Fact]
+        public async Task BitbucketHostProvider_GetCredentialAsync_StoredATExpiryPassed_OAuth_RefreshesWithoutValidating()
+        {
+            const string username = "jsquire";
+            var request = MockInput("https", BITBUCKET_DOT_ORG_HOST, username);
+            var expired = new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) };
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add(GetAccessTokenServiceName(request), username, MOCK_EXPIRED_ACCESS_TOKEN, expired);
+            MockStoredRefreshTokenForRequest(context, request, MOCK_REFRESH_TOKEN);
+            MockRemoteAccessTokenValid(username, MOCK_ACCESS_TOKEN);
+            MockRemoteRefreshTokenValid(request, MOCK_REFRESH_TOKEN, MOCK_ACCESS_TOKEN);
+
+            var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
+
+            var result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(MOCK_ACCESS_TOKEN, result.Credential.Password);
+            bitbucketApi.Verify(m => m.GetUserInformationAsync(It.IsAny<string>(), MOCK_EXPIRED_ACCESS_TOKEN, It.IsAny<bool>()), Times.Never);
+            VerifyOAuthRefreshRan(request, MOCK_REFRESH_TOKEN);
+            VerifyInteractiveAuthNeverRan();
+        }
+
+        [Fact]
+        public async Task BitbucketHostProvider_GetCredentialAsync_StoredRTExpiryPassed_OAuth_PromptsConsent()
+        {
+            const string username = "jsquire";
+            var request = MockInput("https", BITBUCKET_DOT_ORG_HOST, username);
+            var expired = new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) };
+
+            var context = new TestCommandContext();
+            var refreshService = BitbucketHostProvider.GetRefreshTokenServiceName(request.GetRemoteUri());
+            context.CredentialStore.Add(refreshService, username, MOCK_REFRESH_TOKEN, expired);
+            MockPromptOAuth(request);
+            MockRemoteOAuthTokenCreate(request, MOCK_ACCESS_TOKEN, MOCK_ROTATED_REFRESH_TOKEN);
+            MockRemoteAccessTokenValid(username, MOCK_ACCESS_TOKEN);
+
+            var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
+
+            var result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(MOCK_ACCESS_TOKEN, result.Credential.Password);
+            bitbucketAuthentication.Verify(m => m.RefreshOAuthCredentialsAsync(It.IsAny<GitRequest>(), It.IsAny<string>()), Times.Never);
+            VerifyInteractiveAuthRan(request);
+            VerifyOAuthTokenStored(context, refreshService, username, MOCK_ROTATED_REFRESH_TOKEN);
+        }
         
         [Theory]
         // DC/Server does not currently support OAuth

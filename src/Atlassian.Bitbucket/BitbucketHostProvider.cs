@@ -128,6 +128,13 @@ namespace Atlassian.Bitbucket
             ICredential credentials = new GitCredential(storedCredentials.Key.Account, storedCredentials.Secret);
             _context.Trace.WriteLineSecrets($"Found stored credentials: {credentials.Account}/{{0}}", new object[] { credentials.Password });
 
+            // Don't bother validating credentials with the server that we know have expired
+            if (storedCredentials.Metadata.IsExpired)
+            {
+                _context.Trace.WriteLine("Stored credentials have expired.");
+                return null;
+            }
+
             // Check credentials are still valid
             if (!await ValidateCredentialsWork(request, credentials, authModes))
             {
@@ -158,9 +165,16 @@ namespace Atlassian.Bitbucket
                 ? GetCredential(refreshTokenService, request.UserName)
                 : null;
 
+            // Don't attempt to use a refresh token we know has expired
+            if (refreshToken?.Metadata.IsExpired == true)
+            {
+                _context.Trace.WriteLine("Stored refresh token has expired.");
+                refreshToken = null;
+            }
+
             if (refreshToken is null)
             {
-                _context.Trace.WriteLine("No stored refresh token found");
+                _context.Trace.WriteLine("No usable stored refresh token found");
                 // There is no refresh token either because this is a non-2FA enabled account (where OAuth is not
                 // required), or because we previously erased the RT.
 
