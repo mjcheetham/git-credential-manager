@@ -28,6 +28,22 @@ Some credential stores have limitations, or further configuration required
 depending on your particular setup. See more detailed information below for each
 credential store.
 
+## Credential metadata
+
+Some credential stores persist optional, non-secret metadata alongside each
+credential, such as when it expires. Credentials stored without metadata,
+including those written by older versions of GCM, remain readable. Metadata
+does not change how stored credentials are found, and stores do not remove or
+refresh expired credentials themselves.
+
+Store | Expiry representation
+--- | ---
+Plaintext files | An `expires_at` line containing a Unix timestamp.
+
+Expiry is stored as whole seconds since the Unix epoch (UTC). Updating a
+credential with an older version of GCM, or with another tool, may discard its
+metadata.
+
 ## Windows Credential Manager
 
 **Available on:** _Windows_

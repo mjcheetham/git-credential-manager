@@ -1,13 +1,18 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
 
 namespace GitCredentialManager
 {
-    public class PlaintextCredentialStore : ICredentialStore
+    public class PlaintextCredentialStore : ICredentialStore2
     {
+        protected const string ServiceAttribute = "service";
+        protected const string AccountAttribute = "account";
+        protected const string ExpiresAtAttribute = "expires_at";
+
         public PlaintextCredentialStore(IFileSystem fileSystem, string storeRoot, string @namespace = null)
         {
             EnsureArgument.NotNull(fileSystem, nameof(fileSystem));
@@ -25,32 +30,41 @@ namespace GitCredentialManager
 
         public virtual string Name => "Plaintext";
 
-        public IList<string> GetAccounts(string service)
+        public StoredCredential Get(CredentialKey key)
         {
-            return Enumerate(service, null).Select(x => x.Account).Distinct().ToList();
+            return Enumerate(key.Service, key.Account, anyAccount: false).FirstOrDefault()?.ToStoredCredential();
         }
 
-        public ICredential Get(string service, string account)
+        public IReadOnlyList<CredentialKey> Find(string service, string account = null)
         {
-            return Enumerate(service, account).FirstOrDefault();
+            EnsureArgument.NotNullOrWhiteSpace(service, nameof(service));
+
+            return Enumerate(service, account, anyAccount: string.IsNullOrWhiteSpace(account))
+                .Select(x => x.Key)
+                .Distinct()
+                .ToList();
         }
 
-        public void AddOrUpdate(string service, string account, string secret)
+        public void Set(StoredCredential credential)
         {
+            EnsureArgument.NotNull(credential, nameof(credential));
+
             // Ensure the store root exists and permissions are set
             EnsureStoreRoot();
 
-            FileCredential existingCredential = Enumerate(service, account).FirstOrDefault();
+            CredentialKey key = credential.Key;
+            FileCredential existingCredential = Enumerate(key.Service, key.Account, anyAccount: false).FirstOrDefault();
 
             // No need to update existing credential if nothing has changed
             if (existingCredential != null &&
-                StringComparer.Ordinal.Equals(account, existingCredential.Account) &&
-                StringComparer.Ordinal.Equals(secret, existingCredential.Password))
+                StringComparer.Ordinal.Equals(key.Account, existingCredential.Key.Account) &&
+                StringComparer.Ordinal.Equals(credential.Secret, existingCredential.Password) &&
+                credential.Metadata == existingCredential.Metadata)
             {
                 return;
             }
 
-            string serviceSlug = CreateServiceSlug(service);
+            string serviceSlug = CreateServiceSlug(key.Service);
             string servicePath = Path.Combine(StoreRoot, serviceSlug);
 
             if (!FileSystem.DirectoryExists(servicePath))
@@ -58,14 +72,14 @@ namespace GitCredentialManager
                 FileSystem.CreateDirectory(servicePath);
             }
 
-            string fullPath = Path.Combine(servicePath, $"{account}{CredentialFileExtension}");
-            var credential = new FileCredential(fullPath, service, account, secret);
-            SerializeCredential(credential);
+            string fullPath = Path.Combine(servicePath, $"{key.Account}{CredentialFileExtension}");
+            var fileCredential = new FileCredential(fullPath, key.Service, key.Account, credential.Secret, credential.Metadata);
+            SerializeCredential(fileCredential);
         }
 
-        public bool Remove(string service, string account)
+        public bool Remove(CredentialKey key)
         {
-            foreach (FileCredential credential in Enumerate(service, account))
+            foreach (FileCredential credential in Enumerate(key.Service, key.Account, anyAccount: false))
             {
                 // Only delete the first match
                 FileSystem.DeleteFile(credential.FullPath);
@@ -96,12 +110,15 @@ namespace GitCredentialManager
                 IDictionary<string, string> attrs = attrReader.ReadDictionary(StringComparer.OrdinalIgnoreCase);
 
                 // Account is optional
-                attrs.TryGetValue("account", out string account);
+                attrs.TryGetValue(AccountAttribute, out string account);
+
+                // Metadata is optional
+                CredentialMetadata metadata = ReadMetadata(attrs);
 
                 // Service is required
-                if (attrs.TryGetValue("service", out string service))
+                if (attrs.TryGetValue(ServiceAttribute, out string service))
                 {
-                    credential = new FileCredential(path, service, account, password);
+                    credential = new FileCredential(path, service, account, password, metadata);
                     return true;
                 }
             }
@@ -123,17 +140,47 @@ namespace GitCredentialManager
             using (var writer = new StreamWriter(stream))
             {
                 writer.WriteLine(credential.Password);
-                writer.WriteLine("service={0}", credential.Service);
-                writer.WriteLine("account={0}", credential.Account);
+                WriteAttributes(writer, credential);
                 writer.Flush();
             }
         }
 
-        private IEnumerable<FileCredential> Enumerate(string service, string account)
+        /// <summary>
+        /// Write the service, account, and metadata attributes of a credential as `key=value` lines.
+        /// </summary>
+        protected static void WriteAttributes(TextWriter writer, FileCredential credential)
+        {
+            writer.WriteLine("{0}={1}", ServiceAttribute, credential.Service);
+            writer.WriteLine("{0}={1}", AccountAttribute, credential.Account);
+            if (credential.Metadata.ExpiresAt is { } expiry)
+            {
+                string value = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                writer.WriteLine("{0}={1}", ExpiresAtAttribute, value);
+            }
+        }
+
+        /// <summary>
+        /// Read credential metadata from a set of attributes. Unrecognised or invalid values are ignored.
+        /// </summary>
+        protected static CredentialMetadata ReadMetadata(IDictionary<string, string> attrs)
+        {
+            var metadata = CredentialMetadata.Empty;
+            if (attrs.TryGetValue(ExpiresAtAttribute, out string value) &&
+                DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
+            {
+                metadata = metadata with { ExpiresAt = expiry };
+            }
+
+            return metadata;
+        }
+
+        private IEnumerable<FileCredential> Enumerate(string service, string account, bool anyAccount)
         {
             string serviceSlug = CreateServiceSlug(service);
             string searchPath = Path.Combine(StoreRoot, serviceSlug);
-            bool anyAccount = string.IsNullOrWhiteSpace(account);
+
+            // Credentials without an account are stored with an empty account name
+            account ??= string.Empty;
 
             if (!FileSystem.DirectoryExists(searchPath))
             {
@@ -150,7 +197,7 @@ namespace GitCredentialManager
                     // Validate the credential metadata also matches our search
                     if (TryDeserializeCredential(fullPath, out FileCredential credential) &&
                         StringComparer.OrdinalIgnoreCase.Equals(service, credential.Service) &&
-                        (anyAccount || StringComparer.OrdinalIgnoreCase.Equals(account, credential.Account)))
+                        (anyAccount || StringComparer.OrdinalIgnoreCase.Equals(account, credential.Account ?? string.Empty)))
                     {
                         yield return credential;
                     }
