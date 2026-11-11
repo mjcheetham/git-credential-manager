@@ -211,7 +211,7 @@ systems and platforms.
 
 Component|Description
 -|-
-CredentialStore|Stores and retrieves `ICredential` objects through the configured backend, including native OS stores and file-backed implementations. See [credential stores][credential-stores].
+CredentialStore|Stores and retrieves credentials and their metadata through the configured backend, including native OS stores and file-backed implementations. See [credential storage](#credential-storage) and [credential stores][credential-stores].
 Settings|Abstraction over all GCM settings.
 Streams|Standard input, output, and error streams connected to the parent process (typically Git). During credential operations, stdin/stdout are reserved for the Git protocol.
 Console|User-facing messages on stderr and interactive Spectre.Console prompts on the controlling terminal. Only interactive prompts require a TTY.

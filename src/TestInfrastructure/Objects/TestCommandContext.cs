@@ -63,7 +63,7 @@ namespace GitCredentialManager.Tests.Objects
 
         IFileSystem ICommandContext.FileSystem => FileSystem;
 
-        ICredentialStore ICommandContext.CredentialStore => CredentialStore;
+        ICredentialStore2 ICommandContext.CredentialStore => CredentialStore;
 
         IHttpClientFactory ICommandContext.HttpClientFactory => HttpClientFactory;
 

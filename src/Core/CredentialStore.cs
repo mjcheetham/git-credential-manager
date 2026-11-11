@@ -10,11 +10,11 @@ using StoreNames = GitCredentialManager.Constants.CredentialStoreNames;
 
 namespace GitCredentialManager
 {
-    public class CredentialStore : ICredentialStore
+    public class CredentialStore : ICredentialStore2
     {
         private readonly ICommandContext _context;
 
-        private ICredentialStore _backingStore;
+        private ICredentialStore2 _backingStore;
 
         public CredentialStore(ICommandContext context)
         {
@@ -42,32 +42,34 @@ namespace GitCredentialManager
             }
         }
 
-        public IList<string> GetAccounts(string service)
-        {
-            using var _  = Trace2.StartRegion("cred_store", "get_accounts");
-            EnsureBackingStore();
-            return _backingStore.GetAccounts(service);
-        }
-
-        public ICredential Get(string service, string account)
+        public StoredCredential Get(CredentialKey key)
         {
             using var _  = Trace2.StartRegion("cred_store", "get");
             EnsureBackingStore();
-            return _backingStore.Get(service, account);
+            return _backingStore.Get(key);
         }
 
-        public void AddOrUpdate(string service, string account, string secret)
+        public IReadOnlyList<CredentialKey> Find(string service, string account = null)
+        {
+            using var _  = Trace2.StartRegion("cred_store", "get_accounts");
+            EnsureArgument.NotNullOrWhiteSpace(service, nameof(service));
+            EnsureBackingStore();
+            return _backingStore.Find(service, account);
+        }
+
+        public void Set(StoredCredential credential)
         {
             using var _  = Trace2.StartRegion("cred_store", "add");
+            EnsureArgument.NotNull(credential, nameof(credential));
             EnsureBackingStore();
-            _backingStore.AddOrUpdate(service, account, secret);
+            _backingStore.Set(credential);
         }
 
-        public bool Remove(string service, string account)
+        public bool Remove(CredentialKey key)
         {
             using var _  = Trace2.StartRegion("cred_store", "remove");
             EnsureBackingStore();
-            return _backingStore.Remove(service, account);
+            return _backingStore.Remove(key);
         }
 
         #endregion

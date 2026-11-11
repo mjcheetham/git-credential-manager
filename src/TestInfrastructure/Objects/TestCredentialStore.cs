@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace GitCredentialManager.Tests.Objects
 {
-    public class TestCredentialStore : ICredentialStore
+    public class TestCredentialStore : ICredentialStore2
     {
         private readonly IDictionary<(string service, string account), TestCredential> _store;
 
@@ -18,55 +18,50 @@ namespace GitCredentialManager.Tests.Objects
         
         public int MaxCredentialSize { get; set; }
 
-        public IList<string> GetAccounts(string service)
+        StoredCredential ICredentialStore2.Get(CredentialKey key)
         {
-            return Query(service, null).Select(x => x.Account).Distinct().ToList();
+            return _store.TryGetValue((key.Service, key.Account), out TestCredential credential)
+                ? new StoredCredential(key, credential.Password, credential.Metadata)
+                : null;
         }
 
-        ICredential ICredentialStore.Get(string service, string account)
+        IReadOnlyList<CredentialKey> ICredentialStore2.Find(string service, string account)
         {
-            return TryGet(service, account, out TestCredential credential) ? credential : null;
+            return Query(service, account).Select(x => new CredentialKey(x.Key.service, x.Key.account)).Distinct().ToList();
         }
 
-        void ICredentialStore.AddOrUpdate(string service, string account, string secret)
+        void ICredentialStore2.Set(StoredCredential credential)
         {
-            Add(service, account, secret);
+            Add(credential.Key.Service, credential.Key.Account, credential.Secret, credential.Metadata);
         }
 
-        bool ICredentialStore.Remove(string service, string account)
+        bool ICredentialStore2.Remove(CredentialKey key)
         {
-            foreach (var key in _store.Keys)
-            {
-                if ((service == null || key.service == service) &&
-                    (account == null || key.account == account))
-                {
-                    _store.Remove(key);
-                    return true;
-                }
-            }
-
-            return false;
+            return _store.Remove((key.Service, key.Account));
         }
 
         #endregion
 
         public int Count => _store.Count;
 
+        /// <summary>
+        /// Get the first credential stored for a service and, if not null or empty, an account.
+        /// </summary>
         public bool TryGet(string service, string account, out TestCredential credential)
         {
-            credential = Query(service, account).FirstOrDefault();
+            credential = Query(service, account).Select(x => x.Value).FirstOrDefault();
             return credential != null;
         }
 
         public void Add(string service, TestCredential credential)
         {
-            _store[(service, credential.Account)] = credential;
+            _store[(service, NormalizeAccount(credential.Account))] = credential;
         }
 
-        public TestCredential Add(string service, string account, string secret)
+        public TestCredential Add(string service, string account, string secret, CredentialMetadata metadata = null)
         {
-            var credential = new TestCredential(service, account, secret);
-            _store[(service, account)] = credential;
+            var credential = new TestCredential(service, account, secret, metadata);
+            _store[(service, NormalizeAccount(account))] = credential;
             return credential;
         }
 
@@ -75,7 +70,10 @@ namespace GitCredentialManager.Tests.Objects
             return TryGet(service, account, out _);
         }
 
-        private IEnumerable<TestCredential> Query(string service, string account)
+        // Match CredentialKey, which treats an empty account as no account
+        private static string NormalizeAccount(string account) => string.IsNullOrWhiteSpace(account) ? null : account;
+
+        private IEnumerable<KeyValuePair<(string service, string account), TestCredential>> Query(string service, string account)
         {
             if (string.IsNullOrWhiteSpace(account))
             {
@@ -84,26 +82,26 @@ namespace GitCredentialManager.Tests.Objects
                 {
                     if (kvp.Key.service == service)
                     {
-                        yield return kvp.Value;
+                        yield return kvp;
                     }
                 }
             }
-
-            // Find the specific credential matching both service and credential
-            if (_store.TryGetValue((service, account), out var credential))
+            else if (_store.TryGetValue((service, account), out var credential))
             {
-                yield return credential;
+                // Find the specific credential matching both service and credential
+                yield return new KeyValuePair<(string, string), TestCredential>((service, account), credential);
             }
         }
     }
 
     public class TestCredential : ICredential
     {
-        public TestCredential(string service, string account, string password)
+        public TestCredential(string service, string account, string password, CredentialMetadata metadata = null)
         {
             Service = service;
             Account = account;
             Password = password;
+            Metadata = metadata ?? CredentialMetadata.Empty;
         }
 
         public string Service { get; }
@@ -111,5 +109,7 @@ namespace GitCredentialManager.Tests.Objects
         public string Account { get; }
 
         public string Password { get; }
+
+        public CredentialMetadata Metadata { get; }
     }
 }
