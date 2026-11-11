@@ -296,6 +296,13 @@ namespace GitCredentialManager
 
             // Try to use a refresh token if we have one
             StoredCredential refreshToken = _context.CredentialStore.FindFirst(refreshService, userName);
+            if (refreshToken?.Metadata.IsExpired == true)
+            {
+                // Don't attempt to use a refresh token we know has expired; fall through to an interactive flow
+                _context.Trace.WriteLine("Stored refresh token has expired.");
+                refreshToken = null;
+            }
+
             if (refreshToken != null)
             {
                 try
