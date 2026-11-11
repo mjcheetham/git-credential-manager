@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using GitCredentialManager.Tests.Objects;
@@ -151,6 +152,32 @@ namespace GitCredentialManager.Tests
             Assert.True(context.CredentialStore.TryGet(testService, testUserName, out var storedCredential));
             Assert.Equal(testUserName, storedCredential.Account);
             Assert.Equal(testPasswordNew, storedCredential.Password);
+        }
+
+        [Fact]
+        public async Task HostProvider_StoreCredentialAsync_ExistingCredential_SameSecret_KeepsMetadata()
+        {
+            const string testUserName = "john.doe";
+            const string testPassword = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            const string testService = "https://example.com";
+            var metadata = new CredentialMetadata { ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(1784986200) };
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "example.com",
+                ["username"] = testUserName,
+                ["password"] = testPassword, // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            });
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add(testService, testUserName, testPassword, metadata);
+            var provider = new TestHostProvider(context);
+
+            await ((IHostProvider) provider).StoreCredentialAsync(request);
+
+            Assert.True(context.CredentialStore.TryGet(testService, testUserName, out var storedCredential));
+            Assert.Equal(testPassword, storedCredential.Password);
+            Assert.Equal(metadata, storedCredential.Metadata);
         }
 
         #endregion
