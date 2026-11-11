@@ -71,7 +71,7 @@ namespace GitCredentialManager
             string service = GetServiceName(request);
             _context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={request.UserName}...");
 
-            ICredential credential = _context.CredentialStore.Get(service, request.UserName);
+            StoredCredential credential = _context.CredentialStore.FindFirst(service, request.UserName);
             if (credential == null)
             {
                 _context.Trace.WriteLine("No existing credentials found.");
@@ -85,7 +85,7 @@ namespace GitCredentialManager
                 _context.Trace.WriteLine("Existing credential found.");
             }
 
-            return new GitResponse(credential);
+            return new GitResponse(new GitCredential(credential.Key.Account, credential.Secret));
         }
 
         public Task StoreCredentialAsync(GitRequest request)
@@ -103,7 +103,7 @@ namespace GitCredentialManager
             {
                 // Add or update the credential in the store.
                 _context.Trace.WriteLine($"Storing credential with service={service} account={request.UserName}...");
-                _context.CredentialStore.AddOrUpdate(service, request.UserName, request.Password);
+                _context.CredentialStore.SetPreservingMetadata(new CredentialKey(service, request.UserName), request.Password);
                 _context.Trace.WriteLine("Credential was successfully stored.");
             }
 
@@ -116,7 +116,9 @@ namespace GitCredentialManager
 
             // Try to locate an existing credential
             _context.Trace.WriteLine($"Erasing stored credential in store with service={service} account={request.UserName}...");
-            if (_context.CredentialStore.Remove(service, request.UserName))
+            // Without a user name, erase whichever credential is stored for the service
+            IReadOnlyList<CredentialKey> keys = _context.CredentialStore.Find(service, request.UserName);
+            if (keys.Count > 0 && _context.CredentialStore.Remove(keys[0]))
             {
                 _context.Trace.WriteLine("Credential was successfully erased.");
             }
@@ -293,17 +295,17 @@ namespace GitCredentialManager
                 .Uri.AbsoluteUri.TrimEnd('/');
 
             // Try to use a refresh token if we have one
-            ICredential refreshToken = _context.CredentialStore.Get(refreshService, userName);
+            StoredCredential refreshToken = _context.CredentialStore.FindFirst(refreshService, userName);
             if (refreshToken != null)
             {
                 try
                 {
-                    var refreshResult = await client.GetTokenByRefreshTokenAsync(refreshToken.Password, CancellationToken.None);
+                    var refreshResult = await client.GetTokenByRefreshTokenAsync(refreshToken.Secret, CancellationToken.None);
 
                     // Store new refresh token if we have been given one
                     if (!string.IsNullOrWhiteSpace(refreshResult.RefreshToken))
                     {
-                        _context.CredentialStore.AddOrUpdate(refreshService, refreshToken.Account, refreshResult.RefreshToken);
+                        _context.CredentialStore.Set(new StoredCredential(refreshToken.Key, refreshResult.RefreshToken));
                     }
 
                     // Return the new access token
@@ -363,7 +365,7 @@ namespace GitCredentialManager
             // Store the refresh token if we have one
             if (!string.IsNullOrWhiteSpace(tokenResult.RefreshToken))
             {
-                _context.CredentialStore.AddOrUpdate(refreshService, oauthUser, tokenResult.RefreshToken);
+                _context.CredentialStore.Set(new StoredCredential(new CredentialKey(refreshService, oauthUser), tokenResult.RefreshToken));
             }
 
             return new GitCredential(oauthUser, tokenResult.AccessToken);
