@@ -228,6 +228,42 @@ when writing tests. Do not use Git's protocol streams for user-facing prompts
 or diagnostics. Authentication components check the interaction, GUI, and
 terminal-prompt settings before requesting user input.
 
+### Credential storage
+
+`ICredentialStore2` stores credentials identified by a `CredentialKey`: a
+service and an optional account. A `StoredCredential` record holds the key,
+the secret, and `CredentialMetadata`; credentials without metadata have
+`CredentialMetadata.Empty`, never null. `StoredCredential` does not include the
+secret in its string representation.
+
+Only `Find` matches credentials for any account, and it returns keys without
+secrets. `Get`, `Set`, and `Remove` each address exactly one credential, so a
+key without an account only matches a credential stored without one. To use
+whichever credential is stored for a service, find its key first:
+
+```csharp
+IReadOnlyList<CredentialKey> keys = store.Find(service);
+StoredCredential credential = keys.Count > 0 ? store.Get(keys[0]) : null;
+```
+
+`Set` replaces both the secret and the metadata of a credential with the same
+key. Callers that want to keep existing metadata must read it first and pass it
+back.
+
+`CredentialMetadata` is an immutable record. Its `ExpiresAt` property records
+when the credential expires; null means the expiry is unknown. Use a `with`
+expression to derive modified metadata or credentials.
+
+Metadata must not contain secrets, and stores do not always protect it as
+strongly as the secret. Each store owns its attribute names and serialization,
+as described in [credential stores][credential-stores]. Stores persist expiry
+but do not filter expired credentials or refresh them; providers decide whether
+a credential is usable.
+
+Stored credentials are not handed to Git directly. Providers return an
+`ICredential`, such as `GitCredential`, built from the stored account and
+secret.
+
 ## Error handling and tracing
 
 GCM operates a 'fail fast' approach to unrecoverable errors. This usually
