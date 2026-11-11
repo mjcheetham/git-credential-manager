@@ -804,7 +804,51 @@ namespace Atlassian.Bitbucket.Tests
             var serviceName = GetAccessTokenServiceName(request);
             VerifyOAuthTokenStored(context, serviceName, username, password);
         }
-        
+
+        [Theory]
+        [InlineData(0)]
+        [InlineData(MOCK_MAX_CREDENTIAL_SIZE)]
+        public async Task BitbucketHostProvider_StoreCredentialAsync_SameSecret_KeepsMetadata(int maxCredentialSize)
+        {
+            const string username = "jsquire";
+            var metadata = new CredentialMetadata { ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(1784986200) };
+            var request = MockInput("https", BITBUCKET_DOT_ORG_HOST, username, COMBINED_CHUNKED_ACCESS_TOKEN);
+            var context = new TestCommandContext();
+            context.CredentialStore.MaxCredentialSize = maxCredentialSize;
+            var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
+            await provider.StoreCredentialAsync(request);
+            string serviceName = GetAccessTokenServiceName(request);
+            context.CredentialStore.TryGet(serviceName, username, out var stored);
+            context.CredentialStore.Add(serviceName, username, stored.Password, metadata);
+
+            await provider.StoreCredentialAsync(request);
+
+            Assert.True(context.CredentialStore.TryGet(serviceName, username, out var credential));
+            Assert.Equal(metadata, credential.Metadata);
+        }
+
+        [Fact]
+        public async Task BitbucketHostProvider_StoreCredentialAsync_ChunkedDifferentSecret_ClearsMetadata()
+        {
+            const string username = "jsquire";
+            // Different secret that splits into the same number of chunks, so has the same chunk descriptor
+            const string newAccessToken = "at-98765432";
+            var metadata = new CredentialMetadata { ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(1784986200) };
+            var oldRequest = MockInput("https", BITBUCKET_DOT_ORG_HOST, username, COMBINED_CHUNKED_ACCESS_TOKEN);
+            var newRequest = MockInput("https", BITBUCKET_DOT_ORG_HOST, username, newAccessToken);
+            var context = new TestCommandContext();
+            context.CredentialStore.MaxCredentialSize = MOCK_MAX_CREDENTIAL_SIZE;
+            var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(oldRequest, bitbucketApi).Object);
+            await provider.StoreCredentialAsync(oldRequest);
+            string serviceName = GetAccessTokenServiceName(oldRequest);
+            context.CredentialStore.Add(serviceName, username, MOCK_CHUNKED_ACCESS_TOKEN_DESCRIPTOR, metadata);
+
+            await provider.StoreCredentialAsync(newRequest);
+
+            VerifyOAuthTokenStored(context, serviceName, username, MOCK_CHUNKED_ACCESS_TOKEN_DESCRIPTOR);
+            Assert.True(context.CredentialStore.TryGet(serviceName, username, out var credential));
+            Assert.Equal(CredentialMetadata.Empty, credential.Metadata);
+        }
 
         [Theory]
         [InlineData("https", DC_SERVER_HOST, "jsquire", "password")]

@@ -117,14 +117,15 @@ namespace Atlassian.Bitbucket
             Uri remoteUri = request.GetRemoteUri();
             string credentialService = GetServiceName(remoteUri);
             _context.Trace.WriteLine($"Look for existing credentials under {credentialService} ...");
-            ICredential credentials = GetCredential(credentialService, request.UserName);
+            StoredCredential storedCredentials = GetCredential(credentialService, request.UserName);
 
-            if (credentials == null)
+            if (storedCredentials == null)
             {
                 _context.Trace.WriteLine("No stored credentials found");
                 return null;
             }
 
+            ICredential credentials = new GitCredential(storedCredentials.Key.Account, storedCredentials.Secret);
             _context.Trace.WriteLineSecrets($"Found stored credentials: {credentials.Account}/{{0}}", new object[] { credentials.Password });
 
             // Check credentials are still valid
@@ -153,7 +154,7 @@ namespace Atlassian.Bitbucket
             // * When request.UserName is set the refresh token must exist under the provided username in the credential
             // store.
             // If a refresh token is unable to be found a full OAuth authorization flow is initiated.
-            ICredential refreshToken = SupportsOAuth(authModes)
+            StoredCredential refreshToken = SupportsOAuth(authModes)
                 ? GetCredential(refreshTokenService, request.UserName)
                 : null;
 
@@ -192,7 +193,7 @@ namespace Atlassian.Bitbucket
             }
             else
             {
-                _context.Trace.WriteLineSecrets("Found stored refresh token: {0}", new object[] { refreshToken });
+                _context.Trace.WriteLineSecrets("Found stored refresh token: {0}", new object[] { refreshToken.Secret });
 
                 try
                 {
@@ -213,10 +214,10 @@ namespace Atlassian.Bitbucket
             return await GetOAuthCredentialsViaInteractiveBrowserFlow(request);
         }
 
-        private async Task<ICredential> GetOAuthCredentialsViaRefreshFlow(GitRequest request, ICredential refreshToken)
+        private async Task<ICredential> GetOAuthCredentialsViaRefreshFlow(GitRequest request, StoredCredential refreshToken)
         {
             _context.Trace.WriteLine("Refreshing OAuth credentials using refresh token...");
-            OAuth2TokenResult refreshResult = await _bitbucketAuth.RefreshOAuthCredentialsAsync(request, refreshToken.Password);
+            OAuth2TokenResult refreshResult = await _bitbucketAuth.RefreshOAuthCredentialsAsync(request, refreshToken.Secret);
             return await ResolveCredsAndStoreRefreshToken(request, refreshResult);
         }
 
@@ -243,7 +244,7 @@ namespace Atlassian.Bitbucket
 
             // Store the new refresh token in the credential store against the resolved Bitbucket username
             _context.Trace.WriteLine($"Storing new refresh token against user: '{bitbucketUsername}'...");
-            AddOrUpdateCredential(refreshTokenService, bitbucketUsername, tokenSet.RefreshToken);
+            SetCredential(new CredentialKey(refreshTokenService, bitbucketUsername), tokenSet.RefreshToken);
             _context.Trace.WriteLine("Refresh token was successfully stored.");
 
             // Return the new AT as the credential
@@ -334,8 +335,17 @@ namespace Atlassian.Bitbucket
             Uri remoteUri = request.GetRemoteUri();
             string service = GetServiceName(remoteUri);
 
+            // Git only passes back the credential it was given, so keep any metadata stored with an unchanged
+            // credential. Compare against the reassembled secret, as chunk descriptors alone can match even
+            // when the secret has changed.
+            var key = new CredentialKey(service, request.UserName);
+            StoredCredential existing = GetCredential(service, request.UserName);
+            CredentialMetadata metadata = existing?.Key == key && StringComparer.Ordinal.Equals(existing.Secret, request.Password)
+                ? existing.Metadata
+                : null;
+
             _context.Trace.WriteLine("Storing credential...");
-            AddOrUpdateCredential(service, request.UserName, request.Password);
+            SetCredential(key, request.Password, metadata);
             _context.Trace.WriteLine("Credential was successfully stored.");
             return Task.CompletedTask;
         }
@@ -348,8 +358,10 @@ namespace Atlassian.Bitbucket
             Uri remoteUri = request.GetRemoteUri();
             string service = GetServiceName(remoteUri);
 
+            // Without a user name, erase whichever credential is stored for the service
             _context.Trace.WriteLine("Erasing credential...");
-            if (_context.CredentialStore.Remove(service, request.UserName))
+            IReadOnlyList<CredentialKey> keys = _context.CredentialStore.Find(service, request.UserName);
+            if (keys.Count > 0 && _context.CredentialStore.Remove(keys[0]))
             {
                 _context.Trace.WriteLine("Credential was successfully erased.");
             }
@@ -451,8 +463,11 @@ namespace Atlassian.Bitbucket
             return true;
         }
 
-        private void AddOrUpdateCredential(string service, string account, string secret)
+        private void SetCredential(CredentialKey key, string secret, CredentialMetadata metadata = null)
         {
+            string service = key.Service;
+            string account = key.Account;
+
             if (SecretRequiresChunking(secret, out var chunkSize))
             {
                 var chunks = secret
@@ -473,12 +488,12 @@ namespace Atlassian.Bitbucket
                     _context.Trace.WriteLineSecrets(
                         $"Storing chunk for service: {chunkService} and account: {chunkAccount}: {{0}}",
                         new object[] { secretChunk });
-                    _context.CredentialStore.AddOrUpdate(chunkService, chunkAccount, secretChunk);
+                    _context.CredentialStore.Set(new StoredCredential(new CredentialKey(chunkService, chunkAccount), secretChunk));
                 }
                 // When using the chunking implementation we store a chunk descriptor against the account in the usual
                 // service. This allows us to identify (on get) that we've stored chunks, and the number of chunks to
-                // query.
-                _context.CredentialStore.AddOrUpdate(service, account, GetChunkSecret(chunkCount));
+                // query. Metadata for the whole credential is stored with the descriptor.
+                _context.CredentialStore.Set(new StoredCredential(key, GetChunkSecret(chunkCount), metadata));
             }
             else
             {
@@ -488,7 +503,7 @@ namespace Atlassian.Bitbucket
                 );
                 // In the case we only have a single chunk (which will be the case on all credential managers except
                 // `wincredman`) we can store the secret as the old code used to.
-                _context.CredentialStore.AddOrUpdate(service, account, secret);
+                _context.CredentialStore.Set(new StoredCredential(key, secret, metadata));
             }
         }
 
@@ -519,19 +534,19 @@ namespace Atlassian.Bitbucket
         }
         
         
-        private ICredential GetCredential(string service, string account)
+        private StoredCredential GetCredential(string service, string account)
         {   
-            var credential = _context.CredentialStore.Get(service, account);
+            StoredCredential credential = _context.CredentialStore.FindFirst(service, account);
             if (credential is null)
             {
                 return null;
             }
             
-            if (SecretRequiresDechunking(credential.Password, out var chunkCount))
+            if (SecretRequiresDechunking(credential.Secret, out var chunkCount))
             {
                 // We will be using the Account stored in the located credential to build the chunk identifiers and
                 // return the stitched together final Credential.
-                var credentialAccount = credential.Account;
+                var credentialAccount = credential.Key.Account;
                 _context.Trace.WriteLine(
                     $"Found chunked credential (chunks={chunkCount}) for service: {service} and account: {account} " +
                     $" stored against account: {credentialAccount}"
@@ -543,23 +558,24 @@ namespace Atlassian.Bitbucket
                 {  
                     // Build the chunk identifier using the username stored in the chunk descriptor we looked up.
                     var chunkAccount = GetChunkAccount(credentialAccount, index);
-                    var chunk = _context.CredentialStore.Get(chunkedService, chunkAccount);
+                    var chunk = _context.CredentialStore.Get(new CredentialKey(chunkedService, chunkAccount));
                     if (chunk == null){
                         _context.Trace.WriteLine($"Chunk {index} was unexpectedly null");
                         return null;
                     }
                     _context.Trace.WriteLineSecrets(
                         $"Found chunk for service: {chunkedService} and account: {chunkAccount}: {{0}}", 
-                        new object[] { chunk.Password }
+                        new object[] { chunk.Secret }
                     );
-                    chunkedPasswordBuilder.Append(chunk.Password);
+                    chunkedPasswordBuilder.Append(chunk.Secret);
                 }
-                // We've stitched together all the chunks into a singular secret - return it with the original account.
-                return new GitCredential(credentialAccount, chunkedPasswordBuilder.ToString());
+                // We've stitched together all the chunks into a singular secret - return it with the key and
+                // metadata stored with the chunk descriptor.
+                return credential with { Secret = chunkedPasswordBuilder.ToString() };
             }
             _context.Trace.WriteLine(
                 $"Found non-chunked credential for service: {service} and account: {account} stored against " +
-                $"account: {credential.Account}"
+                $"account: {credential.Key.Account}"
             );
             return credential;
         }
