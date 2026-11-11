@@ -59,7 +59,7 @@ namespace GitCredentialManager
         /// <summary>
         /// Secure credential storage.
         /// </summary>
-        ICredentialStore2 CredentialStore { get; }
+        ICredentialStore CredentialStore { get; }
 
         /// <summary>
         /// Factory for creating new <see cref="System.Net.Http.HttpClient"/> instances.
@@ -204,7 +204,7 @@ namespace GitCredentialManager
 
         public IFileSystem FileSystem { get; }
 
-        public ICredentialStore2 CredentialStore { get; }
+        public ICredentialStore CredentialStore { get; }
 
         public IHttpClientFactory HttpClientFactory { get; }
 

@@ -7,7 +7,7 @@ using System.Text;
 
 namespace GitCredentialManager
 {
-    public class PlaintextCredentialStore : ICredentialStore2
+    public class PlaintextCredentialStore : ICredentialStore
     {
         protected const string ServiceAttribute = "service";
         protected const string AccountAttribute = "account";

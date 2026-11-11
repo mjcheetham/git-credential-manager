@@ -85,7 +85,7 @@ namespace GitCredentialManager.Tests
         public void PlaintextCredentialStore_MaxCredentialSize_ReturnsZero()
         {
             var fs = new TestFileSystem();
-            ICredentialStore2 credentialStore = new PlaintextCredentialStore(fs, StoreRoot, TestNamespace);
+            ICredentialStore credentialStore = new PlaintextCredentialStore(fs, StoreRoot, TestNamespace);
             Assert.Equal(0, credentialStore.MaxCredentialSize);
         }
     }

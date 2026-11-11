@@ -5,7 +5,7 @@ using Xunit;
 namespace GitCredentialManager.Tests;
 
 /// <summary>
-/// Behaviour shared by all <see cref="ICredentialStore2"/> implementations.
+/// Behaviour shared by all <see cref="ICredentialStore"/> implementations.
 /// </summary>
 public abstract class CredentialStoreTests
 {
@@ -23,7 +23,7 @@ public abstract class CredentialStoreTests
     private static string CreateService() => $"https://example.com/{Guid.NewGuid():N}";
     private static string CreateSecret() => Guid.NewGuid().ToString("N");
 
-    protected static void ReadWriteDelete(ICredentialStore2 store)
+    protected static void ReadWriteDelete(ICredentialStore store)
     {
         var key = new CredentialKey(CreateService(), "john.doe");
         string secret = CreateSecret();
@@ -52,7 +52,7 @@ public abstract class CredentialStoreTests
         }
     }
 
-    protected static void AccountMatching(ICredentialStore2 store)
+    protected static void AccountMatching(ICredentialStore store)
     {
         string service = CreateService();
         var alice = new CredentialKey(service, "alice");
@@ -101,7 +101,7 @@ public abstract class CredentialStoreTests
         }
     }
 
-    protected static void MetadataLifecycle(ICredentialStore2 store)
+    protected static void MetadataLifecycle(ICredentialStore store)
     {
         string service = CreateService();
         var alice = new CredentialKey(service, "alice");

@@ -8,7 +8,7 @@ using GitCredentialManager.Interop.Windows.Native;
 
 namespace GitCredentialManager.Interop.Windows
 {
-    public class WindowsCredentialManager : ICredentialStore2
+    public class WindowsCredentialManager : ICredentialStore
     {
         internal const string TargetNameLegacyGenericPrefix = "LegacyGeneric:target=";
         private const string ExpiresAtAttribute = "GitCredentialManager_ExpiresAt";

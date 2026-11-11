@@ -175,7 +175,7 @@ namespace GitCredentialManager.Tests.Interop.Posix
             var gpg = new TestGpg(fs);
             string storeRoot = InitializePasswordStore(fs, gpg);
 
-            ICredentialStore2 credentialStore = new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
+            ICredentialStore credentialStore = new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
             Assert.Equal(0, credentialStore.MaxCredentialSize);
         }
 

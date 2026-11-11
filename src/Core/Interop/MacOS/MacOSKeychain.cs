@@ -12,7 +12,7 @@ using static GitCredentialManager.Interop.MacOS.Native.SecurityFramework;
 
 namespace GitCredentialManager.Interop.MacOS
 {
-    public class MacOSKeychain : ICredentialStore2
+    public class MacOSKeychain : ICredentialStore
     {
         private const string ExpiresAtAttribute = "expires_at";
 

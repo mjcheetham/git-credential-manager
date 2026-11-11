@@ -94,7 +94,7 @@ namespace GitCredentialManager.Tests.Interop.Linux
         [LinuxFact]
         public void SecretServiceCollection_MaxCredentialSize_ReturnsZero()
         {
-            ICredentialStore2 credentialStore = new SecretServiceCollection(TestNamespace);
+            ICredentialStore credentialStore = new SecretServiceCollection(TestNamespace);
             Assert.Equal(0, credentialStore.MaxCredentialSize);
         }
     }

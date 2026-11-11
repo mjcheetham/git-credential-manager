@@ -10,11 +10,11 @@ using StoreNames = GitCredentialManager.Constants.CredentialStoreNames;
 
 namespace GitCredentialManager
 {
-    public class CredentialStore : ICredentialStore2
+    public class CredentialStore : ICredentialStore
     {
         private readonly ICommandContext _context;
 
-        private ICredentialStore2 _backingStore;
+        private ICredentialStore _backingStore;
 
         public CredentialStore(ICommandContext context)
         {

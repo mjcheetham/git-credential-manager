@@ -3,7 +3,7 @@ using System.Linq;
 
 namespace GitCredentialManager.Tests.Objects
 {
-    public class TestCredentialStore : ICredentialStore2
+    public class TestCredentialStore : ICredentialStore
     {
         private readonly IDictionary<(string service, string account), TestCredential> _store;
 
@@ -18,24 +18,24 @@ namespace GitCredentialManager.Tests.Objects
         
         public int MaxCredentialSize { get; set; }
 
-        StoredCredential ICredentialStore2.Get(CredentialKey key)
+        StoredCredential ICredentialStore.Get(CredentialKey key)
         {
             return _store.TryGetValue((key.Service, key.Account), out TestCredential credential)
                 ? new StoredCredential(key, credential.Password, credential.Metadata)
                 : null;
         }
 
-        IReadOnlyList<CredentialKey> ICredentialStore2.Find(string service, string account)
+        IReadOnlyList<CredentialKey> ICredentialStore.Find(string service, string account)
         {
             return Query(service, account).Select(x => new CredentialKey(x.Key.service, x.Key.account)).Distinct().ToList();
         }
 
-        void ICredentialStore2.Set(StoredCredential credential)
+        void ICredentialStore.Set(StoredCredential credential)
         {
             Add(credential.Key.Service, credential.Key.Account, credential.Secret, credential.Metadata);
         }
 
-        bool ICredentialStore2.Remove(CredentialKey key)
+        bool ICredentialStore.Remove(CredentialKey key)
         {
             return _store.Remove((key.Service, key.Account));
         }

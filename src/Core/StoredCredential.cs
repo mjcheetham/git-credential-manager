@@ -3,7 +3,7 @@ using System.Text;
 namespace GitCredentialManager;
 
 /// <summary>
-/// A credential held in an <see cref="ICredentialStore2"/>.
+/// A credential held in an <see cref="ICredentialStore"/>.
 /// </summary>
 /// <param name="Key">Service and account that identify the credential.</param>
 /// <param name="Secret">Secret value.</param>

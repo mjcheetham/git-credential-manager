@@ -1,7 +1,7 @@
 namespace GitCredentialManager;
 
 /// <summary>
-/// Identifies a credential in an <see cref="ICredentialStore2"/>.
+/// Identifies a credential in an <see cref="ICredentialStore"/>.
 /// </summary>
 public readonly record struct CredentialKey
 {

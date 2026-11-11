@@ -31,7 +31,7 @@ namespace GitCredentialManager.Tests.Interop.MacOS
         [MacOSFact]
         public void MacOSKeychain_MaxCredentialSize_ReturnsZero()
         {
-            ICredentialStore2 credentialStore = new MacOSKeychain(TestNamespace);
+            ICredentialStore credentialStore = new MacOSKeychain(TestNamespace);
             Assert.Equal(0, credentialStore.MaxCredentialSize);
         }
 

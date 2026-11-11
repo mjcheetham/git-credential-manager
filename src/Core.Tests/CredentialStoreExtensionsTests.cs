@@ -20,7 +20,7 @@ public class CredentialStoreExtensionsTests
     [Fact]
     public void CredentialStoreExtensions_FindFirst_NoAccount_ReturnsCredentialForAnyAccount()
     {
-        ICredentialStore2 store = new TestCredentialStore();
+        ICredentialStore store = new TestCredentialStore();
         store.Set(new StoredCredential(Key, OldPassword, Metadata));
 
         StoredCredential credential = store.FindFirst(Service);
@@ -34,7 +34,7 @@ public class CredentialStoreExtensionsTests
     [Fact]
     public void CredentialStoreExtensions_FindFirst_OtherAccount_ReturnsNull()
     {
-        ICredentialStore2 store = new TestCredentialStore();
+        ICredentialStore store = new TestCredentialStore();
         store.Set(new StoredCredential(Key, OldPassword));
 
         Assert.Null(store.FindFirst(Service, "jane.doe"));
@@ -43,7 +43,7 @@ public class CredentialStoreExtensionsTests
     [Fact]
     public void CredentialStoreExtensions_SetPreservingMetadata_SameSecret_KeepsMetadata()
     {
-        ICredentialStore2 store = new TestCredentialStore();
+        ICredentialStore store = new TestCredentialStore();
         store.Set(new StoredCredential(Key, OldPassword, Metadata));
 
         store.SetPreservingMetadata(Key, OldPassword);
@@ -54,7 +54,7 @@ public class CredentialStoreExtensionsTests
     [Fact]
     public void CredentialStoreExtensions_SetPreservingMetadata_DifferentSecret_ClearsMetadata()
     {
-        ICredentialStore2 store = new TestCredentialStore();
+        ICredentialStore store = new TestCredentialStore();
         store.Set(new StoredCredential(Key, OldPassword, Metadata));
 
         store.SetPreservingMetadata(Key, NewPassword);

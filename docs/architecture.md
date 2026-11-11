@@ -230,7 +230,7 @@ terminal-prompt settings before requesting user input.
 
 ### Credential storage
 
-`ICredentialStore2` stores credentials identified by a `CredentialKey`: a
+`ICredentialStore` stores credentials identified by a `CredentialKey`: a
 service and an optional account. A `StoredCredential` record holds the key,
 the secret, and `CredentialMetadata`; credentials without metadata have
 `CredentialMetadata.Empty`, never null. `StoredCredential` does not include the

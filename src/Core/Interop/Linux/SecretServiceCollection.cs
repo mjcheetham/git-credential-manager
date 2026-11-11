@@ -13,7 +13,7 @@ using static GitCredentialManager.Interop.Linux.Native.Libsecret.SecretSchemaFla
 
 namespace GitCredentialManager.Interop.Linux
 {
-    public class SecretServiceCollection : ICredentialStore2
+    public class SecretServiceCollection : ICredentialStore
     {
         private const string SchemaName = "com.microsoft.GitCredentialManager";
         private const string ServiceAttributeName = "service";

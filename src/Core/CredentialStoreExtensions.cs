@@ -11,7 +11,7 @@ public static class CredentialStoreExtensions
     /// <param name="service">Name of the service to match.</param>
     /// <param name="account">Account to match, or null to match a credential for any account.</param>
     /// <returns>First matching credential, or null if there is none.</returns>
-    public static StoredCredential FindFirst(this ICredentialStore2 store, string service, string account = null)
+    public static StoredCredential FindFirst(this ICredentialStore store, string service, string account = null)
     {
         foreach (CredentialKey key in store.Find(service, account))
         {
@@ -30,13 +30,13 @@ public static class CredentialStoreExtensions
     /// </summary>
     /// <remarks>
     /// Git asks for a credential to be stored after each successful use, passing back only what it was given.
-    /// GCM does not return metadata to Git, so storing on Git's behalf with <see cref="ICredentialStore2.Set"/>
+    /// GCM does not return metadata to Git, so storing on Git's behalf with <see cref="ICredentialStore.Set"/>
     /// alone would discard metadata, such as an expiry, every time a stored credential is used.
     /// </remarks>
     /// <param name="store">Credential store.</param>
     /// <param name="key">Key of the credential.</param>
     /// <param name="secret">Secret value to store.</param>
-    public static void SetPreservingMetadata(this ICredentialStore2 store, CredentialKey key, string secret)
+    public static void SetPreservingMetadata(this ICredentialStore store, CredentialKey key, string secret)
     {
         StoredCredential existing = store.Get(key);
         CredentialMetadata metadata = StringComparer.Ordinal.Equals(existing?.Secret, secret)

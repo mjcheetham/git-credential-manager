@@ -4,7 +4,7 @@ using System.Globalization;
 
 namespace GitCredentialManager
 {
-    public class CredentialCacheStore : ICredentialStore2
+    public class CredentialCacheStore : ICredentialStore
     {
         private const string PasswordExpiryKey = "password_expiry_utc";
 
