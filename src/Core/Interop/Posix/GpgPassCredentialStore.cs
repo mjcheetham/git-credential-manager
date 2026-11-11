@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 
 namespace GitCredentialManager.Interop.Posix
 {
@@ -68,12 +67,15 @@ namespace GitCredentialManager.Interop.Posix
                 IDictionary<string, string> attrs = attrReader.ReadDictionary(StringComparer.OrdinalIgnoreCase);
 
                 // Account is optional
-                attrs.TryGetValue("account", out string account);
+                attrs.TryGetValue(AccountAttribute, out string account);
+
+                // Metadata is optional
+                CredentialMetadata metadata = ReadMetadata(attrs);
 
                 // Service is required
-                if (attrs.TryGetValue("service", out string service))
+                if (attrs.TryGetValue(ServiceAttribute, out string service))
                 {
-                    credential = new FileCredential(path, service, account, password);
+                    credential = new FileCredential(path, service, account, password, metadata);
                     return true;
                 }
             }
@@ -86,10 +88,10 @@ namespace GitCredentialManager.Interop.Posix
         {
             string gpgId = GetGpgId(credential.FullPath);
 
-            var sb = new StringBuilder(credential.Password);
-            sb.AppendFormat("{1}service={0}{1}", credential.Service, Environment.NewLine);
-            sb.AppendFormat("account={0}{1}", credential.Account, Environment.NewLine);
-            string fileContents = sb.ToString();
+            using var writer = new StringWriter();
+            writer.WriteLine(credential.Password);
+            WriteAttributes(writer, credential);
+            string fileContents = writer.ToString();
 
             // Ensure the parent directory exists
             string parentDir = Path.GetDirectoryName(credential.FullPath);

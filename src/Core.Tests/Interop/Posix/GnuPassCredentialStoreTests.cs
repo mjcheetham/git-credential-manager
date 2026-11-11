@@ -7,12 +7,30 @@ using GitCredentialManager.Tests.Objects;
 
 namespace GitCredentialManager.Tests.Interop.Posix
 {
-    public class GnuPassCredentialStoreTests
+    public class GnuPassCredentialStoreTests : CredentialStoreTests
     {
         private const string TestNamespace = "git-test";
 
         [PosixFact]
         public void GnuPassCredentialStore_ReadWriteDelete()
+        {
+            ReadWriteDelete(CreateStore());
+        }
+
+        [PosixFact]
+        public void GnuPassCredentialStore_AccountMatching()
+        {
+            AccountMatching(CreateStore());
+        }
+
+        [PosixFact]
+        public void GnuPassCredentialStore_MetadataLifecycle()
+        {
+            MetadataLifecycle(CreateStore());
+        }
+
+        [PosixFact]
+        public void GnuPassCredentialStore_Set_WritesCredentialFile()
         {
             var fs = new TestFileSystem();
             var gpg = new TestGpg(fs);
@@ -36,54 +54,22 @@ namespace GitCredentialManager.Tests.Interop.Posix
             try
             {
                 // Write
-                collection.AddOrUpdate(service, userName, password);
+                collection.Set(new StoredCredential(new CredentialKey(service, userName), password));
 
                 // Read
-                ICredential outCredential = collection.Get(service, userName);
+                StoredCredential outCredential = collection.Get(new CredentialKey(service, userName));
 
                 Assert.NotNull(outCredential);
                 Assert.Equal(userName, userName);
-                Assert.Equal(password, outCredential.Password);
+                Assert.Equal(password, outCredential.Secret);
                 Assert.True(fs.Files.ContainsKey(expectedFilePath));
                 Assert.Equal(expectedFileBytes, fs.Files[expectedFilePath]);
             }
             finally
             {
                 // Ensure we clean up after ourselves even in case of 'get' failures
-                collection.Remove(service, userName);
+                collection.Remove(new CredentialKey(service, userName));
             }
-        }
-
-        [PosixFact]
-        public void GnuPassCredentialStore_Get_NotFound_ReturnsNull()
-        {
-            var fs = new TestFileSystem();
-            var gpg = new TestGpg(fs);
-            string storeRoot = InitializePasswordStore(fs, gpg);
-
-            var collection = new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            ICredential credential = collection.Get(service, null);
-            Assert.Null(credential);
-        }
-
-        [PosixFact]
-        public void GnuPassCredentialStore_Remove_NotFound_ReturnsFalse()
-        {
-            var fs = new TestFileSystem();
-            var gpg = new TestGpg(fs);
-            string storeRoot = InitializePasswordStore(fs, gpg);
-
-            var collection = new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            bool result = collection.Remove(service, account: null);
-            Assert.False(result);
         }
 
         [PosixFact]
@@ -116,19 +102,19 @@ namespace GitCredentialManager.Tests.Interop.Posix
             try
             {
                 // Write
-                collection.AddOrUpdate(service, userName, password);
+                collection.Set(new StoredCredential(new CredentialKey(service, userName), password));
 
                 // Read
-                ICredential outCredential = collection.Get(service, userName);
+                StoredCredential outCredential = collection.Get(new CredentialKey(service, userName));
 
                 Assert.NotNull(outCredential);
-                Assert.Equal(userName, outCredential.Account);
-                Assert.Equal(password, outCredential.Password);
+                Assert.Equal(userName, outCredential.Key.Account);
+                Assert.Equal(password, outCredential.Secret);
             }
             finally
             {
                 // Ensure we clean up after ourselves even in case of 'get' failures
-                collection.Remove(service, userName);
+                collection.Remove(new CredentialKey(service, userName));
             }
         }
 
@@ -168,17 +154,17 @@ namespace GitCredentialManager.Tests.Interop.Posix
             try
             {
                 // Write - should pick personal/.gpg-id (personalUserId), not work/.gpg-id (workUserId)
-                collection.AddOrUpdate(service, userName, password);
+                collection.Set(new StoredCredential(new CredentialKey(service, userName), password));
 
-                ICredential outCredential = collection.Get(service, userName);
+                StoredCredential outCredential = collection.Get(new CredentialKey(service, userName));
 
                 Assert.NotNull(outCredential);
-                Assert.Equal(userName, outCredential.Account);
-                Assert.Equal(password, outCredential.Password);
+                Assert.Equal(userName, outCredential.Key.Account);
+                Assert.Equal(password, outCredential.Secret);
             }
             finally
             {
-                collection.Remove(service, userName);
+                collection.Remove(new CredentialKey(service, userName));
             }
         }
         
@@ -189,8 +175,16 @@ namespace GitCredentialManager.Tests.Interop.Posix
             var gpg = new TestGpg(fs);
             string storeRoot = InitializePasswordStore(fs, gpg);
 
-            ICredentialStore credentialStore = new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
+            ICredentialStore2 credentialStore = new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
             Assert.Equal(0, credentialStore.MaxCredentialSize);
+        }
+
+        private static GpgPassCredentialStore CreateStore()
+        {
+            var fs = new TestFileSystem();
+            var gpg = new TestGpg(fs);
+            string storeRoot = InitializePasswordStore(fs, gpg);
+            return new GpgPassCredentialStore(fs, gpg, storeRoot, TestNamespace);
         }
 
         private static string InitializePasswordStore(TestFileSystem fs, TestGpg gpg)

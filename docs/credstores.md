@@ -38,6 +38,7 @@ refresh expired credentials themselves.
 
 Store | Expiry representation
 --- | ---
+GPG/`pass` compatible files | An `expires_at` line inside the encrypted file containing a Unix timestamp.
 Plaintext files | An `expires_at` line containing a Unix timestamp.
 
 Expiry is stored as whole seconds since the Unix epoch (UTC). Updating a
