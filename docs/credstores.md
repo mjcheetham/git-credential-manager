@@ -43,11 +43,13 @@ DPAPI protected files | An `expires_at` line containing a Unix timestamp. Only t
 macOS Keychain | An `expires_at` line in the item's generic attribute containing a Unix timestamp.
 Secret Service | An integer `expires_at` item attribute containing a Unix timestamp.
 GPG/`pass` compatible files | An `expires_at` line inside the encrypted file containing a Unix timestamp.
+Git credential cache | Git's `password_expiry_utc` credential field containing a Unix timestamp. Requires Git 2.41 or later.
 Plaintext files | An `expires_at` line containing a Unix timestamp.
 
 Expiry is stored as whole seconds since the Unix epoch (UTC). Updating a
 credential with an older version of GCM, or with another tool, may discard its
-metadata.
+metadata. A credential's expiry is unrelated to the Git credential cache's
+timeout, which controls how long the cache keeps any credential.
 
 ## Windows Credential Manager
 
