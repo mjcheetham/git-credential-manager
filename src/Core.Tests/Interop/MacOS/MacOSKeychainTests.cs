@@ -6,31 +6,40 @@ using GitCredentialManager.Interop.MacOS.Native;
 
 namespace GitCredentialManager.Tests.Interop.MacOS
 {
-    public class MacOSKeychainTests
+    public class MacOSKeychainTests : CredentialStoreTests
     {
         private const string TestNamespace = "git-test";
 
         [MacOSFact]
         public void MacOSKeychain_ReadWriteDelete()
         {
-            var keychain = new MacOSKeychain(TestNamespace);
+            RunWithKeychain(ReadWriteDelete);
+        }
 
-            // Create a service that is guaranteed to be unique
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-            const string account = "john.doe";
-            const string password = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+        [MacOSFact]
+        public void MacOSKeychain_AccountMatching()
+        {
+            RunWithKeychain(AccountMatching);
+        }
 
+        [MacOSFact]
+        public void MacOSKeychain_MetadataLifecycle()
+        {
+            RunWithKeychain(MetadataLifecycle);
+        }
+
+        [MacOSFact]
+        public void MacOSKeychain_MaxCredentialSize_ReturnsZero()
+        {
+            ICredentialStore2 credentialStore = new MacOSKeychain(TestNamespace);
+            Assert.Equal(0, credentialStore.MaxCredentialSize);
+        }
+
+        private static void RunWithKeychain(Action<MacOSKeychain> test)
+        {
             try
             {
-                // Write
-                keychain.AddOrUpdate(service, account, password);
-
-                // Read
-                ICredential outCredential = keychain.Get(service, account);
-
-                Assert.NotNull(outCredential);
-                Assert.Equal(account, outCredential.Account);
-                Assert.Equal(password, outCredential.Password);
+                test(new MacOSKeychain(TestNamespace));
             }
             // There is an unknown issue that the keychain can sometimes get itself in where all API calls
             // result in an errSecAuthFailed error. The only solution seems to be a machine restart, which
@@ -45,42 +54,6 @@ namespace GitCredentialManager.Tests.Interop.MacOS
             {
                 AssertEx.Skip("macOS Keychain is in an invalid state (errSecAuthFailed)");
             }
-            finally
-            {
-                // Ensure we clean up after ourselves even in case of 'get' failures
-                keychain.Remove(service, account);
-            }
-        }
-
-        [MacOSFact]
-        public void MacOSKeychain_Get_NotFound_ReturnsNull()
-        {
-            var keychain = new MacOSKeychain(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            ICredential credential = keychain.Get(service, account: null);
-            Assert.Null(credential);
-        }
-
-        [MacOSFact]
-        public void MacOSKeychain_Remove_NotFound_ReturnsFalse()
-        {
-            var keychain = new MacOSKeychain(TestNamespace);
-
-            // Unique service; guaranteed not to exist!
-            string service = $"https://example.com/{Guid.NewGuid():N}";
-
-            bool result = keychain.Remove(service, account: null);
-            Assert.False(result);
-        }
-        
-        [MacOSFact]
-        public void MacOSKeychain_MaxCredentialSize_ReturnsZero()
-        {
-            ICredentialStore credentialStore = new MacOSKeychain(TestNamespace);
-            Assert.Equal(0, credentialStore.MaxCredentialSize);
         }
     }
 }
