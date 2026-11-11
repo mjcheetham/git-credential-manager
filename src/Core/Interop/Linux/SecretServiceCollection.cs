@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -12,11 +13,12 @@ using static GitCredentialManager.Interop.Linux.Native.Libsecret.SecretSchemaFla
 
 namespace GitCredentialManager.Interop.Linux
 {
-    public class SecretServiceCollection : ICredentialStore
+    public class SecretServiceCollection : ICredentialStore2
     {
         private const string SchemaName = "com.microsoft.GitCredentialManager";
         private const string ServiceAttributeName = "service";
         private const string AccountAttributeName = "account";
+        private const string ExpiresAtAttributeName = "expires_at";
         private const string PlainTextContentType = "text/plain";
 
         private readonly string _namespace;
@@ -51,102 +53,85 @@ namespace GitCredentialManager.Interop.Linux
 
         public string Name => "freedesktop.org Secret Service";
 
-        public IList<string> GetAccounts(string service)
-        {
-            return Enumerate(service, null).Select(x => x.Account).Distinct().ToList();
-        }
-
-        public ICredential Get(string service, string account)
-        {
-            return Enumerate(service, account).FirstOrDefault();
-        }
-
-        private unsafe IEnumerable<ICredential> Enumerate(string service, string account)
+        public unsafe StoredCredential Get(CredentialKey key)
         {
             GHashTable* queryAttrs = null;
             GList* results = null;
-            GError* error = null;
+
+            try
+            {
+                SecretService* secService = GetSecretService();
+
+                queryAttrs = CreateSearchQuery(key.Service, key.Account);
+                results = Search(secService, queryAttrs);
+
+                SecretItem* item = FindItem(results, key.Account);
+                if (item == null)
+                {
+                    return null;
+                }
+
+                EnsureUnlocked(secService, item);
+                return CreateCredentialFromItem(item);
+            }
+            finally
+            {
+                if (queryAttrs != null) g_hash_table_destroy(queryAttrs);
+                if (results != null) g_list_free_full(results, g_object_unref);
+            }
+        }
+
+        public unsafe IReadOnlyList<CredentialKey> Find(string service, string account = null)
+        {
+            EnsureArgument.NotNullOrWhiteSpace(service, nameof(service));
+
+            GHashTable* queryAttrs = null;
+            GList* results = null;
 
             try
             {
                 SecretService* secService = GetSecretService();
 
                 queryAttrs = CreateSearchQuery(service, account);
+                results = Search(secService, queryAttrs);
 
-                SecretSchema schema = GetSchema();
-
-                // Execute search query and return all results
-                results = secret_service_search_sync(
-                    secService,
-                    ref schema,
-                    queryAttrs,
-                    SecretSearchFlags.SECRET_SEARCH_UNLOCK | SecretSearchFlags.SECRET_SEARCH_ALL,
-                    IntPtr.Zero,
-                    out error);
-
-                if (error != null)
+                // Attributes can be read without loading each item's secret
+                var keys = new HashSet<CredentialKey>();
+                for (GList* itemPtr = results; itemPtr != null && itemPtr->data != IntPtr.Zero; itemPtr = (GList*)itemPtr->next)
                 {
-                    throw CreateException(Operation.Search, error);
+                    var item = (SecretItem*)itemPtr->data;
+                    keys.Add(new CredentialKey(service, GetItemAttribute(item, AccountAttributeName)));
                 }
 
-                var credentials = new List<ICredential>();
-
-                GList* itemPtr = results;
-                while (itemPtr != null && itemPtr->data != IntPtr.Zero)
-                {
-                    SecretItem* item = (SecretItem*) itemPtr->data;
-
-                    // Searches can return locked items even when unlocking was requested.
-                    if (secret_item_get_locked(item))
-                    {
-                        var toUnlockList = new GList
-                        {
-                            data = (IntPtr) item,
-                            next = IntPtr.Zero,
-                            prev = IntPtr.Zero
-                        };
-
-                        int numUnlocked = secret_service_unlock_sync(
-                            secService,
-                            &toUnlockList,
-                            IntPtr.Zero,
-                            IntPtr.Zero,
-                            out error
-                        );
-
-                        if (error != null || numUnlocked != 1)
-                        {
-                            throw CreateException(Operation.Unlock, error);
-                        }
-                    }
-
-                    credentials.Add(CreateCredentialFromItem(item));
-
-                    itemPtr = (GList*)itemPtr->next;
-                }
-
-                return credentials;
+                return keys.ToList();
             }
             finally
             {
                 if (queryAttrs != null) g_hash_table_destroy(queryAttrs);
-                if (error != null) g_error_free(error);
                 if (results != null) g_list_free_full(results, g_object_unref);
             }
         }
 
-        public unsafe void AddOrUpdate(string service, string account, string secret)
+        public unsafe void Set(StoredCredential credential)
         {
+            EnsureArgument.NotNull(credential, nameof(credential));
+
+            string service = credential.Key.Service;
+            string account = credential.Key.Account;
+            CredentialMetadata metadata = credential.Metadata;
+
+            GHashTable* queryAttrs = null;
+            GList* results = null;
             GHashTable* attributes = null;
             SecretValue* secretValue = null;
             GError *error = null;
 
-            // If there is an existing credential that matches the same account and password
+            // If there is an existing credential that matches the same account, password, and metadata
             // then don't bother writing out anything because they're the same!
-            ICredential existingCred = Get(service, account);
+            StoredCredential existingCred = Get(credential.Key);
             if (existingCred != null &&
-                StringComparer.Ordinal.Equals(existingCred.Account, account) &&
-                StringComparer.Ordinal.Equals(existingCred.Password, secret))
+                StringComparer.Ordinal.Equals(existingCred.Secret, credential.Secret) &&
+                existingCred.Metadata == metadata)
             {
                 return;
             }
@@ -154,6 +139,15 @@ namespace GitCredentialManager.Interop.Linux
             try
             {
                 SecretService* secService = GetSecretService();
+
+                SecretSchema schema = GetSchema();
+
+                // Secret Service only replaces an existing item when all of its attributes match, so storing
+                // different metadata would create a second item for the same credential. Look for an item
+                // with exactly this service and account to update in place instead.
+                queryAttrs = CreateSearchQuery(service, account);
+                results = Search(secService, queryAttrs);
+                SecretItem* existingItem = FindItem(results, account);
 
                 // Create attributes for the key and user
                 attributes = g_hash_table_new_full(g_str_hash, g_str_equal,
@@ -171,22 +165,45 @@ namespace GitCredentialManager.Interop.Linux
                     g_hash_table_insert(attributes, accountKeyPtr, accountValuePtr);
                 }
 
+                if (metadata.ExpiresAt is { } expiry)
+                {
+                    IntPtr expiryKeyPtr = Marshal.StringToHGlobalAnsi(ExpiresAtAttributeName);
+                    IntPtr expiryValuePtr = Marshal.StringToHGlobalAnsi(
+                        expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture));
+                    g_hash_table_insert(attributes, expiryKeyPtr, expiryValuePtr);
+                }
+
                 // Create the secret value object from the secret string
-                byte[] secretBytes = Encoding.UTF8.GetBytes(secret);
+                byte[] secretBytes = Encoding.UTF8.GetBytes(credential.Secret);
                 secretValue = secret_value_new(secretBytes, secretBytes.Length, PlainTextContentType);
 
-                SecretSchema schema = GetSchema();
+                bool result;
+                if (existingItem != null)
+                {
+                    EnsureUnlocked(secService, existingItem);
 
-                // Store the secret with the associated attributes
-                bool result = secret_service_store_sync(
-                    secService,
-                    ref schema,
-                    attributes,
-                    null,
-                    fullServiceName, // Use full service name as label
-                    secretValue,
-                    IntPtr.Zero,
-                    out error);
+                    // Update the secret and replace all attributes, which clears any metadata not being stored
+                    result = secret_item_set_secret_sync(existingItem, secretValue, IntPtr.Zero, out error);
+                    if (error != null || !result)
+                    {
+                        throw CreateException(Operation.Store, error);
+                    }
+
+                    result = secret_item_set_attributes_sync(existingItem, ref schema, attributes, IntPtr.Zero, out error);
+                }
+                else
+                {
+                    // Store the secret with the associated attributes
+                    result = secret_service_store_sync(
+                        secService,
+                        ref schema,
+                        attributes,
+                        null,
+                        fullServiceName, // Use full service name as label
+                        secretValue,
+                        IntPtr.Zero,
+                        out error);
+                }
 
                 if (error != null)
                 {
@@ -200,44 +217,47 @@ namespace GitCredentialManager.Interop.Linux
             }
             finally
             {
+                if (queryAttrs != null) g_hash_table_destroy(queryAttrs);
+                if (results != null) g_list_free_full(results, g_object_unref);
                 if (attributes != null) g_hash_table_destroy(attributes);
                 if (secretValue != null) secret_value_unref(secretValue);
                 if (error != null) g_error_free(error);
             }
         }
 
-        public unsafe bool Remove(string service, string account)
+        public unsafe bool Remove(CredentialKey key)
         {
-            GHashTable* attributes = null;
+            GHashTable* queryAttrs = null;
+            GList* results = null;
             GError* error = null;
 
             try
             {
                 SecretService* secService = GetSecretService();
 
-                // Create search query
-                attributes = CreateSearchQuery(service, account);
+                queryAttrs = CreateSearchQuery(key.Service, key.Account);
+                results = Search(secService, queryAttrs);
 
-                SecretSchema schema = GetSchema();
+                SecretItem* item = FindItem(results, key.Account);
+                if (item == null)
+                {
+                    return false;
+                }
 
-                // Erase the secret with the specified key
-                bool result = secret_service_clear_sync(
-                    secService,
-                    ref schema,
-                    attributes,
-                    IntPtr.Zero,
-                    out error);
+                EnsureUnlocked(secService, item);
 
-                if (error != null)
+                bool result = secret_item_delete_sync(item, IntPtr.Zero, out error);
+                if (error != null || !result)
                 {
                     throw CreateException(Operation.Erase, error);
                 }
 
-                return result;
+                return true;
             }
             finally
             {
-                if (attributes != null) g_hash_table_destroy(attributes);
+                if (queryAttrs != null) g_hash_table_destroy(queryAttrs);
+                if (results != null) g_list_free_full(results, g_object_unref);
                 if (error != null) g_error_free(error);
             }
         }
@@ -271,28 +291,124 @@ namespace GitCredentialManager.Interop.Linux
             return queryAttrs;
         }
 
-        private static unsafe ICredential CreateCredentialFromItem(SecretItem* item)
+        private static unsafe GList* Search(SecretService* secService, GHashTable* queryAttrs)
+        {
+            SecretSchema schema = GetSchema();
+            GError* error = null;
+
+            try
+            {
+                GList* results = secret_service_search_sync(
+                    secService,
+                    ref schema,
+                    queryAttrs,
+                    SecretSearchFlags.SECRET_SEARCH_UNLOCK | SecretSearchFlags.SECRET_SEARCH_ALL,
+                    IntPtr.Zero,
+                    out error);
+
+                if (error != null)
+                {
+                    if (results != null) g_list_free_full(results, g_object_unref);
+                    throw CreateException(Operation.Search, error);
+                }
+
+                return results;
+            }
+            finally
+            {
+                if (error != null) g_error_free(error);
+            }
+        }
+
+        /// <summary>
+        /// Find the item stored for exactly the given account in a list of search results.
+        /// </summary>
+        /// <remarks>
+        /// Searching without an account matches items for every account, so compare account attributes exactly.
+        /// Credentials without an account are stored without an account attribute.
+        /// </remarks>
+        private static unsafe SecretItem* FindItem(GList* results, string account)
+        {
+            for (GList* itemPtr = results; itemPtr != null && itemPtr->data != IntPtr.Zero; itemPtr = (GList*)itemPtr->next)
+            {
+                var item = (SecretItem*)itemPtr->data;
+                string itemAccount = GetItemAttribute(item, AccountAttributeName);
+                if (StringComparer.Ordinal.Equals(string.IsNullOrWhiteSpace(itemAccount) ? null : itemAccount, account))
+                {
+                    return item;
+                }
+            }
+
+            return null;
+        }
+
+        private static unsafe void EnsureUnlocked(SecretService* secService, SecretItem* item)
+        {
+            // Searches can return locked items even when unlocking was requested.
+            if (!secret_item_get_locked(item))
+            {
+                return;
+            }
+
+            GError* error = null;
+            try
+            {
+                var toUnlockList = new GList
+                {
+                    data = (IntPtr) item,
+                    next = IntPtr.Zero,
+                    prev = IntPtr.Zero
+                };
+
+                int numUnlocked = secret_service_unlock_sync(
+                    secService,
+                    &toUnlockList,
+                    IntPtr.Zero,
+                    IntPtr.Zero,
+                    out error
+                );
+
+                if (error != null || numUnlocked != 1)
+                {
+                    throw CreateException(Operation.Unlock, error);
+                }
+            }
+            finally
+            {
+                if (error != null) g_error_free(error);
+            }
+        }
+
+        private static unsafe string GetItemAttribute(SecretItem* item, string name)
         {
             GHashTable* secretAttrs = null;
-            IntPtr serviceKeyPtr = IntPtr.Zero;
-            IntPtr accountKeyPtr = IntPtr.Zero;
+            IntPtr keyPtr = IntPtr.Zero;
+
+            try
+            {
+                secretAttrs = secret_item_get_attributes(item);
+                keyPtr = Marshal.StringToHGlobalAnsi(name);
+                IntPtr valuePtr = g_hash_table_lookup(secretAttrs, keyPtr);
+                return Marshal.PtrToStringAuto(valuePtr);
+            }
+            finally
+            {
+                if (secretAttrs != null) g_hash_table_unref(secretAttrs);
+                if (keyPtr != IntPtr.Zero) Marshal.FreeHGlobal(keyPtr);
+            }
+        }
+
+        private unsafe StoredCredential CreateCredentialFromItem(SecretItem* item)
+        {
             SecretValue* value = null;
             IntPtr passwordPtr = IntPtr.Zero;
             GError* error = null;
 
             try
             {
-                secretAttrs = secret_item_get_attributes(item);
-
-                // Extract the service attribute
-                serviceKeyPtr = Marshal.StringToHGlobalAnsi(ServiceAttributeName);
-                IntPtr serviceValuePtr = g_hash_table_lookup(secretAttrs, serviceKeyPtr);
-                string service = Marshal.PtrToStringAuto(serviceValuePtr);
-
-                // Extract the account attribute
-                accountKeyPtr = Marshal.StringToHGlobalAnsi(AccountAttributeName);
-                IntPtr accountValuePtr = g_hash_table_lookup(secretAttrs, accountKeyPtr);
-                string account = Marshal.PtrToStringAuto(accountValuePtr);
+                string serviceName = GetItemAttribute(item, ServiceAttributeName);
+                string account = GetItemAttribute(item, AccountAttributeName);
+                string expiryValue = GetItemAttribute(item, ExpiresAtAttributeName);
 
                 // Load the secret value
                 bool loaded = secret_item_load_secret_sync(item, IntPtr.Zero, out error);
@@ -311,13 +427,18 @@ namespace GitCredentialManager.Interop.Linux
                 passwordPtr = secret_value_get(value, out int passwordLength);
                 string password = Marshal.PtrToStringAuto(passwordPtr, passwordLength);
 
-                return new SecretServiceCredential(service, account, password);
+                string service = GetServiceFromServiceName(serviceName);
+
+                var metadata = CredentialMetadata.Empty;
+                if (DateTimeOffsetEx.TryParseUnixTimeSeconds(expiryValue, out DateTimeOffset expiry))
+                {
+                    metadata = metadata with { ExpiresAt = expiry };
+                }
+
+                return new StoredCredential(new CredentialKey(service, account), password, metadata);
             }
             finally
             {
-                if (secretAttrs != null) g_hash_table_unref(secretAttrs);
-                if (accountKeyPtr != IntPtr.Zero) Marshal.FreeHGlobal(accountKeyPtr);
-                if (serviceKeyPtr != IntPtr.Zero) Marshal.FreeHGlobal(serviceKeyPtr);
                 if (value != null) secret_value_unref(value);
                 if (error != null) g_error_free(error);
             }
@@ -333,6 +454,20 @@ namespace GitCredentialManager.Interop.Linux
 
             sb.Append(service);
             return sb.ToString();
+        }
+
+        private string GetServiceFromServiceName(string serviceName)
+        {
+            if (!string.IsNullOrWhiteSpace(_namespace) && serviceName is not null)
+            {
+                string prefix = $"{_namespace}:";
+                if (serviceName.StartsWith(prefix, StringComparison.Ordinal))
+                {
+                    return serviceName.Substring(prefix.Length);
+                }
+            }
+
+            return serviceName;
         }
 
         private static unsafe SecretService* GetSecretService()
@@ -467,6 +602,12 @@ namespace GitCredentialManager.Interop.Linux
             {
                 name = AccountAttributeName,
                 type = SECRET_SCHEMA_ATTRIBUTE_STRING
+            };
+
+            schema.attributes[2] = new SecretSchemaAttribute
+            {
+                name = ExpiresAtAttributeName,
+                type = SECRET_SCHEMA_ATTRIBUTE_INTEGER
             };
 
             return schema;
