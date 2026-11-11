@@ -45,6 +45,7 @@ Secret Service | An integer `expires_at` item attribute containing a Unix timest
 GPG/`pass` compatible files | An `expires_at` line inside the encrypted file containing a Unix timestamp.
 Git credential cache | Git's `password_expiry_utc` credential field containing a Unix timestamp. Requires Git 2.41 or later.
 Plaintext files | An `expires_at` line containing a Unix timestamp.
+Passthrough/no-op | Nothing is stored.
 
 Expiry is stored as whole seconds since the Unix epoch (UTC). Updating a
 credential with an older version of GCM, or with another tool, may discard its

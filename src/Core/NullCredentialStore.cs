@@ -7,15 +7,15 @@ namespace GitCredentialManager;
 /// Credential store that does nothing. This is useful when you want to disable internal credential storage
 /// and only use another helper configured in Git to store credentials.
 /// </summary>
-public class NullCredentialStore : ICredentialStore
+public class NullCredentialStore : ICredentialStore2
 {
     public string Name => "No-op";
 
-    public IList<string> GetAccounts(string service) => Array.Empty<string>();
+    public StoredCredential Get(CredentialKey key) => null;
 
-    public ICredential Get(string service, string account) => null;
+    public IReadOnlyList<CredentialKey> Find(string service, string account = null) => Array.Empty<CredentialKey>();
 
-    public void AddOrUpdate(string service, string account, string secret) { }
+    public void Set(StoredCredential credential) { }
 
-    public bool Remove(string service, string account) => false;
+    public bool Remove(CredentialKey key) => false;
 }
