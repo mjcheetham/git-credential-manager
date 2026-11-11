@@ -166,8 +166,9 @@ namespace Microsoft.AzureRepos
 
                 _context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={account}...");
 
-                ICredential credential = _context.CredentialStore.Get(service, account);
-                if (credential == null)
+                StoredCredential storedCredential = _context.CredentialStore.FindFirst(service, account);
+                ICredential credential;
+                if (storedCredential == null)
                 {
                     _context.Trace.WriteLine("No existing credentials found.");
 
@@ -179,6 +180,7 @@ namespace Microsoft.AzureRepos
                 else
                 {
                     _context.Trace.WriteLine("Existing credential found.");
+                    credential = new GitCredential(storedCredential.Key.Account, storedCredential.Secret);
                 }
 
                 return new GitResponse(credential);
@@ -217,7 +219,7 @@ namespace Microsoft.AzureRepos
 
                 // Add or update the credential in the store.
                 _context.Trace.WriteLine($"Storing credential with service={service} account={account}...");
-                _context.CredentialStore.AddOrUpdate(service, account, request.Password);
+                _context.CredentialStore.SetPreservingMetadata(new CredentialKey(service, account), request.Password);
                 _context.Trace.WriteLine("Credential was successfully stored.");
             }
             else
@@ -254,7 +256,9 @@ namespace Microsoft.AzureRepos
                 // Try to locate an existing credential
                 _context.Trace.WriteLine(
                     $"Erasing stored credential in store with service={service} account={account}...");
-                if (_context.CredentialStore.Remove(service, account))
+                // Without a user name, erase whichever credential is stored for the service
+                IReadOnlyList<CredentialKey> keys = _context.CredentialStore.Find(service, account);
+                if (keys.Count > 0 && _context.CredentialStore.Remove(keys[0]))
                 {
                     _context.Trace.WriteLine("Credential was successfully erased.");
                 }
