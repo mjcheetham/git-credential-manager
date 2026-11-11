@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using GitCredentialManager;
+using GitCredentialManager.Authentication.OAuth;
 using GitCredentialManager.Tests.Objects;
+using Moq;
 using Xunit;
 
 namespace GitLab.Tests
@@ -68,6 +71,62 @@ namespace GitLab.Tests
             AuthenticationModes actual = provider.GetSupportedAuthenticationModes(targetUri);
 
             Assert.Equal(expected, actual);
+        }
+
+        [Fact]
+        public async Task GitLabHostProvider_GetCredentialAsync_ExpiredAccessToken_RefreshesWithoutCheckingServer()
+        {
+            const string service = "https://gitlab.com";
+            const string refreshService = "https://oauth-refresh-token.gitlab.com/";
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "gitlab.com",
+            });
+            var expired = new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) };
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add(service, "oauth2", "expired-access-token", expired);
+            context.CredentialStore.Add(refreshService, "oauth2", "refresh-token");
+
+            var auth = new Mock<IGitLabAuthentication>(MockBehavior.Strict);
+            auth.Setup(x => x.GetOAuthTokenViaRefresh(It.IsAny<Uri>(), "refresh-token"))
+                .ReturnsAsync(new OAuth2TokenResult("new-access-token", "bearer") { RefreshToken = "new-refresh-token" });
+
+            var provider = new GitLabHostProvider(context, auth.Object);
+
+            GitResponse response = await provider.GetCredentialAsync(request);
+
+            Assert.Equal("new-access-token", response.Credential.Password);
+            ((TestHttpMessageHandler)context.HttpClientFactory.MessageHandler).AssertNoRequests();
+        }
+
+        [Fact]
+        public async Task GitLabHostProvider_GetCredentialAsync_ExpiredRefreshToken_DoesNotRefresh()
+        {
+            const string refreshService = "https://oauth-refresh-token.gitlab.com/";
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "gitlab.com",
+            });
+            var expired = new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) };
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add(refreshService, "oauth2", "expired-refresh-token", expired);
+
+            var auth = new Mock<IGitLabAuthentication>(MockBehavior.Strict);
+            auth.Setup(x => x.GetAuthenticationAsync(It.IsAny<Uri>(), It.IsAny<string>(), It.IsAny<AuthenticationModes>()))
+                .ReturnsAsync(new AuthenticationPromptResult(AuthenticationModes.Browser));
+            auth.Setup(x => x.GetOAuthTokenViaBrowserAsync(It.IsAny<Uri>(), It.IsAny<IEnumerable<string>>()))
+                .ReturnsAsync(new OAuth2TokenResult("new-access-token", "bearer") { RefreshToken = "new-refresh-token" });
+
+            var provider = new GitLabHostProvider(context, auth.Object);
+
+            GitResponse response = await provider.GetCredentialAsync(request);
+
+            Assert.Equal("new-access-token", response.Credential.Password);
+            auth.Verify(x => x.GetOAuthTokenViaRefresh(It.IsAny<Uri>(), It.IsAny<string>()), Times.Never);
         }
     }
 }
