@@ -127,6 +127,12 @@ namespace GitLab.Tests
 
             Assert.Equal("new-access-token", response.Credential.Password);
             auth.Verify(x => x.GetOAuthTokenViaRefresh(It.IsAny<Uri>(), It.IsAny<string>()), Times.Never);
+
+            // New tokens are stored straight away
+            Assert.True(context.CredentialStore.TryGet("https://gitlab.com", "oauth2", out var accessToken));
+            Assert.Equal("new-access-token", accessToken.Password);
+            Assert.True(context.CredentialStore.TryGet(refreshService, "oauth2", out var refreshToken));
+            Assert.Equal("new-refresh-token", refreshToken.Password);
         }
     }
 }
