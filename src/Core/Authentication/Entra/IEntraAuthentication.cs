@@ -87,5 +87,6 @@ public interface IEntraAuthentication
 public interface IEntraAuthenticationResult
 {
     string AccessToken { get; }
+    string IdToken { get; }
     IEntraAccount Account { get; }
 }

@@ -35,10 +35,12 @@ public partial class EntraAuthentication : AuthenticationBase, IEntraAuthenticat
             new AuthResult
             {
                 AccessToken = result.AccessToken,
-                Account = result.Account is null ? null : EntraAccount.FromMsalAccount(result.Account)
+                IdToken = result.IdToken,
+                Account = result.Account is null ? null : EntraAccount.FromMsalAccount(result.Account),
             };
 
         public string AccessToken { get; private init; }
+        public string IdToken { get; private set; }
         public IEntraAccount Account { get; private init; }
     }
 }

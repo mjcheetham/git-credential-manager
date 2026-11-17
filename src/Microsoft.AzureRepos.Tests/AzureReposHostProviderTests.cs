@@ -1449,6 +1449,7 @@ namespace Microsoft.AzureRepos.Tests
         private class MockEntraAuthResult : IEntraAuthenticationResult
         {
             public string AccessToken { get; set; }
+            public string IdToken { get; set; }
             public IEntraAccount Account { get; set; }
         }
     }
