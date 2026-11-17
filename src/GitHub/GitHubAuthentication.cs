@@ -527,6 +527,10 @@ namespace GitHub
         {
             using var _ = Trace2.StartRegion("github", "oauth_entra");
 
+            // TODO: expose this as a real setting?
+            bool useIdJag = Context.Environment.GetEnvironmentVariable("GCM_GITHUB_ENTRA_IDJAG")?.IsTruthy() ?? false;
+            Trace2.WriteData("github", "flow_type", useIdJag ? "id-jag" : "direct-exchange");
+
             // TODO: discover the correct scopes/Entra audience
             // GitHub Enterprise Managed User (OIDC)
             string[] entraScopes = ["12f6db80-0741-4a7e-b9c5-b85d737b3a31/.default"];
@@ -544,7 +548,7 @@ namespace GitHub
                 };
             }
 
-            var entra = new EntraAuthentication(Context, GetEntraConfig());
+            IEntraAuthentication entra = new EntraAuthentication(Context, GetEntraConfig());
             IEntraAuthenticationResult entraResult = await entra.GetTokenForUserAsync(entraScopes);
             Trace2.WriteData("github", "entra/account_id", entraResult.Account.HomeAccountId);
 
@@ -555,9 +559,27 @@ namespace GitHub
                 GitHubConstants.EnvironmentVariables.DevOAuthClientSecret, "68bbd667b6f1e954c1ab457717c147f221147eba");
 
             var oauthClient = new GitHubOAuth2Client(HttpClient, Context.Settings, targetUri);
+            string[] scopesArr = scopes.ToArray();
+
+            // Use the new ID-JAG flow if enabled
+            if (useIdJag)
+            {
+                // We need to first exchange the Entra ID token for an ID-JAG token for use with GitHub.
+                string resource = "TODO";
+                string audience = "TODO";
+                IEntraAuthenticationResult idJagResult = await entra.GetIdJagToken(
+                    scopesArr, entraResult.Account, resource, audience, CancellationToken.None);
+                string idJag = idJagResult.AccessToken;
+
+                // Now we have the ID-JAG token, we can then exchange it for a GitHub access token.
+                return await oauthClient.GetTokenByJwtAssertionAsync(scopesArr, idJag, CancellationToken.None);
+            }
+
+            // Use the original token exchange flow where we just provide an
+            // Entra access token directly in exchange for a GitHub access token.
             OAuth2TokenExchangeOptions exchangeOptions = new()
             {
-                Scopes = scopes.ToArray(),
+                Scopes = scopesArr,
                 SubjectToken = entraResult.AccessToken,
                 SubjectTokenType = OAuth2TokenType.AccessToken,
             };
