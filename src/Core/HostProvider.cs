@@ -167,7 +167,9 @@ namespace GitCredentialManager
             {
                 // Add or update the credential in the store.
                 Context.Trace.WriteLine($"Storing credential with service={service} account={request.UserName}...");
-                Context.CredentialStore.SetPreservingMetadata(new CredentialKey(service, request.UserName), request.Password);
+                Context.CredentialStore.Set(
+                    new StoredCredential(new CredentialKey(service, request.UserName), request.Password,
+                        new CredentialMetadata { ExpiresAt = request.PasswordExpiry }));
                 Context.Trace.WriteLine("Credential was successfully stored.");
             }
 

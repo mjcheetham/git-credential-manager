@@ -1,5 +1,3 @@
-using System;
-
 namespace GitCredentialManager;
 
 public static class CredentialStoreExtensions
@@ -23,26 +21,5 @@ public static class CredentialStoreExtensions
         }
 
         return null;
-    }
-
-    /// <summary>
-    /// Store a credential, keeping any metadata already stored with it if the secret is unchanged.
-    /// </summary>
-    /// <remarks>
-    /// Git asks for a credential to be stored after each successful use, passing back only what it was given.
-    /// GCM does not return metadata to Git, so storing on Git's behalf with <see cref="ICredentialStore.Set"/>
-    /// alone would discard metadata, such as an expiry, every time a stored credential is used.
-    /// </remarks>
-    /// <param name="store">Credential store.</param>
-    /// <param name="key">Key of the credential.</param>
-    /// <param name="secret">Secret value to store.</param>
-    public static void SetPreservingMetadata(this ICredentialStore store, CredentialKey key, string secret)
-    {
-        StoredCredential existing = store.Get(key);
-        CredentialMetadata metadata = StringComparer.Ordinal.Equals(existing?.Secret, secret)
-            ? existing.Metadata
-            : null;
-
-        store.Set(new StoredCredential(key, secret, metadata));
     }
 }

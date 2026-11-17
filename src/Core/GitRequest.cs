@@ -54,6 +54,20 @@ namespace GitCredentialManager
         public string Password   => GetArgumentOrDefault(Constants.CredentialProtocol.PasswordKey);
         public bool IsEphemeral  => StringExtensions.IsTruthy(GetArgumentOrDefault(Constants.CredentialProtocol.EphemeralKey));
 
+        /// <summary>
+        /// The instant at which the password expires, or null if Git did not provide one.
+        /// </summary>
+        /// <remarks>
+        /// Git passes back the expiry reported by the helper that provided the credential when it asks helpers to
+        /// store or erase it. Git uses zero to mean no expiry.
+        /// </remarks>
+        public DateTimeOffset? PasswordExpiry =>
+            DateTimeOffsetEx.TryParseUnixTimeSeconds(
+                GetArgumentOrDefault(Constants.CredentialProtocol.PasswordExpiryKey), out DateTimeOffset expiry) &&
+            expiry != DateTimeOffset.UnixEpoch
+                ? expiry
+                : null;
+
         public IList<string> WwwAuth => GetMultiArgumentOrDefault("wwwauth");
 
         /// <summary>

@@ -226,7 +226,9 @@ namespace Microsoft.AzureRepos
 
                 // Add or update the credential in the store.
                 _context.Trace.WriteLine($"Storing credential with service={service} account={account}...");
-                _context.CredentialStore.SetPreservingMetadata(new CredentialKey(service, account), request.Password);
+                _context.CredentialStore.Set(
+                    new StoredCredential(new CredentialKey(service, account), request.Password,
+                        new CredentialMetadata { ExpiresAt = request.PasswordExpiry }));
                 _context.Trace.WriteLine("Credential was successfully stored.");
             }
             else

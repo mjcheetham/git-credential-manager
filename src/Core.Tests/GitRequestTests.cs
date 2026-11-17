@@ -76,6 +76,24 @@ namespace GitCredentialManager.Tests
             Assert.Equal(new[] { "val1", "val2", "val3" }, request.GetMultiArgumentOrDefault("multi"));
         }
 
+        [Theory]
+        [InlineData("1784986200", 1784986200L)]
+        [InlineData("0", null)]
+        [InlineData("invalid", null)]
+        [InlineData(null, null)]
+        public void GitRequest_PasswordExpiry(string value, long? expected)
+        {
+            var dict = new Dictionary<string, string> { ["protocol"] = "https", ["host"] = "example.com" };
+            if (value is not null)
+            {
+                dict["password_expiry_utc"] = value;
+            }
+
+            var request = new GitRequest(dict);
+
+            Assert.Equal(expected, request.PasswordExpiry?.ToUnixTimeSeconds());
+        }
+
         [Fact]
         public void GitRequest_GetRemoteUri_NoAuthority_ReturnsNull()
         {

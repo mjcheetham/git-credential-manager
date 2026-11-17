@@ -47,8 +47,11 @@ Git credential cache | Git's `password_expiry_utc` credential field containing a
 Plaintext files | An `expires_at` line containing a Unix timestamp.
 Passthrough/no-op | Nothing is stored.
 
-Expiry is stored as whole seconds since the Unix epoch (UTC). Updating a
-credential with an older version of GCM, or with another tool, may discard its
+Expiry is stored as whole seconds since the Unix epoch (UTC). GCM reports a
+credential's expiry to Git, which passes it back when the credential is next
+stored; Git 2.41 or later is needed for this, and with older versions of Git
+the expiry is cleared once the credential has been used. Updating a credential
+with an older version of GCM, or with another tool, may also discard its
 metadata. A credential's expiry is unrelated to the Git credential cache's
 timeout, which controls how long the cache keeps any credential.
 

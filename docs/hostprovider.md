@@ -258,6 +258,12 @@ credential that is not present during the subsequent call to `store` (or
 `erase`). In these cases providers MAY store the credential during the `get`
 rather than, or as well as during the `store`.
 
+When storing a credential that Git has passed to `StoreCredentialAsync`,
+providers SHOULD store the expiry Git supplies in `password_expiry_utc`
+(`GitRequest.PasswordExpiry`) with it. Git passes back the expiry that `get`
+reported for the credential, so this keeps the expiry of an unchanged
+credential.
+
 Host providers MAY store multiple credentials or tokens in the same request if
 it is required. One example where multiple credential storage is needed is with
 OAuth2 access tokens (AT) and refresh tokens (RT). Both the AT and RT SHOULD be

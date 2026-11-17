@@ -265,7 +265,10 @@ Stored credentials are not handed to Git directly. Providers convert them with
 `StoredCredential.ToGitCredential`, which carries the stored expiry across.
 `get` reports the expiry to Git as `password_expiry_utc`, so Git skips a
 credential that has already expired and passes the expiry back when it asks for
-the credential to be stored.
+the credential to be stored. Providers store that expiry, available as
+`GitRequest.PasswordExpiry`, with the credential. Git versions before 2.41 do
+not pass the expiry back, so with those versions it is cleared the next time
+Git asks for the credential to be stored.
 
 ## Error handling and tracing
 

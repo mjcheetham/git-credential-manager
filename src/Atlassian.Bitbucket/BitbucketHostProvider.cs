@@ -349,17 +349,9 @@ namespace Atlassian.Bitbucket
             Uri remoteUri = request.GetRemoteUri();
             string service = GetServiceName(remoteUri);
 
-            // Git only passes back the credential it was given, so keep any metadata stored with an unchanged
-            // credential. Compare against the reassembled secret, as chunk descriptors alone can match even
-            // when the secret has changed.
-            var key = new CredentialKey(service, request.UserName);
-            StoredCredential existing = GetCredential(service, request.UserName);
-            CredentialMetadata metadata = existing?.Key == key && StringComparer.Ordinal.Equals(existing.Secret, request.Password)
-                ? existing.Metadata
-                : null;
-
             _context.Trace.WriteLine("Storing credential...");
-            SetCredential(key, request.Password, metadata);
+            SetCredential(new CredentialKey(service, request.UserName), request.Password,
+                new CredentialMetadata { ExpiresAt = request.PasswordExpiry });
             _context.Trace.WriteLine("Credential was successfully stored.");
             return Task.CompletedTask;
         }
