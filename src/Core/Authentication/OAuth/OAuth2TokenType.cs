@@ -34,4 +34,15 @@ public record struct OAuth2TokenType(string Identifier)
     /// A JWT token as defined in RFC 7519.
     /// </summary>
     public static readonly OAuth2TokenType JwtToken = new(OAuth2Constants.TokenTypes.JwtToken);
+
+    /// <summary>
+    /// An Identity Assertion JWT Authorization Grant (ID-JAG) as defined in the IETF draft
+    /// draft-ietf-oauth-identity-assertion-authz-grant.
+    /// </summary>
+    /// <remarks>
+    /// An ID-JAG is obtained from an identity provider using token exchange (RFC 8693), and
+    /// then redeemed for an access token at the resource authorization server using the JWT
+    /// bearer authorization grant (RFC 7523).
+    /// </remarks>
+    public static readonly OAuth2TokenType IdJag = new(OAuth2Constants.TokenTypes.IdJag);
 }

@@ -17,6 +17,7 @@ namespace GitCredentialManager.Authentication.OAuth
             public const string Saml1Assertion = "urn:ietf:params:oauth:token-type:saml1";
             public const string Saml2Assertion = "urn:ietf:params:oauth:token-type:saml2";
             public const string JwtToken = "urn:ietf:params:oauth:token-type:jwt";
+            public const string IdJag = "urn:ietf:params:oauth:token-type:id-jag";
         }
 
         public static class AuthorizationEndpoint
