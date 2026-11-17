@@ -19,6 +19,6 @@ namespace GitCredentialManager
         /// <param name="userName">Optional pre-filled username.</param>
         /// <param name="credential">The captured basic credential.</param>
         /// <returns>True if the user completes the dialog, false otherwise.</returns>
-        bool ShowCredentialPrompt(string resource, string userName, out ICredential credential);
+        bool ShowCredentialPrompt(string resource, string userName, out GitCredential credential);
     }
 }

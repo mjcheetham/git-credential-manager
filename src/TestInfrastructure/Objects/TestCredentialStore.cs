@@ -94,7 +94,7 @@ namespace GitCredentialManager.Tests.Objects
         }
     }
 
-    public class TestCredential : ICredential
+    public class TestCredential
     {
         public TestCredential(string service, string account, string password, CredentialMetadata metadata = null)
         {

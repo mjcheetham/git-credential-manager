@@ -257,7 +257,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(urlAccount, credential.Account);
@@ -310,7 +310,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(urlAccount, credential.Account);
@@ -358,7 +358,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -406,7 +406,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -459,7 +459,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -509,7 +509,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -711,7 +711,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -759,7 +759,7 @@ namespace Microsoft.AzureRepos.Tests
                 authorityCacheMock.Object, userMgrMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -795,7 +795,7 @@ namespace Microsoft.AzureRepos.Tests
             var provider = new AzureReposHostProvider(context, azDevOps, entraAuth, authorityCache, userMgr);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(account, credential.Account);
@@ -840,7 +840,7 @@ namespace Microsoft.AzureRepos.Tests
                 context, azDevOps, entraAuthMock.Object, authorityCache, userMgr);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(expectedIdentity.Id, credential.Account);
@@ -926,7 +926,7 @@ namespace Microsoft.AzureRepos.Tests
                 context, azDevOps, entraAuthMock.Object, authorityCache, userMgr);
 
             GitResponse result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(clientId, credential.Account);
@@ -991,7 +991,7 @@ namespace Microsoft.AzureRepos.Tests
                 context, azDevOps, entraAuthMock.Object, authorityCache, userMgr);
 
             GitResponse result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(clientId, credential.Account);
@@ -1053,7 +1053,7 @@ namespace Microsoft.AzureRepos.Tests
                 context, azDevOps, entraAuthMock.Object, authorityCache, userMgr);
 
             GitResponse result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(clientId, credential.Account);
@@ -1117,7 +1117,7 @@ namespace Microsoft.AzureRepos.Tests
                 context, azDevOps, entraAuthMock.Object, authorityCache, userMgr);
 
             GitResponse result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(clientId, credential.Account);
@@ -1178,7 +1178,7 @@ namespace Microsoft.AzureRepos.Tests
                 context, azDevOps, entraAuthMock.Object, authorityCache, userMgr);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
             Assert.Equal(clientId, credential.Account);

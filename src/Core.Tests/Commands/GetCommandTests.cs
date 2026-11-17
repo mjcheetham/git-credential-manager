@@ -17,7 +17,7 @@ namespace GitCredentialManager.Tests.Commands
         {
             const string testUserName = "john.doe";
             const string testPassword = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
-            ICredential testCredential = new GitCredential(testUserName, testPassword);
+            GitCredential testCredential = new GitCredential(testUserName, testPassword);
             var stdin = $"protocol=http\nhost=example.com\n\n";
             var expectedStdOutDict = new Dictionary<string, string>
             {
@@ -52,7 +52,7 @@ namespace GitCredentialManager.Tests.Commands
             // Regression: the generic provider returns empty username + password to
             // signal Windows Integrated Authentication. Those empty values MUST be
             // emitted (as `username=` / `password=`) for Git to use WIA.
-            ICredential emptyCredential = new GitCredential(string.Empty, string.Empty);
+            GitCredential emptyCredential = new GitCredential(string.Empty, string.Empty);
             var stdin = "protocol=https\nhost=example.com\n\n";
 
             var providerMock = new Mock<IHostProvider>();
@@ -77,7 +77,7 @@ namespace GitCredentialManager.Tests.Commands
             // Regression: the generic provider emits `ntlm=allow` via
             // GitResponse.AdditionalProperties. Those entries must round-trip
             // to standard out so Git continues to honour them.
-            ICredential testCredential = new GitCredential(string.Empty, string.Empty);
+            GitCredential testCredential = new GitCredential(string.Empty, string.Empty);
             var response = new GitResponse(testCredential);
             response.AdditionalProperties["ntlm"] = "allow";
 
@@ -106,7 +106,7 @@ namespace GitCredentialManager.Tests.Commands
             // (state) MUST be echoed back via `capability[]=state` per the protocol's
             // capability negotiation rules. The unsupported authtype MUST NOT be
             // echoed.
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var stdin = "protocol=https\nhost=example.com\ncapability[]=authtype\ncapability[]=state\n\n";
 
             var providerMock = new Mock<IHostProvider>();
@@ -130,7 +130,7 @@ namespace GitCredentialManager.Tests.Commands
         {
             // Git declares no capabilities; even though GCM advertises state, the
             // intersection is empty and no capability[] lines should be emitted.
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var stdin = "protocol=https\nhost=example.com\n\n";
 
             var providerMock = new Mock<IHostProvider>();
@@ -200,7 +200,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_StateNegotiated_EmitsStateLinesWithGcmPrefix()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var response = GitResponse.Ok(testCredential);
             response.SetState("github.account", "alice");
             response.SetState("azure.tenant", "contoso");
@@ -226,7 +226,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_StateNotNegotiated_DropsStateLines()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var response = GitResponse.Ok(testCredential);
             response.SetState("github.account", "alice");
 
@@ -251,7 +251,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_ContinueNegotiated_EmitsContinue1AlongsideCredential()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var stdin = "protocol=https\nhost=example.com\ncapability[]=state\n\n";
 
             var providerMock = new Mock<IHostProvider>();
@@ -274,7 +274,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_ContinueNotNegotiated_DropsContinueLine()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var stdin = "protocol=https\nhost=example.com\n\n";
 
             var providerMock = new Mock<IHostProvider>();
@@ -297,7 +297,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_OutputOrdering_CapabilitiesFirstThenScalarsThenContinueThenState()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var response = GitResponse.Continue(testCredential);
             response.SetState("k", "v");
 
@@ -331,7 +331,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_CapabilityAuthType_MissingRevertsToPlainPassword()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var response = GitResponse.Ok(testCredential, isEphemeral: true, authtype: "token");
 
             var stdin = "protocol=https\nhost=example.com\n\n";
@@ -359,7 +359,7 @@ namespace GitCredentialManager.Tests.Commands
         [Fact]
         public async Task GetCommand_ExecuteAsync_CapabilityAuthType_UsesAuthTypeFeatures()
         {
-            ICredential testCredential = new GitCredential("alice", "hunter2");
+            GitCredential testCredential = new GitCredential("alice", "hunter2");
             var response = GitResponse.Ok(testCredential, isEphemeral: true, authtype: "token");
 
             var stdin = "protocol=https\nhost=example.com\ncapability[]=authtype\n\n";

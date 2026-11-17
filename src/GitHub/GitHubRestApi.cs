@@ -296,7 +296,7 @@ namespace GitHub
         public static Task<AuthenticationResult> CreatePersonalTokenAsync(
             this IGitHubRestApi api,
             Uri targetUri,
-            ICredential credentials,
+            GitCredential credentials,
             string authenticationCode,
             IEnumerable<string> scopes)
         {

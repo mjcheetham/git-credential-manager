@@ -117,7 +117,7 @@ namespace GitCredentialManager
         /// </summary>
         /// <param name="request">Git credential request.</param>
         /// <returns>A credential Git can use to authenticate to the remote repository.</returns>
-        public abstract Task<ICredential> GenerateCredentialAsync(GitRequest request);
+        public abstract Task<GitCredential> GenerateCredentialAsync(GitRequest request);
 
         public virtual async Task<GitResponse> GetCredentialAsync(GitRequest request)
         {
@@ -126,7 +126,7 @@ namespace GitCredentialManager
             Context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={request.UserName}...");
 
             StoredCredential storedCredential = Context.CredentialStore.FindFirst(service, request.UserName);
-            ICredential credential;
+            GitCredential credential;
             if (storedCredential == null)
             {
                 Context.Trace.WriteLine("No existing credentials found.");

@@ -31,7 +31,7 @@ namespace GitLab
             AuthenticationMode = mode;
         }
 
-        public AuthenticationPromptResult(AuthenticationModes mode, ICredential credential)
+        public AuthenticationPromptResult(AuthenticationModes mode, GitCredential credential)
             : this(mode)
         {
             Credential = credential;
@@ -39,7 +39,7 @@ namespace GitLab
 
         public AuthenticationModes AuthenticationMode { get; }
 
-        public ICredential Credential { get; set; }
+        public GitCredential Credential { get; set; }
     }
 
     [Flags]

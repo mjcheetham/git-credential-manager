@@ -165,7 +165,7 @@ namespace GitHub
             // Always try and locate an existing credential in the OS credential store unless we're being
             // told to explicitly add a new account OR have specifically filtered out irrelevant accounts.
             // If the account lookup failed for another reason we should still try to lookup an existing credential.
-            ICredential credential = null;
+            GitCredential credential = null;
             if (addAccount)
             {
                 _context.Trace.WriteLine("Adding a new account!");
@@ -287,7 +287,7 @@ namespace GitHub
             return Task.CompletedTask;
         }
 
-        internal /* for testing purposes */  async Task<ICredential> GenerateCredentialAsync(Uri remoteUri, string userName)
+        internal /* for testing purposes */  async Task<GitCredential> GenerateCredentialAsync(Uri remoteUri, string userName)
         {
             ThrowIfDisposed();
 
@@ -362,7 +362,7 @@ namespace GitHub
             return new GitCredential(userInfo.Login, result.AccessToken);
         }
 
-        private async Task<GitCredential> GeneratePersonalAccessTokenAsync(Uri targetUri, ICredential credentials)
+        private async Task<GitCredential> GeneratePersonalAccessTokenAsync(Uri targetUri, GitCredential credentials)
         {
             AuthenticationResult result = await _gitHubApi.CreatePersonalTokenAsync(
                 targetUri, credentials, null, GitHubCredentialScopes);

@@ -13,12 +13,12 @@ namespace GitCredentialManager.Authentication
 {
     public interface IBasicAuthentication
     {
-        Task<ICredential> GetCredentialsAsync(string resource, string userName);
+        Task<GitCredential> GetCredentialsAsync(string resource, string userName);
     }
 
     public static class BasicAuthenticationExtensions
     {
-        public static Task<ICredential> GetCredentialsAsync(this IBasicAuthentication basicAuth, string resource)
+        public static Task<GitCredential> GetCredentialsAsync(this IBasicAuthentication basicAuth, string resource)
         {
             return basicAuth.GetCredentialsAsync(resource, null);
         }
@@ -34,7 +34,7 @@ namespace GitCredentialManager.Authentication
         public BasicAuthentication(ICommandContext context)
             : base (context) { }
 
-        public async Task<ICredential> GetCredentialsAsync(string resource, string userName)
+        public async Task<GitCredential> GetCredentialsAsync(string resource, string userName)
         {
             EnsureArgument.NotNullOrWhiteSpace(resource, nameof(resource));
 
@@ -55,7 +55,7 @@ namespace GitCredentialManager.Authentication
             return await GetCredentialsViaTtyAsync(resource, userName);
         }
 
-        private async Task<ICredential> GetCredentialsViaUiAsync(string resource, string userName)
+        private async Task<GitCredential> GetCredentialsViaUiAsync(string resource, string userName)
         {
             var viewModel = new CredentialsViewModel
             {
@@ -72,7 +72,7 @@ namespace GitCredentialManager.Authentication
             return new GitCredential(viewModel.UserName, viewModel.Password);
         }
 
-        private async Task<ICredential> GetCredentialsViaTtyAsync(string resource, string userName)
+        private async Task<GitCredential> GetCredentialsViaTtyAsync(string resource, string userName)
         {
             Context.Console.WriteLine($"Enter basic credentials for '{resource}':");
 
@@ -93,7 +93,7 @@ namespace GitCredentialManager.Authentication
             return new GitCredential(userName, password);
         }
 
-        private async Task<ICredential> GetCredentialsViaHelperAsync(string command, string args, string resource, string userName)
+        private async Task<GitCredential> GetCredentialsViaHelperAsync(string command, string args, string resource, string userName)
         {
             var promptArgs = new StringBuilder(args);
             promptArgs.Append("basic");

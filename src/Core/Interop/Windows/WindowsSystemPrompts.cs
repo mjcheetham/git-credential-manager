@@ -15,7 +15,7 @@ namespace GitCredentialManager.Interop.Windows
             set => _parentHwd = ConvertUtils.TryToInt32(value, out int ptr) ? new IntPtr(ptr) : IntPtr.Zero;
         }
 
-        public bool ShowCredentialPrompt(string resource, string userName, out ICredential credential)
+        public bool ShowCredentialPrompt(string resource, string userName, out GitCredential credential)
         {
             EnsureArgument.NotNullOrWhiteSpace(resource, nameof(resource));
 
@@ -85,7 +85,7 @@ namespace GitCredentialManager.Interop.Windows
             uint inBufferSize,
             bool saveCredentials,
             CredUi.CredentialUiWindowsFlags uiFlags,
-            out ICredential credential)
+            out GitCredential credential)
         {
             uint authPackage = 0;
             IntPtr outBufferPtr = IntPtr.Zero;

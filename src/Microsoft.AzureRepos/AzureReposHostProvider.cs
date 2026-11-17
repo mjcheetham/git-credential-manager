@@ -167,7 +167,7 @@ namespace Microsoft.AzureRepos
                 _context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={account}...");
 
                 StoredCredential storedCredential = _context.CredentialStore.FindFirst(service, account);
-                ICredential credential;
+                GitCredential credential;
                 if (storedCredential == null)
                 {
                     _context.Trace.WriteLine("No existing credentials found.");
@@ -299,7 +299,7 @@ namespace Microsoft.AzureRepos
             }
         }
 
-        private async Task<ICredential> GeneratePersonalAccessTokenAsync(GitRequest request)
+        private async Task<GitCredential> GeneratePersonalAccessTokenAsync(GitRequest request)
         {
             ThrowIfDisposed();
             ThrowIfUnsafeRemote(request);

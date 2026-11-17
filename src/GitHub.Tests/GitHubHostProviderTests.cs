@@ -202,7 +202,7 @@ namespace GitHub.Tests
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(credential.Account, newCredential.Account);
             Assert.Equal(credential.Password, newCredential.Password);
@@ -233,7 +233,7 @@ namespace GitHub.Tests
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(result);
             Assert.Equal("alice", credential.Account);
@@ -263,7 +263,7 @@ namespace GitHub.Tests
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(result);
             Assert.Equal("bob_contoso", credential.Account);
@@ -296,7 +296,7 @@ namespace GitHub.Tests
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(result);
             Assert.Equal("john_contoso", credential.Account);
@@ -340,7 +340,7 @@ namespace GitHub.Tests
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(newCredential.Account, credential.Account);
             Assert.Equal(newCredential.Password, credential.Password);
@@ -399,7 +399,7 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential credential = await provider.GenerateCredentialAsync(remoteUri, null);
+            GitCredential credential = await provider.GenerateCredentialAsync(remoteUri, null);
 
             Assert.NotNull(credential);
             Assert.Equal(expectedUserName, credential.Account);
@@ -441,7 +441,7 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential credential = await provider.GenerateCredentialAsync(expectedTargetUri, expectedUserName);
+            GitCredential credential = await provider.GenerateCredentialAsync(expectedTargetUri, expectedUserName);
 
             Assert.NotNull(credential);
             Assert.Equal(expectedUserName, credential.Account);
@@ -484,7 +484,7 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential credential = await provider.GenerateCredentialAsync(remoteUri, null);
+            GitCredential credential = await provider.GenerateCredentialAsync(remoteUri, null);
 
             Assert.NotNull(credential);
             Assert.Equal(expectedUserName, credential.Account);
@@ -533,7 +533,7 @@ namespace GitHub.Tests
 
             var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
 
-            ICredential credential = await provider.GenerateCredentialAsync(remoteUri, null);
+            GitCredential credential = await provider.GenerateCredentialAsync(remoteUri, null);
 
             Assert.NotNull(credential);
             Assert.Equal(expectedUserName, credential.Account);

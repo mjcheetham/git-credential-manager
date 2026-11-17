@@ -32,7 +32,7 @@ namespace GitCredentialManager.Tests.Authentication
 
             var basicAuth = new BasicAuthentication(context);
 
-            ICredential credential = await basicAuth.GetCredentialsAsync(testResource, testUserName);
+            GitCredential credential = await basicAuth.GetCredentialsAsync(testResource, testUserName);
 
             Assert.Equal(testUserName, credential.Account);
             Assert.Equal(testPassword, credential.Password);
@@ -51,7 +51,7 @@ namespace GitCredentialManager.Tests.Authentication
 
             var basicAuth = new BasicAuthentication(context);
 
-            ICredential credential = await basicAuth.GetCredentialsAsync(testResource);
+            GitCredential credential = await basicAuth.GetCredentialsAsync(testResource);
 
             Assert.Equal(testUserName, credential.Account);
             Assert.Equal(testPassword, credential.Password);
@@ -112,7 +112,7 @@ namespace GitCredentialManager.Tests.Authentication
                     }
                 );
 
-            ICredential credential = await auth.Object.GetCredentialsAsync(testResource);
+            GitCredential credential = await auth.Object.GetCredentialsAsync(testResource);
 
             Assert.NotNull(credential);
             Assert.Equal(testUserName, credential.Account);
@@ -158,7 +158,7 @@ namespace GitCredentialManager.Tests.Authentication
                     }
                 );
 
-            ICredential credential = await auth.Object.GetCredentialsAsync(testResource, testUserName);
+            GitCredential credential = await auth.Object.GetCredentialsAsync(testResource, testUserName);
 
             Assert.NotNull(credential);
             Assert.Equal(testUserName, credential.Account);

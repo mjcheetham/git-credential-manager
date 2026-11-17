@@ -99,12 +99,12 @@ namespace Atlassian.Bitbucket
 
             var authModes = await GetSupportedAuthenticationModesAsync(request);
 
-            ICredential credential = await GetStoredCredentials(request, authModes) ??
+            GitCredential credential = await GetStoredCredentials(request, authModes) ??
                                      await GetRefreshedCredentials(request, authModes);
             return new GitResponse(credential);
         }
 
-        private async Task<ICredential> GetStoredCredentials(GitRequest request, AuthenticationModes authModes)
+        private async Task<GitCredential> GetStoredCredentials(GitRequest request, AuthenticationModes authModes)
         {
             if (_context.Settings.TryGetSetting(BitbucketConstants.EnvironmentVariables.AlwaysRefreshCredentials,
                 Constants.GitConfiguration.Credential.SectionName, BitbucketConstants.GitConfiguration.Credential.AlwaysRefreshCredentials,
@@ -125,7 +125,7 @@ namespace Atlassian.Bitbucket
                 return null;
             }
 
-            ICredential credentials = new GitCredential(storedCredentials.Key.Account, storedCredentials.Secret);
+            GitCredential credentials = new GitCredential(storedCredentials.Key.Account, storedCredentials.Secret);
             _context.Trace.WriteLineSecrets($"Found stored credentials: {credentials.Account}/{{0}}", new object[] { credentials.Password });
 
             // Don't bother validating credentials with the server that we know have expired
@@ -144,7 +144,7 @@ namespace Atlassian.Bitbucket
             return credentials;
         }
 
-        private async Task<ICredential> GetRefreshedCredentials(GitRequest request, AuthenticationModes authModes)
+        private async Task<GitCredential> GetRefreshedCredentials(GitRequest request, AuthenticationModes authModes)
         {
             _context.Trace.WriteLine("Refresh credentials...");
 
@@ -228,14 +228,14 @@ namespace Atlassian.Bitbucket
             return await GetOAuthCredentialsViaInteractiveBrowserFlow(request);
         }
 
-        private async Task<ICredential> GetOAuthCredentialsViaRefreshFlow(GitRequest request, StoredCredential refreshToken)
+        private async Task<GitCredential> GetOAuthCredentialsViaRefreshFlow(GitRequest request, StoredCredential refreshToken)
         {
             _context.Trace.WriteLine("Refreshing OAuth credentials using refresh token...");
             OAuth2TokenResult refreshResult = await _bitbucketAuth.RefreshOAuthCredentialsAsync(request, refreshToken.Secret);
             return await ResolveCredsAndStoreRefreshToken(request, refreshResult);
         }
 
-        private async Task<ICredential> GetOAuthCredentialsViaInteractiveBrowserFlow(GitRequest request)
+        private async Task<GitCredential> GetOAuthCredentialsViaInteractiveBrowserFlow(GitRequest request)
         {
             // We failed to use the refresh token either because it didn't exist, or because the refresh token is no
             // longer valid. Either way we must now try authenticating using OAuth interactively.
@@ -246,7 +246,7 @@ namespace Atlassian.Bitbucket
             return await ResolveCredsAndStoreRefreshToken(request, oauthResult);
         }
 
-        private async Task<ICredential> ResolveCredsAndStoreRefreshToken(GitRequest request, OAuth2TokenResult tokenSet)
+        private async Task<GitCredential> ResolveCredsAndStoreRefreshToken(GitRequest request, OAuth2TokenResult tokenSet)
         {
             Uri remoteUri = request.GetRemoteUri();
 
@@ -415,7 +415,7 @@ namespace Atlassian.Bitbucket
                 $"Failed to resolve username. HTTP: {result.StatusCode}");
         }
 
-        private async Task<bool> ValidateCredentialsWork(GitRequest request, ICredential credentials, AuthenticationModes authModes)
+        private async Task<bool> ValidateCredentialsWork(GitRequest request, GitCredential credentials, AuthenticationModes authModes)
         {
             if (_context.Settings.TryGetSetting(
                 BitbucketConstants.EnvironmentVariables.ValidateStoredCredentials,

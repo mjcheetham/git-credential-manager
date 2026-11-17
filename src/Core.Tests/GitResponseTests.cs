@@ -9,7 +9,7 @@ public class GitResponseTests
     [Fact]
     public void GitResponse_Constructor_SetsCredential()
     {
-        ICredential credential = new GitCredential("alice", "hunter2");
+        GitCredential credential = new GitCredential("alice", "hunter2");
 
         var response = new GitResponse(credential);
 
@@ -64,7 +64,7 @@ public class GitResponseTests
     [Fact]
     public void GitResponse_Ok_ReturnsSuccessfulResponseWithCredential()
     {
-        ICredential credential = new GitCredential("alice", "hunter2");
+        GitCredential credential = new GitCredential("alice", "hunter2");
 
         var response = GitResponse.Ok(credential);
 
@@ -113,7 +113,7 @@ public class GitResponseTests
     [Fact]
     public void GitResponse_Continue_ReturnsResponseWithCredentialAndIsContinue()
     {
-        ICredential credential = new GitCredential("alice", "hunter2");
+        GitCredential credential = new GitCredential("alice", "hunter2");
 
         var response = GitResponse.Continue(credential);
 

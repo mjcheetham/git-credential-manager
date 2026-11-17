@@ -36,7 +36,7 @@ namespace GitHub
             AuthenticationMode = mode;
         }
 
-        public AuthenticationPromptResult(AuthenticationModes mode, ICredential credential)
+        public AuthenticationPromptResult(AuthenticationModes mode, GitCredential credential)
             : this(mode)
         {
             Credential = credential;
@@ -44,7 +44,7 @@ namespace GitHub
 
         public AuthenticationModes AuthenticationMode { get; }
 
-        public ICredential Credential { get; set; }
+        public GitCredential Credential { get; set; }
     }
 
     [Flags]

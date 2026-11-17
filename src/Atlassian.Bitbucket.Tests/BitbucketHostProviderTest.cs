@@ -138,7 +138,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(password, credential.Password);
@@ -176,7 +176,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(token, credential.Password);
@@ -218,7 +218,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(expectedAccessToken, credential.Password);
@@ -256,7 +256,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(token, credential.Password);
@@ -292,7 +292,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(password, credential.Password);
@@ -316,7 +316,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(accessToken, credential.Password);
@@ -346,7 +346,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(accessToken, credential.Password);
@@ -377,7 +377,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(accessToken, credential.Password);
@@ -458,7 +458,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(rotatedAccessToken, credential.Password);
@@ -492,7 +492,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(accessToken, credential.Password);
@@ -530,7 +530,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(rotatedAccessToken, credential.Password);
@@ -564,7 +564,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(accessToken, credential.Password);
@@ -602,7 +602,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(accessToken, credential.Password);
@@ -643,7 +643,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(rotatedAccessToken, credential.Password);
@@ -675,7 +675,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.NotNull(credential);
 
@@ -703,7 +703,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(newToken, credential.Password);
@@ -733,7 +733,7 @@ namespace Atlassian.Bitbucket.Tests
             var provider = new BitbucketHostProvider(context, bitbucketAuthentication.Object, MockRestApiRegistry(request, bitbucketApi).Object);
 
             var result = await provider.GetCredentialAsync(request);
-            ICredential credential = result.Credential;
+            GitCredential credential = result.Credential;
 
             Assert.Equal(username, credential.Account);
             Assert.Equal(freshPassword, credential.Password);
@@ -991,7 +991,7 @@ namespace Atlassian.Bitbucket.Tests
         {
             var remoteUri = request.GetRemoteUri();
             bitbucketAuthentication.Setup(m => m.GetCredentialsAsync(remoteUri, request.UserName, It.IsAny<AuthenticationModes>()))
-                .ReturnsAsync(new CredentialsPromptResult(AuthenticationModes.Basic, new TestCredential(request.Host, request.UserName, password)));
+                .ReturnsAsync(new CredentialsPromptResult(AuthenticationModes.Basic, new GitCredential(request.UserName, password)));
         }
 
         private void MockPromptOAuth(GitRequest request)

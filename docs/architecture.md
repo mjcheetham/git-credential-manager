@@ -186,10 +186,11 @@ requests), `StoreCredentialAsync` (for `store` requests) or
 `GitRequest` contains the request information passed over standard input
 from Git/the caller; the same as was passed to `IsSupported`.
 
-`GetCredentialAsync` returns `Task<GitResponse>`, not `Task<ICredential>`.
-A successful response contains an `ICredential` that Git can use to complete
+`GetCredentialAsync` returns `Task<GitResponse>`, not `Task<GitCredential>`.
+A successful response contains a `GitCredential` that Git can use to complete
 authentication. The base class's `GenerateCredentialAsync` method still returns
-`Task<ICredential>`.
+`Task<GitCredential>`. `GitCredential` is an immutable record whose string
+representation does not include the password.
 
 > [!NOTE]
 > The credential can also be an instance where both username and password are
@@ -260,9 +261,8 @@ as described in [credential stores][credential-stores]. Stores persist expiry
 but do not filter expired credentials or refresh them; providers decide whether
 a credential is usable.
 
-Stored credentials are not handed to Git directly. Providers return an
-`ICredential`, such as `GitCredential`, built from the stored account and
-secret.
+Stored credentials are not handed to Git directly. Providers return a
+`GitCredential` built from the stored account and secret.
 
 ## Error handling and tracing
 

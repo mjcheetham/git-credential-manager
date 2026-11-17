@@ -54,7 +54,7 @@ namespace GitCredentialManager.Commands
                 return;
             }
 
-            ICredential credential = response.Credential;
+            GitCredential credential = response.Credential;
 
             // Negotiate capabilities by intersecting what Git advertised with what GCM supports.
             // Capability-gated output fields may only be emitted for capabilities in this set.

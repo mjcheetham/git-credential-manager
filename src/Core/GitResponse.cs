@@ -13,8 +13,8 @@ namespace GitCredentialManager;
 /// A response is exactly one of four shapes:
 /// </para>
 /// <list type="bullet">
-///   <item><see cref="Ok(ICredential)"/> -- the provider produced a credential.</item>
-///   <item><see cref="Continue(ICredential)"/> -- the provider produced a
+///   <item><see cref="Ok(GitCredential)"/> -- the provider produced a credential.</item>
+///   <item><see cref="Continue(GitCredential)"/> -- the provider produced a
 ///     credential AND signals that another round of authentication is
 ///     expected (emits <c>continue=1</c>; gated by the <c>state</c>
 ///     capability).</item>
@@ -43,7 +43,7 @@ public class GitResponse
     private readonly Dictionary<string, string> _state = new(StringComparer.Ordinal);
     private ReadOnlyDictionary<string, string> _stateView;
 
-    private GitResponse(ICredential credential, bool isEphemeral = false, string authType = null, bool isContinue = false, bool isCancelled = false, bool isYielded = false)
+    private GitResponse(GitCredential credential, bool isEphemeral = false, string authType = null, bool isContinue = false, bool isCancelled = false, bool isYielded = false)
     {
         // At most one of Continue, Cancel, Yield may be set (Ok is "none of them").
         if ((isContinue && isCancelled) ||
@@ -82,8 +82,8 @@ public class GitResponse
     /// <summary>
     /// Construct a successful response carrying the given credential.
     /// </summary>
-    /// <remarks>Equivalent to <see cref="Ok(ICredential)"/>.</remarks>
-    public GitResponse(ICredential credential)
+    /// <remarks>Equivalent to <see cref="Ok(GitCredential)"/>.</remarks>
+    public GitResponse(GitCredential credential)
         : this(credential, authType: null)
     {
     }
@@ -91,7 +91,7 @@ public class GitResponse
     /// <summary>
     /// Construct a successful response carrying the given credential.
     /// </summary>
-    public static GitResponse Ok(ICredential credential, bool isEphemeral = false, string authtype = null) =>
+    public static GitResponse Ok(GitCredential credential, bool isEphemeral = false, string authtype = null) =>
         new(credential, isEphemeral: isEphemeral, authType: authtype);
 
     /// <summary>
@@ -104,7 +104,7 @@ public class GitResponse
     /// multistage HTTP authentication (NTLM/Kerberos) and any flow where the
     /// helper wants to be invoked again after the next server response.
     /// </remarks>
-    public static GitResponse Continue(ICredential credential, bool isEphemeral = false, string authType = null) =>
+    public static GitResponse Continue(GitCredential credential, bool isEphemeral = false, string authType = null) =>
         new (credential, isEphemeral: isEphemeral, authType: authType, isContinue: true);
 
     /// <summary>
@@ -141,7 +141,7 @@ public class GitResponse
     /// The credential resolved or generated for the request, or <see langword="null"/>
     /// when <see cref="IsCancelled"/> or <see cref="IsYielded"/> is <see langword="true"/>.
     /// </summary>
-    public ICredential Credential { get; }
+    public GitCredential Credential { get; }
 
     /// <summary>
     /// The credential is ephemeral (or generated) and not to be stored on success.

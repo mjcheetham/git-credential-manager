@@ -40,7 +40,7 @@ namespace Atlassian.Bitbucket
             AuthenticationMode = mode;
         }
 
-        public CredentialsPromptResult(AuthenticationModes mode, ICredential credential)
+        public CredentialsPromptResult(AuthenticationModes mode, GitCredential credential)
             : this(mode)
         {
             Credential = credential;
@@ -48,7 +48,7 @@ namespace Atlassian.Bitbucket
 
         public AuthenticationModes AuthenticationMode { get; }
 
-        public ICredential Credential { get; set; }
+        public GitCredential Credential { get; set; }
     }
 
     public class BitbucketAuthentication : AuthenticationBase, IBitbucketAuthentication

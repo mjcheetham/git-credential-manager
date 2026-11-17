@@ -222,7 +222,7 @@ namespace GitCredentialManager
 
                             // WIA is signaled to Git using an empty username/password
                             _context.Trace.WriteLine("Returning empty username/password to trigger current user auth with WIA.");
-                            ICredential creds = new GitCredential(string.Empty, string.Empty);
+                            GitCredential creds = new GitCredential(string.Empty, string.Empty);
                             return new GitResponse(creds)
                             {
                                 AdditionalProperties = additionalProps
@@ -269,7 +269,7 @@ namespace GitCredentialManager
             }
         }
 
-        private async Task<ICredential> GetOAuthAccessToken(Uri remoteUri, string userName, GenericOAuthConfig config)
+        private async Task<GitCredential> GetOAuthAccessToken(Uri remoteUri, string userName, GenericOAuthConfig config)
         {
             // TODO: Determined user info from a webcall? ID token? Need OIDC support
             string oauthUser = userName ?? config.DefaultUserName;

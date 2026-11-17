@@ -99,7 +99,7 @@ public partial class GitHubHostProvider : ICommandProvider
             }
         }
 
-        ICredential credential;
+        GitCredential credential;
         if (token is not null)
         {
             // Resolve the GitHub user handle if the user didn't supply one

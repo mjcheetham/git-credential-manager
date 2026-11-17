@@ -94,7 +94,7 @@ namespace GitLab
             return response.Headers.Contains("X-Gitlab-Feature-Category");
         }
 
-        public override async Task<ICredential> GenerateCredentialAsync(GitRequest request)
+        public override async Task<GitCredential> GenerateCredentialAsync(GitRequest request)
         {
             ThrowIfDisposed();
 
@@ -202,7 +202,7 @@ namespace GitLab
                 return new GitResponse(new GitCredential(storedCredential.Key.Account, storedCredential.Secret));
             }
 
-            ICredential credential = null;
+            GitCredential credential = null;
 
             string refreshService = GetRefreshTokenServiceName(request);
             StoredCredential refreshToken = Context.CredentialStore.FindFirst(refreshService, request.UserName);

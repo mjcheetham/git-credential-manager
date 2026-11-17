@@ -144,7 +144,7 @@ cancels, so Git stops rather than falling back to another prompt.
 The `GetCredentialAsync` method will be called when a `get` request is made.
 The method MUST return a `GitResponse` instance.
 
-A successful response MUST contain an `ICredential` capable of fulfilling the
+A successful response MUST contain a `GitCredential` capable of fulfilling the
 specific access request. The argument passed to `GetCredentialAsync` contains
 properties indicating the required `protocol` and `host` for this request. The
 `username` and `path` properties are OPTIONAL, however if they are present, they
