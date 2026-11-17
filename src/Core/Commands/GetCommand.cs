@@ -114,6 +114,14 @@ namespace GitCredentialManager.Commands
                 stdout.WriteLine($"{Constants.CredentialProtocol.PasswordKey}={credential.Password}");
                 Context.Trace.WriteLineSecrets("\t" + Constants.CredentialProtocol.PasswordKey + "={0}", [ credential.Password ]);
             }
+            if (credential.ExpiresAt is { } expiresAt)
+            {
+                // Git treats zero as no expiry and does not expect negative values, so report any
+                // expiry at or before the epoch as the earliest possible instant instead.
+                long expiry = Math.Max(1, expiresAt.ToUnixTimeSeconds());
+                stdout.WriteLine($"{Constants.CredentialProtocol.PasswordExpiryKey}={expiry}");
+                Context.Trace.WriteLine($"\t{Constants.CredentialProtocol.PasswordExpiryKey}={expiry}");
+            }
             if (authTypeCapNegotiated && response.IsCredentialEphemeral)
             {
                 stdout.WriteLine($"{Constants.CredentialProtocol.EphemeralKey}=1");

@@ -146,7 +146,7 @@ namespace GitCredentialManager
             else
             {
                 Context.Trace.WriteLine("Existing credential found.");
-                credential = new GitCredential(storedCredential.Key.Account, storedCredential.Secret);
+                credential = storedCredential.ToGitCredential();
             }
 
             return new GitResponse(credential);

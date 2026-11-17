@@ -92,7 +92,7 @@ namespace GitCredentialManager
                 _context.Trace.WriteLine("Existing credential found.");
             }
 
-            return new GitResponse(new GitCredential(credential.Key.Account, credential.Secret));
+            return new GitResponse(credential.ToGitCredential());
         }
 
         public Task StoreCredentialAsync(GitRequest request)

@@ -181,7 +181,7 @@ namespace GitHub
                 }
                 else if (storedCredential is not null)
                 {
-                    credential = new GitCredential(storedCredential.Key.Account, storedCredential.Secret);
+                    credential = storedCredential.ToGitCredential();
                 }
             }
 

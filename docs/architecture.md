@@ -261,8 +261,11 @@ as described in [credential stores][credential-stores]. Stores persist expiry
 but do not filter expired credentials or refresh them; providers decide whether
 a credential is usable.
 
-Stored credentials are not handed to Git directly. Providers return a
-`GitCredential` built from the stored account and secret.
+Stored credentials are not handed to Git directly. Providers convert them with
+`StoredCredential.ToGitCredential`, which carries the stored expiry across.
+`get` reports the expiry to Git as `password_expiry_utc`, so Git skips a
+credential that has already expired and passes the expiry back when it asks for
+the credential to be stored.
 
 ## Error handling and tracing
 

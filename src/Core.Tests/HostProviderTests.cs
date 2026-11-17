@@ -44,6 +44,29 @@ namespace GitCredentialManager.Tests
         }
 
         [Fact]
+        public async Task HostProvider_GetCredentialAsync_CredentialExists_ReturnsExpiry()
+        {
+            const string userName = "john.doe";
+            const string password = "letmein123"; // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            const string service = "https://example.com";
+            DateTimeOffset expiry = DateTimeOffset.FromUnixTimeSeconds(4102444800); // 2100-01-01T00:00:00Z
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "example.com",
+                ["username"] = userName,
+            });
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add(service, userName, password, new CredentialMetadata { ExpiresAt = expiry });
+            var provider = new TestHostProvider(context);
+
+            var result = await ((IHostProvider) provider).GetCredentialAsync(request);
+
+            Assert.Equal(new GitCredential(userName, password) { ExpiresAt = expiry }, result.Credential);
+        }
+
+        [Fact]
         public async Task HostProvider_GetCredentialAsync_CredentialExpired_ReturnsNewGeneratedCredential()
         {
             const string userName = "john.doe";

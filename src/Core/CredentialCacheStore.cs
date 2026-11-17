@@ -6,8 +6,6 @@ namespace GitCredentialManager
 {
     public class CredentialCacheStore : ICredentialStore
     {
-        private const string PasswordExpiryKey = "password_expiry_utc";
-
         readonly IGit _git;
         readonly string _options;
 
@@ -45,7 +43,7 @@ namespace GitCredentialManager
             }
 
             var metadata = CredentialMetadata.Empty;
-            if (result.TryGetValue(PasswordExpiryKey, out string value) &&
+            if (result.TryGetValue(Constants.CredentialProtocol.PasswordExpiryKey, out string value) &&
                 DateTimeOffsetEx.TryParseUnixTimeSeconds(value, out DateTimeOffset expiry))
             {
                 metadata = metadata with { ExpiresAt = expiry };
@@ -80,7 +78,7 @@ namespace GitCredentialManager
             // The cache replaces the whole entry, so omitting the expiry clears any existing one
             if (credential.Metadata.ExpiresAt is { } expiry)
             {
-                input[PasswordExpiryKey] = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
+                input[Constants.CredentialProtocol.PasswordExpiryKey] = expiry.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture);
             }
 
             // per https://git-scm.com/docs/gitcredentials :

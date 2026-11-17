@@ -71,6 +71,32 @@ namespace GitCredentialManager.Tests.Commands
             Assert.Contains("password=\n", actualOutput);
         }
 
+        [Theory]
+        [InlineData(1784986200L, "1784986200")]
+        [InlineData(0L, "1")]
+        [InlineData(-5L, "1")]
+        public async Task GetCommand_ExecuteAsync_CredentialWithExpiry_EmitsPasswordExpiry(long expiresAt, string expected)
+        {
+            var credential = new GitCredential("john.doe", "letmein123") // [SuppressMessage("Microsoft.Security", "CS001:SecretInline", Justification="Fake credential")]
+            {
+                ExpiresAt = DateTimeOffset.FromUnixTimeSeconds(expiresAt)
+            };
+            var stdin = "protocol=https\nhost=example.com\n\n";
+
+            var providerMock = new Mock<IHostProvider>();
+            providerMock.Setup(x => x.GetCredentialAsync(It.IsAny<GitRequest>()))
+                        .ReturnsAsync(new GitResponse(credential));
+            var providerRegistry = new TestHostProviderRegistry { Provider = providerMock.Object };
+            var context = new TestCommandContext { Streams = { In = stdin } };
+
+            var command = new GetCommand(context, providerRegistry);
+
+            await command.ExecuteAsync();
+
+            IDictionary<string, string> actualStdOutDict = ParseDictionary(context.Streams.Out);
+            Assert.Equal(expected, actualStdOutDict["password_expiry_utc"]);
+        }
+
         [Fact]
         public async Task GetCommand_ExecuteAsync_AdditionalProperties_AreEmitted()
         {

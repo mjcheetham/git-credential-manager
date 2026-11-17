@@ -88,6 +88,12 @@ namespace GitCredentialManager
             public const string UserNameKey = "username";
 
             /// <summary>
+            /// The Git credential protocol attribute name for the time at which the password expires,
+            /// as a Unix timestamp in seconds (since Git 2.41).
+            /// </summary>
+            public const string PasswordExpiryKey = "password_expiry_utc";
+
+            /// <summary>
             /// Prefix that Git Credential Manager reserves on every <c>state[]</c> entry
             /// so its state can be distinguished from other helpers' state per
             /// <see href="https://git-scm.com/docs/git-credential">git-credential(1)</see>:

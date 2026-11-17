@@ -201,7 +201,7 @@ namespace GitLab
 
             if (storedCredential != null)
             {
-                return new GitResponse(new GitCredential(storedCredential.Key.Account, storedCredential.Secret));
+                return new GitResponse(storedCredential.ToGitCredential());
             }
 
             GitCredential credential = null;

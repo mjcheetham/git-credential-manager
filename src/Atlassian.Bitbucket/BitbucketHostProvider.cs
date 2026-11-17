@@ -125,7 +125,7 @@ namespace Atlassian.Bitbucket
                 return null;
             }
 
-            GitCredential credentials = new GitCredential(storedCredentials.Key.Account, storedCredentials.Secret);
+            GitCredential credentials = storedCredentials.ToGitCredential();
             _context.Trace.WriteLineSecrets($"Found stored credentials: {credentials.Account}/{{0}}", new object[] { credentials.Password });
 
             // Don't bother validating credentials with the server that we know have expired

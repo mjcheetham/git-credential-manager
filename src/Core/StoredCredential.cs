@@ -21,6 +21,11 @@ public sealed record StoredCredential(CredentialKey Key, string Secret, Credenti
         init => _metadata = value ?? CredentialMetadata.Empty;
     }
 
+    /// <summary>
+    /// Create a credential to return to Git from the stored account, secret, and expiry.
+    /// </summary>
+    public GitCredential ToGitCredential() => new(Key.Account, Secret) { ExpiresAt = Metadata.ExpiresAt };
+
     // Never include the secret in the string representation
     private bool PrintMembers(StringBuilder builder)
     {
