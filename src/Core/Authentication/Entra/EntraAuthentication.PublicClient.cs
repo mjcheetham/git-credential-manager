@@ -233,6 +233,33 @@ public partial class EntraAuthentication
         return AuthResult.FromMsalResult(result);
     }
 
+    public async Task<IEntraAuthenticationResult> GetIdJagToken(string[] scopes, IEntraAccount account, string resource,
+        string audience, CancellationToken ct = default)
+    {
+        using var _ = Trace2.StartRegion(Trace2Category, "get_idjag");
+        Trace2.WriteData(Trace2Category, "resource", resource);
+        Trace2.WriteData(Trace2Category, "audience", audience);
+
+        PublicClientApplicationBuilder builder = GetPublicAppBuilder(out bool useBroker);
+
+        IPublicClientApplication app = builder.Build();
+        await RegisterCacheAsync(app);
+
+        IAccount msalAccount = await ResolveAccountAsync(app, account);
+        if (msalAccount is null)
+        {
+            throw new InvalidOperationException(
+                $"No cached account found for HomeAccountId '{account.HomeAccountId}' and UPN '{account.UserName}'.");
+        }
+
+        AuthenticationResult result = await app.AcquireTokenSilent(scopes, msalAccount)
+            // TODO: add when MSAL supports ID-JAG tokens
+            // .WithIdJag(resource, audience)
+            .ExecuteAsync(ct);
+
+        return AuthResult.FromMsalResult(result);
+    }
+
     private async Task<AuthenticationResult> GetTokenForUserSilentAsync(
         IPublicClientApplication app, string[] scopes, IAccount msalAccount, CancellationToken ct)
     {

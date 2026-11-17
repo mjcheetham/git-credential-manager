@@ -82,6 +82,17 @@ public interface IEntraAuthentication
         WorkloadFederationOptions fedOpts,
         CancellationToken ct = default
     );
+
+    /// <summary>
+    /// Acquire an ID-JAG token for a user principal.
+    /// </summary>
+    Task<IEntraAuthenticationResult> GetIdJagToken(
+        string[] scopes,
+        IEntraAccount account,
+        string resource,
+        string audience,
+        CancellationToken ct = default
+    );
 }
 
 public interface IEntraAuthenticationResult
