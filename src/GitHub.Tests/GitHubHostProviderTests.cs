@@ -241,6 +241,34 @@ namespace GitHub.Tests
         }
 
         [Fact]
+        public async Task GitHubHostProvider_GetCredentialAsync_InputUser_CredentialExpired_ReturnsNewCredential()
+        {
+            var request = new GitRequest(
+                new Dictionary<string, string>
+                {
+                    ["protocol"] = "https",
+                    ["host"]     = "github.com",
+                    ["username"] = "alice"
+                }
+            );
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add("https://github.com", "alice", "expired-token",
+                new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) });
+
+            var ghApiMock = new Mock<IGitHubRestApi>(MockBehavior.Strict);
+            var ghAuthMock = new Mock<IGitHubAuthentication>(MockBehavior.Strict);
+            ghAuthMock.Setup(x => x.GetAuthenticationAsync(It.IsAny<Uri>(), "alice", It.IsAny<AuthenticationModes>()))
+                .ReturnsAsync(new AuthenticationPromptResult(AuthenticationModes.Pat, new GitCredential("alice", "new-token")));
+
+            var provider = new GitHubHostProvider(context, ghApiMock.Object, ghAuthMock.Object);
+
+            var result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(new GitCredential("alice", "new-token"), result.Credential);
+        }
+
+        [Fact]
         public async Task GitHubHostProvider_GetCredentialAsync_OneDomainAccount_ReturnsCredentialForRealmAccount()
         {
             var request = new GitRequest(

@@ -187,12 +187,14 @@ namespace GitLab
         {
             string service = GetServiceName(request);
             StoredCredential storedCredential = Context.CredentialStore.FindFirst(service, request.UserName);
-            // Only ask the server about OAuth access tokens that have not already passed their stored expiry
-            if (storedCredential?.Key.Account == OAuthUserName &&
+            // Remove credentials known to have expired. Only ask the server about OAuth access tokens
+            // that have not already passed their stored expiry.
+            if (storedCredential is not null &&
                 (storedCredential.Metadata.IsExpired ||
-                 await IsOAuthTokenExpired(request.GetRemoteUri(), storedCredential.Secret)))
+                 (storedCredential.Key.Account == OAuthUserName &&
+                  await IsOAuthTokenExpired(request.GetRemoteUri(), storedCredential.Secret))))
             {
-                Context.Trace.WriteLine("Removing expired OAuth access token...");
+                Context.Trace.WriteLine("Removing expired credential...");
                 Context.CredentialStore.Remove(storedCredential.Key);
                 storedCredential = null;
             }

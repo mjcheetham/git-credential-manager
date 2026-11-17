@@ -154,7 +154,9 @@ The host provider MAY attempt to locate any existing credential, stored by the
 `StoreCredentialAsync` method, before resorting to the creation a new one.
 
 The host provider MAY choose to check if a stored credential is still valid
-by inspecting any stored metadata associated with the value. A host provider MAY
+by inspecting any stored metadata associated with the value. The host provider
+SHOULD NOT return a stored credential whose stored expiry has passed, and SHOULD
+treat it as if no credential were stored. A host provider MAY
 also choose to further validate a retrieved stored credential by making a web
 request. However, it is NOT RECOMMENDED to make any request that is known to be
 slow or that typically produces inconclusive validation results.

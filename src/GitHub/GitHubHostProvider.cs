@@ -174,7 +174,12 @@ namespace GitHub
             {
                 _context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={userName}...");
                 StoredCredential storedCredential = _context.CredentialStore.FindFirst(service, userName);
-                if (storedCredential is not null)
+                if (storedCredential?.Metadata.IsExpired == true)
+                {
+                    // A credential known to have expired cannot be used, so create a new one instead
+                    _context.Trace.WriteLine("Existing credential has expired.");
+                }
+                else if (storedCredential is not null)
                 {
                     credential = new GitCredential(storedCredential.Key.Account, storedCredential.Secret);
                 }

@@ -68,6 +68,35 @@ namespace GitCredentialManager.Tests
         }
 
         [Fact]
+        public async Task GenericHostProvider_GetCredentialAsync_CredentialExpired_ReturnsNewCredential()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"]     = "example.com",
+            });
+
+            var newCredential = new GitCredential("basicUser", "new-password");
+
+            var context = new TestCommandContext
+            {
+                Settings = {IsWindowsIntegratedAuthenticationEnabled = false}
+            };
+            context.CredentialStore.Add("https://example.com", "basicUser", "expired-password",
+                new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) });
+            var basicAuthMock = new Mock<IBasicAuthentication>();
+            basicAuthMock.Setup(x => x.GetCredentialsAsync(It.IsAny<string>(), It.IsAny<string>()))
+                .ReturnsAsync(newCredential);
+
+            var provider = new GenericHostProvider(context, basicAuthMock.Object,
+                Mock.Of<IWindowsIntegratedAuthentication>(), Mock.Of<IOAuthAuthentication>());
+
+            var result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(newCredential, result.Credential);
+        }
+
+        [Fact]
         public async Task GenericHostProvider_CreateCredentialAsync_WiaNotAllowed_ReturnsBasicCredentialNoWiaCheck()
         {
             var request = new GitRequest(new Dictionary<string, string>

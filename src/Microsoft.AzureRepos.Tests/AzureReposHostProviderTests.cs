@@ -803,6 +803,48 @@ namespace Microsoft.AzureRepos.Tests
         }
 
         [Fact]
+        public async Task AzureReposProvider_GetCredentialAsync_PatMode_ExpiredPat_GeneratesCredential()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "dev.azure.com",
+                ["path"] = "org/proj/_git/repo"
+            });
+
+            var expectedOrgUri = new Uri("https://dev.azure.com/org");
+            var authorityUrl = "https://login.microsoftonline.com/common";
+            var expectedScopes = AzureDevOpsConstants.AzureDevOpsDefaultScopes;
+            var accessToken = "ACCESS-TOKEN";
+            var personalAccessToken = "PERSONAL-ACCESS-TOKEN";
+            var account = "john.doe";
+            var authResult = CreateAuthResult(account, accessToken);
+
+            var context = new TestCommandContext();
+            context.Environment.Variables[AzureDevOpsConstants.EnvironmentVariables.CredentialType] =
+                AzureDevOpsConstants.PatCredentialType;
+            context.CredentialStore.Add("https://dev.azure.com/org", account, "EXPIRED-PAT",
+                new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) });
+
+            var azDevOpsMock = new Mock<IAzureDevOpsRestApi>(MockBehavior.Strict);
+            azDevOpsMock.Setup(x => x.GetAuthorityAsync(expectedOrgUri)).ReturnsAsync(authorityUrl);
+            azDevOpsMock.Setup(x => x.CreatePersonalAccessTokenAsync(expectedOrgUri, accessToken, It.IsAny<IEnumerable<string>>()))
+                        .ReturnsAsync(personalAccessToken);
+
+            var entraAuthMock = new Mock<IEntraAuthentication>(MockBehavior.Strict);
+            entraAuthMock.Setup(x => x.GetTokenForUserAsync(
+                    expectedScopes, authorityUrl, null, InteractionMode.Auto, CancellationToken.None))
+                .ReturnsAsync(authResult);
+
+            var provider = new AzureReposHostProvider(context, azDevOpsMock.Object, entraAuthMock.Object,
+                Mock.Of<IAzureDevOpsAuthorityCache>(MockBehavior.Strict), Mock.Of<IAzureReposBindingManager>(MockBehavior.Strict));
+
+            var result = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(new GitCredential(account, personalAccessToken), result.Credential);
+        }
+
+        [Fact]
         public async Task AzureReposProvider_GetCredentialAsync_ManagedIdentity_ReturnsManagedIdCredential()
         {
             var request = new GitRequest(new Dictionary<string, string>

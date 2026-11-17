@@ -102,6 +102,33 @@ namespace GitLab.Tests
         }
 
         [Fact]
+        public async Task GitLabHostProvider_GetCredentialAsync_ExpiredPersonalAccessToken_RemovesAndPrompts()
+        {
+            var request = new GitRequest(new Dictionary<string, string>
+            {
+                ["protocol"] = "https",
+                ["host"] = "gitlab.com",
+                ["username"] = "alice",
+            });
+
+            var context = new TestCommandContext();
+            context.CredentialStore.Add("https://gitlab.com", "alice", "expired-pat",
+                new CredentialMetadata { ExpiresAt = DateTimeOffset.UtcNow.AddDays(-1) });
+
+            var auth = new Mock<IGitLabAuthentication>(MockBehavior.Strict);
+            auth.Setup(x => x.GetAuthenticationAsync(It.IsAny<Uri>(), "alice", It.IsAny<AuthenticationModes>()))
+                .ReturnsAsync(new AuthenticationPromptResult(AuthenticationModes.Pat, new GitCredential("alice", "new-pat")));
+
+            var provider = new GitLabHostProvider(context, auth.Object);
+
+            GitResponse response = await provider.GetCredentialAsync(request);
+
+            Assert.Equal(new GitCredential("alice", "new-pat"), response.Credential);
+            Assert.False(context.CredentialStore.Contains("https://gitlab.com", "alice"));
+            ((TestHttpMessageHandler)context.HttpClientFactory.MessageHandler).AssertNoRequests();
+        }
+
+        [Fact]
         public async Task GitLabHostProvider_GetCredentialAsync_ExpiredRefreshToken_DoesNotRefresh()
         {
             const string refreshService = "https://oauth-refresh-token.gitlab.com/";

@@ -167,6 +167,13 @@ namespace Microsoft.AzureRepos
                 _context.Trace.WriteLine($"Looking for existing credential in store with service={service} account={account}...");
 
                 StoredCredential storedCredential = _context.CredentialStore.FindFirst(service, account);
+                if (storedCredential?.Metadata.IsExpired == true)
+                {
+                    // A credential known to have expired cannot be used, so create a new one instead
+                    _context.Trace.WriteLine("Existing credential has expired.");
+                    storedCredential = null;
+                }
+
                 GitCredential credential;
                 if (storedCredential == null)
                 {
